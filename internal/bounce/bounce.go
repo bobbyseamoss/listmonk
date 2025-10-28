@@ -19,13 +19,11 @@ type Mailbox interface {
 
 // Opt represents bounce processing options.
 type Opt struct {
-	MailboxEnabled  bool        `json:"mailbox_enabled"`
-	MailboxType     string      `json:"mailbox_type"`
-	Mailbox         mailbox.Opt `json:"mailbox"`
-	WebhooksEnabled bool        `json:"webhooks_enabled"`
-	SESEnabled      bool        `json:"ses_enabled"`
-	SendgridEnabled bool        `json:"sendgrid_enabled"`
-	SendgridKey     string      `json:"sendgrid_key"`
+	Mailboxes       []MailboxOpt `json:"mailboxes"`
+	WebhooksEnabled bool         `json:"webhooks_enabled"`
+	SESEnabled      bool         `json:"ses_enabled"`
+	SendgridEnabled bool         `json:"sendgrid_enabled"`
+	SendgridKey     string       `json:"sendgrid_key"`
 	Postmark        struct {
 		Enabled  bool
 		Username string
@@ -39,10 +37,19 @@ type Opt struct {
 	RecordBounceCB func(models.Bounce) error
 }
 
+// MailboxOpt represents a single mailbox configuration.
+type MailboxOpt struct {
+	UUID    string      `json:"uuid"`
+	Name    string      `json:"name"`
+	Enabled bool        `json:"enabled"`
+	Type    string      `json:"type"`
+	Opt     mailbox.Opt `json:"opt"`
+}
+
 // Manager handles e-mail bounces.
 type Manager struct {
 	queue        chan models.Bounce
-	mailbox      Mailbox
+	mailboxes    map[string]Mailbox // keyed by UUID
 	SES          *webhooks.SES
 	Sendgrid     *webhooks.Sendgrid
 	Postmark     *webhooks.Postmark
@@ -61,19 +68,25 @@ type Queries struct {
 // New returns a new instance of the bounce manager.
 func New(opt Opt, q *Queries, lo *log.Logger) (*Manager, error) {
 	m := &Manager{
-		opt:     opt,
-		queries: q,
-		queue:   make(chan models.Bounce, 1000),
-		log:     lo,
+		opt:       opt,
+		queries:   q,
+		queue:     make(chan models.Bounce, 1000),
+		mailboxes: make(map[string]Mailbox),
+		log:       lo,
 	}
 
-	// Is there a mailbox?
-	if opt.MailboxEnabled {
-		switch opt.MailboxType {
+	// Initialize all enabled mailboxes.
+	for _, boxOpt := range opt.Mailboxes {
+		if !boxOpt.Enabled {
+			continue
+		}
+
+		switch boxOpt.Type {
 		case "pop":
-			m.mailbox = mailbox.NewPOP(opt.Mailbox)
+			m.mailboxes[boxOpt.UUID] = mailbox.NewPOP(boxOpt.Opt)
+			lo.Printf("initialized bounce mailbox: %s (%s)", boxOpt.Name, boxOpt.Type)
 		default:
-			return nil, errors.New("unknown bounce mailbox type")
+			return nil, errors.New("unknown bounce mailbox type: " + boxOpt.Type)
 		}
 	}
 
@@ -107,8 +120,9 @@ func New(opt Opt, q *Queries, lo *log.Logger) (*Manager, error) {
 // Run is a blocking function that listens for bounce events from webhooks and or mailboxes
 // and executes them on the DB.
 func (m *Manager) Run() {
-	if m.opt.MailboxEnabled {
-		go m.runMailboxScanner()
+	// Start a scanner goroutine for each enabled mailbox.
+	for uuid, mb := range m.mailboxes {
+		go m.runMailboxScanner(uuid, mb)
 	}
 
 	for b := range m.queue {
@@ -123,13 +137,26 @@ func (m *Manager) Run() {
 }
 
 // runMailboxScanner runs a blocking loop that scans the mailbox at given intervals.
-func (m *Manager) runMailboxScanner() {
+func (m *Manager) runMailboxScanner(uuid string, mb Mailbox) {
+	// Find the mailbox configuration to get the scan interval.
+	var scanInterval time.Duration
+	for _, boxOpt := range m.opt.Mailboxes {
+		if boxOpt.UUID == uuid {
+			scanInterval = boxOpt.Opt.ScanInterval
+			break
+		}
+	}
+
+	if scanInterval == 0 {
+		scanInterval = 15 * time.Minute // default
+	}
+
 	for {
-		if err := m.mailbox.Scan(1000, m.queue); err != nil {
-			m.log.Printf("error scanning bounce mailbox: %v", err)
+		if err := mb.Scan(1000, m.queue); err != nil {
+			m.log.Printf("error scanning bounce mailbox %s: %v", uuid, err)
 		}
 
-		time.Sleep(m.opt.Mailbox.ScanInterval)
+		time.Sleep(scanInterval)
 	}
 }
 

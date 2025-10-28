@@ -1,0 +1,61 @@
+# Multi-stage Dockerfile to build listmonk from source
+
+# Stage 1: Build email-builder frontend
+FROM node:20-alpine AS email-builder
+WORKDIR /app
+COPY frontend/email-builder/package.json frontend/email-builder/yarn.lock ./email-builder/
+WORKDIR /app/email-builder
+RUN yarn install --frozen-lockfile
+COPY frontend/email-builder/ ./
+RUN yarn build
+
+# Stage 2: Build main frontend
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app
+COPY frontend/ ./
+RUN mkdir -p ../static/public/static && \
+    touch .gitignore && \
+    yarn install --frozen-lockfile
+# Copy email-builder output
+COPY --from=email-builder /app/email-builder/dist ./public/static/email-builder
+# Build without running prelint to skip eslint
+RUN yarn vite build
+
+# Stage 3: Build Go backend
+FROM golang:1.24-alpine AS backend-builder
+RUN apk add --no-cache gcc g++ make git
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# Copy frontend dist
+COPY --from=frontend-builder /app/dist ./frontend/dist
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X 'main.buildString=v420-custom' -X 'main.versionString=v420'" -o listmonk cmd/*.go
+
+# Stage 4: Final image
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates tzdata shadow su-exec postgresql-client
+WORKDIR /listmonk
+# Copy the binary
+COPY --from=backend-builder /app/listmonk .
+# Copy config files (rename sample to actual config)
+COPY --from=backend-builder /app/config.toml.sample ./config.toml.sample
+COPY --from=backend-builder /app/config.toml.sample ./config.toml
+# Copy static assets from source
+COPY --from=backend-builder /app/static ./static
+# Copy built frontend to the expected location
+COPY --from=backend-builder /app/frontend/dist ./frontend/dist
+# Copy other required files
+COPY --from=backend-builder /app/i18n ./i18n
+COPY --from=backend-builder /app/schema.sql .
+COPY --from=backend-builder /app/queries.sql .
+COPY --from=backend-builder /app/permissions.json .
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
+    chmod +x ./listmonk
+
+EXPOSE 9000
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["./listmonk"]

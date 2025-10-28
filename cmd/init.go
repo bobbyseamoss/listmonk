@@ -787,23 +787,23 @@ func initBounceManager(cb func(models.Bounce) error, stmt *sqlx.Stmt, lo *log.Lo
 			ko.String("bounce.forwardemail.key"),
 		},
 		RecordBounceCB: cb,
+		Mailboxes:      []bounce.MailboxOpt{},
 	}
 
-	// For now, only one mailbox is supported.
+	// Load all bounce mailboxes.
 	for _, b := range ko.Slices("bounce.mailboxes") {
-		if !b.Bool("enabled") {
-			continue
-		}
-
 		var boxOpt mailbox.Opt
 		if err := b.UnmarshalWithConf("", &boxOpt, koanf.UnmarshalConf{Tag: "json"}); err != nil {
 			lo.Fatalf("error reading bounce mailbox config: %v", err)
 		}
 
-		opt.MailboxType = b.String("type")
-		opt.MailboxEnabled = true
-		opt.Mailbox = boxOpt
-		break
+		opt.Mailboxes = append(opt.Mailboxes, bounce.MailboxOpt{
+			UUID:    b.String("uuid"),
+			Name:    b.String("name"),
+			Enabled: b.Bool("enabled"),
+			Type:    b.String("type"),
+			Opt:     boxOpt,
+		})
 	}
 
 	// Initialize the bounce manager.

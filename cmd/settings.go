@@ -338,9 +338,43 @@ func (a *App) TestSMTPSettings(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.internalError"))
 	}
 
+	// If UUID exists, this is an existing SMTP server - fetch the real password from DB
+	uuid := ko.String("uuid")
+	if uuid != "" {
+		settings, err := a.core.GetSettings()
+		if err != nil {
+			a.log.Printf("error getting settings for SMTP test: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError, a.i18n.Ts("globals.messages.internalError"))
+		}
+		// Find the matching SMTP server by UUID and use its real password
+		for _, s := range settings.SMTP {
+			if s.UUID == uuid {
+				req.Password = s.Password
+				req.Username = s.Username
+				break
+			}
+		}
+	}
+
 	to := ko.String("email")
 	if to == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.missingFields", "name", "email"))
+	}
+
+	// Get the from_email from the request or fall back to app setting.
+	from := ko.String("from_email")
+	if from == "" {
+		// Get current settings from DB to use the configured from_email as fallback.
+		settings, err := a.core.GetSettings()
+		if err != nil {
+			a.log.Printf("error getting settings for SMTP test: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError, a.i18n.Ts("globals.messages.internalError"))
+		}
+		from = settings.AppFromEmail
+	}
+
+	if from == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.Ts("globals.messages.missingFields", "name", "from_email"))
 	}
 
 	// Initialize a new SMTP pool.
@@ -361,7 +395,7 @@ func (a *App) TestSMTPSettings(c echo.Context) error {
 	}
 
 	m := models.Message{}
-	m.From = a.cfg.FromEmail
+	m.From = from
 	m.To = []string{to}
 	m.Subject = a.i18n.T("settings.smtp.testConnection")
 	m.Body = b.Bytes()

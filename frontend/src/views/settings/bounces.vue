@@ -116,16 +116,32 @@
     </div>
 
     <!-- bounce mailbox -->
-    <b-field :label="$t('settings.bounces.enableMailbox')">
-      <b-switch v-if="data['bounce.mailboxes']" v-model="data['bounce.mailboxes'][0].enabled"
-        :disabled="!data['bounce.enabled']" name="enabled" :native-value="true" data-cy="btn-enable-bounce-mailbox" />
-    </b-field>
+    <h3 class="title is-5 mb-4">{{ $t('settings.bounces.enableMailbox') }}</h3>
 
-    <template v-if="data['bounce.enabled'] && data['bounce.mailboxes'][0].enabled">
+    <div class="items bounce-mailboxes">
       <div class="block box" v-for="(item, n) in data['bounce.mailboxes']" :key="n">
         <div class="columns">
+          <div class="column is-2">
+            <b-field :label="$t('globals.buttons.enabled')">
+              <b-switch v-model="item.enabled" :disabled="!data['bounce.enabled']" name="enabled" :native-value="true"
+                data-cy="btn-enable-bounce-mailbox" />
+            </b-field>
+            <b-field v-if="data['bounce.mailboxes'].length > 1">
+              <a @click.prevent="$utils.confirm(null, () => removeBounceBox(n))" href="#" data-cy="btn-delete-bounce">
+                <b-icon icon="trash-can-outline" />
+                {{ $t('globals.buttons.delete') }}
+              </a>
+            </b-field>
+          </div>
+
           <div class="column" :class="{ disabled: !item.enabled }">
             <div class="columns">
+              <div class="column is-6">
+                <b-field :label="$t('globals.fields.name')" label-position="on-border"
+                  :message="$t('settings.bounces.mailboxNameHelp')">
+                  <b-input v-model="item.name" name="name" placeholder="bounce-primary" :maxlength="100" />
+                </b-field>
+              </div>
               <div class="column is-3">
                 <b-field :label="$t('settings.bounces.type')" label-position="on-border">
                   <b-select v-model="item.type" name="type">
@@ -135,7 +151,10 @@
                   </b-select>
                 </b-field>
               </div>
-              <div class="column is-6">
+            </div>
+
+            <div class="columns">
+              <div class="column is-9">
                 <b-field :label="$t('settings.mailserver.host')" label-position="on-border"
                   :message="$t('settings.mailserver.hostHelp')">
                   <b-input v-model="item.host" name="host" placeholder="bounce.yourmailserver.net" :maxlength="200" />
@@ -145,7 +164,7 @@
                 <b-field :label="$t('settings.mailserver.port')" label-position="on-border"
                   :message="$t('settings.mailserver.portHelp')">
                   <b-numberinput v-model="item.port" name="port" type="is-light" controls-position="compact"
-                    placeholder="25" min="1" max="65535" />
+                    placeholder="110" min="1" max="65535" />
                 </b-field>
               </div>
             </div><!-- host -->
@@ -214,7 +233,11 @@
           </div>
         </div><!-- second container column -->
       </div><!-- block -->
-    </template>
+    </div><!-- bounce-mailboxes -->
+
+    <b-button @click="addBounceBox" icon-left="plus" type="is-primary" :disabled="!data['bounce.enabled']">
+      {{ $t('globals.buttons.addNew') }}
+    </b-button>
   </div>
 </template>
 
@@ -238,6 +261,22 @@ export default Vue.extend({
   },
 
   methods: {
+    addBounceBox() {
+      this.data['bounce.mailboxes'].push({
+        uuid: '',
+        enabled: true,
+        name: '',
+        type: 'pop',
+        host: '',
+        port: 110,
+        auth_protocol: 'userpass',
+        username: '',
+        password: '',
+        tls_enabled: true,
+        tls_skip_verify: false,
+        scan_interval: '15m',
+      });
+    },
     removeBounceBox(i) {
       this.data['bounce.mailboxes'].splice(i, 1);
     },

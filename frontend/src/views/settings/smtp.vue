@@ -2,20 +2,57 @@
   <div>
     <div class="items mail-servers">
       <div class="block box" v-for="(item, n) in form.smtp" :key="n">
-        <div class="columns">
-          <div class="column is-2">
-            <b-field :label="$t('globals.buttons.enabled')">
-              <b-switch v-model="item.enabled" name="enabled" :native-value="true" data-cy="btn-enable-smtp" />
-            </b-field>
-            <b-field v-if="form.smtp.length > 1">
-              <a @click.prevent="$utils.confirm(null, () => removeSMTP(n))" href="#" data-cy="btn-delete-smtp">
-                <b-icon icon="trash-can-outline" />
-                {{ $t('globals.buttons.delete') }}
-              </a>
-            </b-field>
-          </div><!-- first column -->
+        <!-- Collapsed header view -->
+        <div v-if="item.collapsed" class="columns is-vcentered" style="cursor: pointer;" @click="toggleCollapse(n)">
+          <div class="column is-narrow">
+            <b-icon :icon="item.collapsed ? 'chevron-right' : 'chevron-down'" />
+          </div>
+          <div class="column is-narrow">
+            <b-switch v-model="item.enabled" name="enabled" :native-value="true" @click.native.stop />
+          </div>
+          <div class="column">
+            <strong>{{ item.name || 'Unnamed SMTP Server' }}</strong>
+            <span v-if="item.host" class="has-text-grey"> - {{ item.host }}</span>
+          </div>
+          <div class="column is-narrow">
+            <b-button size="is-small" @click.stop="toggleCollapse(n)">
+              {{ $t('globals.buttons.expand') }}
+            </b-button>
+          </div>
+        </div>
 
-          <div class="column" :class="{ disabled: !item.enabled }">
+        <!-- Expanded full view -->
+        <div v-else>
+          <div class="columns is-vcentered mb-2">
+            <div class="column is-narrow">
+              <a @click.prevent="toggleCollapse(n)" style="cursor: pointer;">
+                <b-icon :icon="item.collapsed ? 'chevron-right' : 'chevron-down'" size="is-medium" />
+              </a>
+            </div>
+            <div class="column">
+              <strong class="is-size-5">{{ item.name || 'SMTP Server ' + (n + 1) }}</strong>
+            </div>
+            <div class="column is-narrow">
+              <b-button size="is-small" @click="toggleCollapse(n)">
+                {{ $t('globals.buttons.collapse') }}
+              </b-button>
+            </div>
+          </div>
+
+          <div class="columns">
+            <div class="column is-2">
+              <b-field :label="$t('globals.buttons.enabled')">
+                <b-switch v-model="item.enabled" name="enabled" :native-value="true" data-cy="btn-enable-smtp" />
+              </b-field>
+              <b-field v-if="form.smtp.length > 1">
+                <a @click.prevent="$utils.confirm(null, () => removeSMTP(n))" href="#" data-cy="btn-delete-smtp">
+                  <b-icon icon="trash-can-outline" />
+                  {{ $t('globals.buttons.delete') }}
+                </a>
+              </b-field>
+            </div><!-- first column -->
+
+            <div class="column" :class="{ disabled: !item.enabled }">
             <div class="columns">
               <div class="column is-9">
                 <b-field :label="$t('settings.mailserver.host')" label-position="on-border"
@@ -148,6 +185,17 @@
                   <b-input v-model="item.name" name="name" placeholder="email-primary" :maxlength="100" />
                 </b-field>
               </div>
+              <div class="column is-6">
+                <b-field :label="$t('settings.smtp.bounceMailbox')" label-position="on-border"
+                  :message="$t('settings.smtp.bounceMailboxHelp')">
+                  <b-select v-model="item.bounce_mailbox_uuid" name="bounce_mailbox_uuid" expanded>
+                    <option value="">{{ $t('globals.terms.none') }}</option>
+                    <option v-for="box in bounceMailboxes" :key="box.uuid" :value="box.uuid">
+                      {{ box.name || box.host }}
+                    </option>
+                  </b-select>
+                </b-field>
+              </div>
             </div>
 
             <div class="columns">
@@ -168,15 +216,16 @@
             <form @submit.prevent="() => doSMTPTest(item, n)">
               <div class="columns">
                 <template v-if="smtpTestItem === n">
-                  <div class="column is-5">
-                    <strong>{{ $t('settings.general.fromEmail') }}</strong>
-                    <br />
-                    {{ settings['app.from_email'] }}
+                  <div class="column is-4">
+                    <b-field :label="$t('settings.general.fromEmail')" label-position="on-border">
+                      <b-input v-model="testFromEmail" :ref="'testEmailFrom'"
+                        placeholder="sender@yourdomain.com" :custom-class="`test-from-email-${n}`" />
+                    </b-field>
                   </div>
                   <div class="column is-4">
                     <b-field :label="$t('settings.smtp.toEmail')" label-position="on-border">
-                      <b-input type="email" required v-model="testEmail" :ref="'testEmailTo'"
-                        placeholder="email@site.com" :custom-class="`test-email-${n}`" />
+                      <b-input v-model="testEmail" :ref="'testEmailTo'"
+                        placeholder="recipient@site.com" :custom-class="`test-email-${n}`" />
                     </b-field>
                   </div>
                 </template>
@@ -199,7 +248,8 @@
               </div>
             </form><!-- smtp test -->
           </div>
-        </div><!-- second container column -->
+        </div><!-- columns -->
+        </div><!-- expanded view -->
       </div><!-- block -->
     </div><!-- mail-servers -->
 
@@ -252,30 +302,85 @@ export default Vue.extend({
       // Index of the SMTP block item in the array to show the
       // test form in.
       smtpTestItem: null,
+      testFromEmail: '',
       testEmail: '',
       errMsg: '',
     };
   },
 
-  methods: {
-    addSMTP() {
-      this.data.smtp.push({
-        name: '',
-        enabled: true,
-        host: '',
-        hello_hostname: '',
-        port: 587,
-        auth_protocol: 'none',
-        username: '',
-        password: '',
-        email_headers: [],
-        max_conns: 10,
-        max_msg_retries: 2,
-        idle_timeout: '15s',
-        wait_timeout: '5s',
-        tls_type: 'STARTTLS',
-        tls_skip_verify: false,
+  computed: {
+    ...mapState(['settings']),
+    bounceMailboxes() {
+      // Get bounce mailboxes from settings if available
+      if (this.settings && this.settings['bounce.mailboxes']) {
+        return this.settings['bounce.mailboxes'];
+      }
+      // Fallback to form data
+      if (this.form && this.form['bounce.mailboxes']) {
+        return this.form['bounce.mailboxes'];
+      }
+      return [];
+    },
+  },
+
+  mounted() {
+    // Initialize collapsed state for existing SMTP servers
+    // Start with first server expanded, rest collapsed for cleaner UI
+    if (this.form.smtp && this.form.smtp.length > 0) {
+      this.form.smtp.forEach((item, index) => {
+        if (typeof item.collapsed === 'undefined') {
+          this.$set(item, 'collapsed', index > 0);
+        }
       });
+    }
+  },
+
+  methods: {
+    toggleCollapse(index) {
+      const item = this.data.smtp[index];
+      this.$set(item, 'collapsed', !item.collapsed);
+    },
+
+    addSMTP() {
+      // If there's at least one existing SMTP server, copy its settings
+      let newServer;
+      if (this.data.smtp.length > 0) {
+        const lastServer = this.data.smtp[this.data.smtp.length - 1];
+        // Copy all settings from the last server including host, username, password
+        newServer = {
+          ...lastServer,
+          // Clear only name and uuid (generate new uuid on save)
+          name: '',
+          uuid: '',
+          // Keep showHeaders state if it exists
+          showHeaders: lastServer.showHeaders || false,
+          // New servers start expanded so user can edit
+          collapsed: false,
+        };
+      } else {
+        // Default settings if this is the first SMTP server
+        newServer = {
+          name: '',
+          enabled: true,
+          host: '',
+          hello_hostname: '',
+          port: 587,
+          auth_protocol: 'none',
+          username: '',
+          password: '',
+          email_headers: [],
+          max_conns: 10,
+          max_msg_retries: 2,
+          idle_timeout: '15s',
+          wait_timeout: '5s',
+          tls_type: 'STARTTLS',
+          tls_skip_verify: false,
+          bounce_mailbox_uuid: '',
+          collapsed: false,
+        };
+      }
+
+      this.data.smtp.push(newServer);
 
       this.$nextTick(() => {
         const items = document.querySelectorAll('.mail-servers input[name="host"]');
@@ -313,7 +418,7 @@ export default Vue.extend({
       }
 
       this.errMsg = '';
-      this.$api.testSMTP({ ...item, email: this.testEmail }).then(() => {
+      this.$api.testSMTP({ ...item, from_email: this.testFromEmail, email: this.testEmail }).then(() => {
         this.$utils.toast(this.$t('campaigns.testSent'));
       }).catch((err) => {
         if (err.response?.data?.message) {
@@ -325,18 +430,16 @@ export default Vue.extend({
     showTestForm(n) {
       this.smtpTestItem = n;
       this.testItem = this.form.smtp[n];
+      this.testFromEmail = this.settings['app.from_email'] || '';
       this.errMsg = '';
 
       this.$nextTick(() => {
-        document.querySelector(`.test-email-${n}`).focus();
+        document.querySelector(`.test-from-email-${n}`).focus();
       });
     },
 
     isTestEnabled(item) {
       if (!item.host || !item.port) {
-        return false;
-      }
-      if (item.auth_protocol !== 'none' && item.password.includes('•')) {
         return false;
       }
 
