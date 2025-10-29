@@ -41,9 +41,11 @@ import (
 	"github.com/knadh/listmonk/internal/media"
 	"github.com/knadh/listmonk/internal/media/providers/filesystem"
 	"github.com/knadh/listmonk/internal/media/providers/s3"
+	"github.com/knadh/listmonk/internal/messenger/automatic"
 	"github.com/knadh/listmonk/internal/messenger/email"
 	"github.com/knadh/listmonk/internal/messenger/postback"
 	"github.com/knadh/listmonk/internal/notifs"
+	"github.com/knadh/listmonk/internal/queue"
 	"github.com/knadh/listmonk/internal/subimporter"
 	"github.com/knadh/listmonk/models"
 	"github.com/knadh/stuffbin"
@@ -54,8 +56,9 @@ import (
 )
 
 const (
-	queryFilePath = "queries.sql"
-	emailMsgr     = "email"
+	queryFilePath  = "queries.sql"
+	emailMsgr      = "email"
+	automaticMsgr  = "automatic"
 )
 
 // UrlConfig contains various URL constants used in the app.
@@ -613,9 +616,14 @@ func initImporter(q *models.Queries, db *sqlx.DB, core *core.Core, i *i18n.I18n,
 // initSMTPMessenger initializes the combined and individual SMTP messengers.
 func initSMTPMessengers() []manager.Messenger {
 	var (
-		servers = []email.Server{}
-		out     = []manager.Messenger{}
+		servers     = []email.Server{}
+		out         = []manager.Messenger{}
+		testingMode = ko.Bool("app.testing_mode")
 	)
+
+	if testingMode {
+		lo.Printf("⚠️  TESTING MODE ENABLED - Emails will be simulated, not actually sent!")
+	}
 
 	// Load the config for multiple SMTP servers.
 	for _, item := range ko.Slices("smtp") {
@@ -635,7 +643,7 @@ func initSMTPMessengers() []manager.Messenger {
 		// If the server has a name, initialize it as a standalone e-mail messenger
 		// allowing campaigns to select individual SMTPs. In the UI and config, it'll appear as `email / $name`.
 		if s.Name != "" {
-			msgr, err := email.New(s.Name, s)
+			msgr, err := email.New(s.Name, testingMode, lo.Printf, s)
 			if err != nil {
 				lo.Fatalf("error initializing e-mail messenger: %v", err)
 			}
@@ -644,7 +652,7 @@ func initSMTPMessengers() []manager.Messenger {
 	}
 
 	// Initialize the 'email' messenger with all SMTP servers.
-	msgr, err := email.New(email.MessengerName, servers...)
+	msgr, err := email.New(email.MessengerName, testingMode, lo.Printf, servers...)
 	if err != nil {
 		lo.Fatalf("error initializing e-mail messenger: %v", err)
 	}
@@ -694,6 +702,46 @@ func initPostbackMessengers(ko *koanf.Koanf) []manager.Messenger {
 	}
 
 	return out
+}
+
+// initAutomaticMessenger initializes the automatic (queue-based) messenger
+func initAutomaticMessenger(db *sqlx.DB) manager.Messenger {
+	msgr, err := automatic.New(db, lo)
+	if err != nil {
+		lo.Fatalf("error initializing automatic messenger: %v", err)
+	}
+
+	lo.Printf("initialized automatic (queue-based) messenger")
+	return msgr
+}
+
+// initQueueProcessor initializes and starts the queue processor for automatic campaigns
+func initQueueProcessor(db *sqlx.DB, settings models.Settings) *queue.Processor {
+	// Parse sliding window duration
+	var slidingDuration time.Duration
+	if settings.AppMessageSlidingWindowDuration != "" {
+		d, err := time.ParseDuration(settings.AppMessageSlidingWindowDuration)
+		if err == nil {
+			slidingDuration = d
+		}
+	}
+
+	cfg := queue.Config{
+		PollInterval:          time.Minute * 1, // Check for emails every minute
+		BatchSize:             100,
+		TimeWindowStart:       settings.AppSendTimeStart,
+		TimeWindowEnd:         settings.AppSendTimeEnd,
+		SlidingWindowDuration: slidingDuration,
+		SlidingWindowLimit:    settings.AppMessageSlidingWindowRate,
+	}
+
+	proc := queue.New(db, cfg, lo)
+
+	// Start the processor in a goroutine
+	go proc.Start()
+
+	lo.Println("started queue processor for automatic campaigns")
+	return proc
 }
 
 // initMediaStore initializes Upload manager with a custom backend.

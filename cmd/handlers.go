@@ -170,6 +170,16 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PUT("/api/campaigns/:id/archive", pm(hasID(a.UpdateCampaignArchive), "campaigns:manage_all", "campaigns:manage"))
 		g.DELETE("/api/campaigns/:id", pm(hasID(a.DeleteCampaign), "campaigns:manage_all", "campaigns:manage"))
 
+		// Queue system API endpoints
+		g.GET("/api/queue/items", pm(a.GetQueueItems, "campaigns:get_all", "campaigns:get"))
+		g.GET("/api/queue/stats", pm(a.GetEmailQueueStats, "campaigns:get_all", "campaigns:get"))
+		g.GET("/api/queue/servers", pm(a.GetSMTPServerCapacity, "campaigns:get_all", "campaigns:get"))
+		g.PUT("/api/queue/:id/cancel", pm(hasID(a.CancelQueueItem), "campaigns:manage_all", "campaigns:manage"))
+		g.PUT("/api/queue/:id/retry", pm(hasID(a.RetryQueueItem), "campaigns:manage_all", "campaigns:manage"))
+		g.POST("/api/queue/clear", pm(a.ClearAllQueuedEmails, "campaigns:manage_all", "campaigns:manage"))
+		g.PUT("/api/queue/pause", pm(a.ToggleQueuePause, "settings:manage"))
+		g.POST("/api/queue/send-all", pm(a.SendAllQueuedEmails, "campaigns:manage_all", "campaigns:manage"))
+
 		g.GET("/api/media", pm(a.GetAllMedia, "media:get"))
 		g.GET("/api/media/:id", pm(hasID(a.GetMedia), "media:get"))
 		g.POST("/api/media", pm(a.UploadMedia, "media:manage"))

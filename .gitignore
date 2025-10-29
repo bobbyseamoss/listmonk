@@ -19,3 +19,5 @@ dist/*
 uploads/
 AZURE_DEPLOYMENT.md
 AZURE_DEPLOYMENT.md
+# Deployment credentials (contains plaintext passwords)
+deployment/configs/credential_map.json

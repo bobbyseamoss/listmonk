@@ -21,6 +21,10 @@ type Settings struct {
 	AppConcurrency           int    `json:"app.concurrency"`
 	AppMaxSendErrors         int    `json:"app.max_send_errors"`
 	AppMessageRate           int    `json:"app.message_rate"`
+	AppSendTimeStart         string `json:"app.send_time_start"`
+	AppSendTimeEnd           string `json:"app.send_time_end"`
+	AppTestingMode           bool   `json:"app.testing_mode"`
+	AppQueuePaused           bool   `json:"app.queue_paused"`
 	CacheSlowQueries         bool   `json:"app.cache_slow_queries"`
 	CacheSlowQueriesInterval string `json:"app.cache_slow_queries_interval"`
 
@@ -97,6 +101,11 @@ type Settings struct {
 		TLSType           string              `json:"tls_type"`
 		TLSSkipVerify     bool                `json:"tls_skip_verify"`
 		BounceMailboxUUID string              `json:"bounce_mailbox_uuid"`
+		FromEmail         string              `json:"from_email"`
+		DailyLimit        int                 `json:"daily_limit"`
+		SlidingWindow         bool   `json:"sliding_window"`
+		SlidingWindowDuration string `json:"sliding_window_duration"`
+		SlidingWindowRate     int    `json:"sliding_window_rate"`
 	} `json:"smtp"`
 
 	Messengers []struct {

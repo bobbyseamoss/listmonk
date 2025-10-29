@@ -36,6 +36,11 @@ type Server struct {
 	//lint:ignore SA5008 ,squash is needed by koanf/mapstructure config unmarshal.
 	smtppool.Opt `json:",squash"`
 
+	// Sliding window rate limiting configuration for this server.
+	SlidingWindow         bool   `json:"sliding_window"`
+	SlidingWindowDuration string `json:"sliding_window_duration"`
+	SlidingWindowRate     int    `json:"sliding_window_rate"`
+
 	pool *smtppool.Pool
 }
 
@@ -43,15 +48,35 @@ type Server struct {
 type Emailer struct {
 	servers []*Server
 	name    string
+
+	// Sliding window rate limiting configuration.
+	SlidingWindow         bool
+	SlidingWindowDuration string
+	SlidingWindowRate     int
+
+	// Testing mode - when enabled, emails are not actually sent
+	testingMode bool
+	logger      func(string, ...interface{})
 }
 
 // New returns an SMTP e-mail Messenger backend with the given SMTP servers.
 // Group indicates whether the messenger represents a group of SMTP servers (1 or more)
 // that are used as a round-robin pool, or a single server.
-func New(name string, servers ...Server) (*Emailer, error) {
+// testingMode when true will simulate sending without actually connecting to SMTP.
+func New(name string, testingMode bool, logger func(string, ...interface{}), servers ...Server) (*Emailer, error) {
 	e := &Emailer{
-		servers: make([]*Server, 0, len(servers)),
-		name:    name,
+		servers:     make([]*Server, 0, len(servers)),
+		name:        name,
+		testingMode: testingMode,
+		logger:      logger,
+	}
+
+	// If this is a single-server messenger, use its sliding window configuration.
+	// For multi-server pool messengers, sliding window will be disabled at this level.
+	if len(servers) == 1 {
+		e.SlidingWindow = servers[0].SlidingWindow
+		e.SlidingWindowDuration = servers[0].SlidingWindowDuration
+		e.SlidingWindowRate = servers[0].SlidingWindowRate
 	}
 
 	for _, srv := range servers {
@@ -105,6 +130,11 @@ func New(name string, servers ...Server) (*Emailer, error) {
 // Name returns the messenger's name.
 func (e *Emailer) Name() string {
 	return e.name
+}
+
+// GetSlidingWindow returns the sliding window configuration for this messenger.
+func (e *Emailer) GetSlidingWindow() (enabled bool, duration string, rate int) {
+	return e.SlidingWindow, e.SlidingWindowDuration, e.SlidingWindowRate
 }
 
 // Push pushes a message to the server.
@@ -187,6 +217,15 @@ func (e *Emailer) Push(m models.Message) error {
 		if len(m.AltBody) > 0 {
 			em.Text = m.AltBody
 		}
+	}
+
+	// If testing mode is enabled, simulate the send without actually connecting to SMTP
+	if e.testingMode {
+		if e.logger != nil {
+			e.logger("[TESTING MODE] Simulated email send: from=%s to=%s subject=%s server=%s",
+				m.From, m.To[0], m.Subject, srv.Host)
+		}
+		return nil
 	}
 
 	return srv.pool.Send(em)

@@ -202,8 +202,9 @@ export default Vue.extend({
           // There are running campaigns and the app didn't auto restart.
           // The UI will show a warning.
           this.$root.loadConfig();
-          this.getSettings();
-          this.isLoading = false;
+          this.getSettings().finally(() => {
+            this.isLoading = false;
+          });
           return;
         }
 
@@ -227,7 +228,7 @@ export default Vue.extend({
 
     getSettings() {
       this.isLoading = true;
-      this.$api.getSettings().then((data) => {
+      return this.$api.getSettings().then((data) => {
         let d = {};
         try {
           // Create a deep-copy of the settings hierarchy.
@@ -247,10 +248,15 @@ export default Vue.extend({
 
         this.key += 1;
         this.form = d;
-        this.formCopy = JSON.stringify(d);
 
+        // Wait for Vue reactivity and all child components to fully initialize
+        // before taking the formCopy snapshot
         this.$nextTick(() => {
           this.isLoading = false;
+          // Add a small delay to ensure all child component mutations are complete
+          setTimeout(() => {
+            this.formCopy = JSON.stringify(this.form);
+          }, 100);
         });
       });
     },

@@ -20,6 +20,7 @@ export default defineConfig(({ _, mode }) => {
       assetsDir: 'static',
     },
     server: {
+      host: '0.0.0.0', // Listen on all interfaces for Docker
       port: env.LISTMONK_FRONTEND_PORT || 8080,
       proxy: {
         '^/$': {

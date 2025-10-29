@@ -53,6 +53,13 @@ type Messenger interface {
 	Close() error
 }
 
+// MessengerWithSlidingWindow is an optional interface that messengers can implement
+// to provide per-messenger sliding window rate limiting configuration.
+type MessengerWithSlidingWindow interface {
+	Messenger
+	GetSlidingWindow() (enabled bool, duration string, rate int)
+}
+
 // CampStats contains campaign stats like per minute send rate.
 type CampStats struct {
 	SendRate int
@@ -88,10 +95,21 @@ type Manager struct {
 	// Sliding window keeps track of the total number of messages sent in a period
 	// and on reaching the specified limit, waits until the window is over before
 	// sending further messages.
+	// DEPRECATED: Use slidingWindows map for per-messenger tracking instead.
 	slidingCount int
 	slidingStart time.Time
 
+	// Per-messenger sliding window state tracking.
+	slidingWindows    map[string]*slidingWindowState
+	slidingWindowsMut sync.Mutex
+
 	tplFuncs template.FuncMap
+}
+
+// slidingWindowState tracks the sliding window rate limiting state for a messenger.
+type slidingWindowState struct {
+	count int
+	start time.Time
 }
 
 // CampaignMessage represents an instance of campaign message to be pushed out,
@@ -164,15 +182,16 @@ func New(cfg Config, store Store, i *i18n.I18n, l *log.Logger) *Manager {
 		fnNotify: func(subject string, data any) error {
 			return notifs.NotifySystem(subject, notifs.TplCampaignStatus, data, nil)
 		},
-		log:          l,
-		messengers:   make(map[string]Messenger),
-		pipes:        make(map[int]*pipe),
-		tpls:         make(map[int]*models.Template),
-		links:        make(map[string]string),
-		nextPipes:    make(chan *pipe, 1000),
-		campMsgQ:     make(chan CampaignMessage, cfg.Concurrency*cfg.MessageRate*2),
-		msgQ:         make(chan models.Message, cfg.Concurrency*cfg.MessageRate*2),
-		slidingStart: time.Now(),
+		log:            l,
+		messengers:     make(map[string]Messenger),
+		pipes:          make(map[int]*pipe),
+		tpls:           make(map[int]*models.Template),
+		links:          make(map[string]string),
+		slidingWindows: make(map[string]*slidingWindowState),
+		nextPipes:      make(chan *pipe, 1000),
+		campMsgQ:       make(chan CampaignMessage, cfg.Concurrency*cfg.MessageRate*2),
+		msgQ:           make(chan models.Message, cfg.Concurrency*cfg.MessageRate*2),
+		slidingStart:   time.Now(),
 	}
 	m.tplFuncs = m.makeGnericFuncMap()
 

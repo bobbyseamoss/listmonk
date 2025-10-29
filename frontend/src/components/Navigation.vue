@@ -40,6 +40,9 @@
       <b-menu-item v-if="$can('campaigns:get_analytics')" :to="{ name: 'campaignAnalytics' }" tag="router-link"
         :active="activeItem.campaignAnalytics" data-cy="analytics" icon="chart-bar"
         :label="$t('globals.terms.analytics')" />
+      <b-menu-item v-if="$can('campaigns:get')" :to="{ name: 'queue' }" tag="router-link"
+        :active="activeItem.queue" data-cy="queue" icon="format-list-checkbox"
+        label="Queue" />
     </b-menu-item><!-- campaigns -->
 
     <b-menu-item v-if="$can('users:*', 'roles:*')" :expanded="activeGroup.users" :active="activeGroup.users"

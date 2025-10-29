@@ -88,6 +88,21 @@ type Queries struct {
 	RegisterCampaignView     *sqlx.Stmt `query:"register-campaign-view"`
 	DeleteCampaign           *sqlx.Stmt `query:"delete-campaign"`
 
+	// Queue system queries
+	QueueCampaignEmails     *sqlx.Stmt `query:"queue-campaign-emails"`
+	GetQueuedEmailCount     *sqlx.Stmt `query:"get-queued-email-count"`
+	GetQueueStats           *sqlx.Stmt `query:"get-queue-stats"`
+	CancelCampaignQueue     *sqlx.Stmt `query:"cancel-campaign-queue"`
+	UpdateCampaignAsQueued  *sqlx.Stmt `query:"update-campaign-as-queued"`
+	GetQueueItems           *sqlx.Stmt `query:"get-queue-items"`
+	GetQueueSummaryStats    *sqlx.Stmt `query:"get-queue-summary-stats"`
+	GetNextScheduledEmail   *sqlx.Stmt `query:"get-next-scheduled-email"`
+	CancelQueueItem         *sqlx.Stmt `query:"cancel-queue-item"`
+	RetryQueueItem          *sqlx.Stmt `query:"retry-queue-item"`
+	GetSMTPServerCapacity   *sqlx.Stmt `query:"get-smtp-server-capacity"`
+	ClearAllQueuedEmails    *sqlx.Stmt `query:"clear-all-queued-emails"`
+	SendAllQueuedEmails     *sqlx.Stmt `query:"send-all-queued-emails"`
+
 	InsertMedia *sqlx.Stmt `query:"insert-media"`
 	GetMedia    *sqlx.Stmt `query:"get-media"`
 	QueryMedia  *sqlx.Stmt `query:"query-media"`

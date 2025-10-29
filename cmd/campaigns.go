@@ -357,9 +357,17 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 		return err
 	}
 
+	// Email queueing for automatic messenger is handled inside core.UpdateCampaignStatus
+	// (in internal/core/campaigns.go:324-330), which calls QueueCampaignEmails and the scheduler
+
 	// If the campaign is being stopped, send the signal to the manager to stop it in flight.
 	if req.Status == models.CampaignStatusPaused || req.Status == models.CampaignStatusCancelled {
 		a.manager.StopCampaign(id)
+
+		// Also cancel any queued emails for this campaign
+		if err := a.core.CancelCampaignQueue(id); err != nil {
+			a.log.Printf("error cancelling campaign queue: %v", err)
+		}
 	}
 
 	return c.JSON(http.StatusOK, okResp{out})
@@ -743,4 +751,64 @@ func canEditCampaign(status string) bool {
 	return status == models.CampaignStatusDraft ||
 		status == models.CampaignStatusPaused ||
 		status == models.CampaignStatusScheduled
+}
+
+// GetQueueStats returns statistics about the email queue
+func (a *App) GetQueueStats(c echo.Context) error {
+	// This will be implemented when queue processor is integrated
+	stats := map[string]interface{}{
+		"total_queued":  0,
+		"total_sending": 0,
+		"total_sent":    0,
+		"total_failed":  0,
+	}
+
+	return c.JSON(http.StatusOK, okResp{stats})
+}
+
+// GetServerCapacities returns current capacity information for all SMTP servers
+func (a *App) GetServerCapacities(c echo.Context) error {
+	// Get settings
+	settings, err := a.core.GetSettings()
+	if err != nil {
+		return err
+	}
+
+	capacities := []map[string]interface{}{}
+
+	for _, smtp := range settings.SMTP {
+		if !smtp.Enabled {
+			continue
+		}
+
+		// Get today's usage from database
+		var usage int
+		err := a.db.Get(&usage, `
+			SELECT COALESCE(emails_sent, 0)
+			FROM smtp_daily_usage
+			WHERE smtp_server_uuid = $1 AND usage_date = CURRENT_DATE
+		`, smtp.UUID)
+
+		if err != nil && err.Error() != "sql: no rows in result set" {
+			a.log.Printf("error getting daily usage: %v", err)
+			usage = 0
+		}
+
+		capacity := map[string]interface{}{
+			"uuid":            smtp.UUID,
+			"name":            smtp.Name,
+			"daily_limit":     smtp.DailyLimit,
+			"daily_used":      usage,
+			"daily_remaining": smtp.DailyLimit - usage,
+			"from_email":      smtp.FromEmail,
+		}
+
+		if capacity["daily_remaining"].(int) < 0 {
+			capacity["daily_remaining"] = 0
+		}
+
+		capacities = append(capacities, capacity)
+	}
+
+	return c.JSON(http.StatusOK, okResp{capacities})
 }

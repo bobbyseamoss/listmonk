@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/knadh/listmonk/internal/queue"
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
 	"github.com/lib/pq"
@@ -20,6 +21,29 @@ const (
 	campaignTplDefault = "default"
 	campaignTplArchive = "archive"
 )
+
+// NewScheduler creates a queue scheduler with configuration from settings
+func (c *Core) NewScheduler(settings models.Settings) *queue.Scheduler {
+	// Parse sliding window duration
+	var slidingDuration time.Duration
+	if settings.AppMessageSlidingWindowDuration != "" {
+		d, err := time.ParseDuration(settings.AppMessageSlidingWindowDuration)
+		if err == nil {
+			slidingDuration = d
+		}
+	}
+
+	cfg := queue.Config{
+		PollInterval:          time.Minute * 1,
+		BatchSize:             100,
+		TimeWindowStart:       settings.AppSendTimeStart,
+		TimeWindowEnd:         settings.AppSendTimeEnd,
+		SlidingWindowDuration: slidingDuration,
+		SlidingWindowLimit:    settings.AppMessageSlidingWindowRate,
+	}
+
+	return queue.NewScheduler(c.db, cfg, c.log)
+}
 
 // QueryCampaigns retrieves paginated campaigns optionally filtering them by the given arbitrary
 // query expression. It also returns the total number of records in the DB.
@@ -296,6 +320,15 @@ func (c *Core) UpdateCampaignStatus(id int, status string) (models.Campaign, err
 			c.i18n.Ts("globals.messages.notFound", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
 	}
 
+	// If campaign is being set to running and messenger is "automatic", queue all emails
+	if status == models.CampaignStatusRunning && cm.Messenger == "automatic" {
+		count, err := c.QueueCampaignEmails(cm.ID)
+		if err != nil {
+			return models.Campaign{}, err
+		}
+		c.log.Printf("queued %d emails for campaign %d (%s)", count, cm.ID, cm.Name)
+	}
+
 	cm.Status = status
 	return cm, nil
 }
@@ -444,6 +477,60 @@ func (c *Core) DeleteCampaignLinkClicks(before time.Time) error {
 	if _, err := c.q.DeleteCampaignLinkClicks.Exec(before); err != nil {
 		c.log.Printf("error deleting campaign link clicks: %s", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, c.i18n.Ts("public.errorProcessingRequest"))
+	}
+
+	return nil
+}
+
+// QueueCampaignEmails queues all emails for a campaign to be sent via the queue system
+func (c *Core) QueueCampaignEmails(campID int) (int, error) {
+	// Queue all campaign emails (initially with same scheduled_at time)
+	if _, err := c.q.QueueCampaignEmails.Exec(campID); err != nil {
+		c.log.Printf("error queuing campaign emails: %v", err)
+		return 0, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+
+	// Get the count of queued emails
+	var count int
+	if err := c.q.GetQueuedEmailCount.Get(&count, campID); err != nil {
+		c.log.Printf("error getting queued email count: %v", err)
+		return 0, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+
+	// Get settings for scheduler
+	settings, err := c.GetSettings()
+	if err != nil {
+		c.log.Printf("error getting settings for scheduling: %v", err)
+		return 0, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "settings", "error", pqErrMsg(err)))
+	}
+
+	// Schedule emails with staggered times and SMTP server assignments
+	scheduler := c.NewScheduler(settings)
+	if err := scheduler.ScheduleCampaign(campID, settings); err != nil {
+		c.log.Printf("error scheduling campaign emails: %v", err)
+		// Don't fail the entire operation, emails are queued even if scheduling fails
+		// They'll be picked up by the processor eventually
+	}
+
+	// Update campaign to mark it as queued
+	if _, err := c.q.UpdateCampaignAsQueued.Exec(campID); err != nil {
+		c.log.Printf("error updating campaign as queued: %v", err)
+		return 0, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+
+	return count, nil
+}
+
+// CancelCampaignQueue cancels all queued emails for a campaign
+func (c *Core) CancelCampaignQueue(campID int) error {
+	if _, err := c.q.CancelCampaignQueue.Exec(campID); err != nil {
+		c.log.Printf("error cancelling campaign queue: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
 	}
 
 	return nil

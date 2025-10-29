@@ -694,11 +694,13 @@ SELECT EXISTS (
 -- a campaign. This is used to fetch and slice subscribers for the campaign in next-campaign-subscribers.
 WITH camps AS (
     -- Get all running campaigns and their template bodies (if the template's deleted, the default template body instead)
+    -- Exclude queue-based campaigns (use_queue=true) as they're handled by the queue processor, not the manager
     SELECT campaigns.*, COALESCE(templates.body, (SELECT body FROM templates WHERE is_default = true LIMIT 1), '') AS template_body
     FROM campaigns
     LEFT JOIN templates ON (templates.id = campaigns.template_id)
     WHERE (status='running' OR (status='scheduled' AND NOW() >= campaigns.send_at))
     AND NOT(campaigns.id = ANY($1::INT[]))
+    AND (use_queue IS NULL OR use_queue = false)
 ),
 campLists AS (
     -- Get the list_ids and their optin statuses for the campaigns found in the previous step.
@@ -1329,3 +1331,146 @@ UPDATE roles SET name=$2, permissions=$3 WHERE id=$1 and parent_id IS NULL RETUR
 
 -- name: delete-role
 DELETE FROM roles WHERE id=$1;
+
+-- Queue system queries
+
+-- name: queue-campaign-emails
+-- Queue all emails for a campaign to be sent via the queue system
+INSERT INTO email_queue (campaign_id, subscriber_id, status, priority, scheduled_at, created_at, updated_at)
+SELECT 
+    $1 as campaign_id,
+    sl.subscriber_id,
+    'queued' as status,
+    0 as priority,
+    NOW() as scheduled_at,
+    NOW() as created_at,
+    NOW() as updated_at
+FROM campaign_lists cl
+INNER JOIN subscriber_lists sl ON (cl.list_id = sl.list_id AND sl.status = 'confirmed')
+WHERE cl.campaign_id = $1
+ON CONFLICT DO NOTHING;
+
+-- name: get-queued-email-count
+-- Get the count of emails queued for a campaign
+SELECT COUNT(*) as count FROM email_queue WHERE campaign_id = $1 AND status = 'queued';
+
+-- name: get-queue-stats
+-- Get statistics about the email queue
+SELECT 
+    status,
+    COUNT(*) as count,
+    MIN(scheduled_at) as oldest,
+    MAX(scheduled_at) as newest
+FROM email_queue
+GROUP BY status;
+
+-- name: cancel-campaign-queue
+-- Cancel all queued emails for a campaign
+UPDATE email_queue 
+SET status = 'cancelled', updated_at = NOW()
+WHERE campaign_id = $1 AND status IN ('queued', 'sending');
+
+-- name: update-campaign-as-queued
+-- Mark a campaign as using the queue system
+UPDATE campaigns
+SET use_queue = true, queued_at = NOW(), updated_at = NOW()
+WHERE id = $1;
+
+-- name: get-queue-items
+-- Get queue items with campaign and subscriber details for the Queue page
+SELECT
+    COUNT(*) OVER() AS total,
+    eq.id,
+    eq.campaign_id,
+    c.name as campaign_name,
+    c.uuid as campaign_uuid,
+    eq.subscriber_id,
+    s.email as subscriber_email,
+    s.uuid as subscriber_uuid,
+    eq.status,
+    eq.priority,
+    eq.scheduled_at,
+    eq.sent_at,
+    eq.assigned_smtp_server_uuid,
+    eq.retry_count,
+    eq.last_error as error_message,
+    eq.created_at,
+    eq.updated_at
+FROM email_queue eq
+INNER JOIN campaigns c ON eq.campaign_id = c.id
+INNER JOIN subscribers s ON eq.subscriber_id = s.id
+WHERE ($1 = 0 OR eq.campaign_id = $1)
+    AND (CARDINALITY($2::TEXT[]) = 0 OR eq.status = ANY($2::TEXT[]))
+    AND ($3 = '' OR eq.assigned_smtp_server_uuid = $3)
+    AND ($4 = '' OR s.email ILIKE $4)
+ORDER BY eq.scheduled_at DESC, eq.id DESC
+OFFSET $5 LIMIT (CASE WHEN $6 < 1 THEN NULL ELSE $6 END);
+
+-- name: get-queue-summary-stats
+-- Get summary statistics for the email queue
+SELECT
+    COALESCE(SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END), 0) as queued,
+    COALESCE(SUM(CASE WHEN status = 'sending' THEN 1 ELSE 0 END), 0) as sending,
+    COALESCE(SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END), 0) as sent,
+    COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed,
+    COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) as cancelled
+FROM email_queue;
+
+-- name: get-next-scheduled-email
+-- Get the next email scheduled to be sent
+SELECT scheduled_at
+FROM email_queue
+WHERE status = 'queued'
+ORDER BY scheduled_at ASC
+LIMIT 1;
+
+-- name: cancel-queue-item
+-- Cancel a specific queued email
+UPDATE email_queue
+SET status = 'cancelled', updated_at = NOW()
+WHERE id = $1 AND status IN ('queued', 'sending');
+
+-- name: retry-queue-item
+-- Retry a failed or cancelled email
+UPDATE email_queue
+SET status = 'queued',
+    retry_count = retry_count + 1,
+    last_error = NULL,
+    scheduled_at = NOW(),
+    updated_at = NOW()
+WHERE id = $1 AND status IN ('failed', 'cancelled');
+
+-- name: get-smtp-server-capacity
+-- Get capacity information for SMTP servers
+SELECT
+    smtp_uuid,
+    smtp_name,
+    daily_limit,
+    daily_used,
+    from_email,
+    (daily_limit - daily_used) as daily_remaining
+FROM (
+    SELECT
+        elem->>'uuid' as smtp_uuid,
+        elem->>'name' as smtp_name,
+        COALESCE((elem->>'daily_limit')::INT, 0) as daily_limit,
+        COALESCE((SELECT emails_sent FROM smtp_daily_usage
+                  WHERE smtp_server_uuid = elem->>'uuid'
+                  AND usage_date = CURRENT_DATE), 0) as daily_used,
+        elem->>'from_email' as from_email
+    FROM settings s, jsonb_array_elements(s.value) AS elem
+    WHERE s.key = 'smtp' AND (elem->>'enabled')::BOOLEAN = true
+) smtp_info
+ORDER BY smtp_name;
+
+-- name: clear-all-queued-emails
+-- Cancel all queued emails (sets status to 'cancelled')
+UPDATE email_queue
+SET status = 'cancelled', updated_at = NOW()
+WHERE status = 'queued';
+
+-- name: send-all-queued-emails
+-- Set all queued emails to send immediately (sets scheduled_at to NOW)
+UPDATE email_queue
+SET scheduled_at = NOW(), updated_at = NOW()
+WHERE status = 'queued';

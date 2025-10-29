@@ -54,6 +54,40 @@
 
     <div>
       <hr />
+      <h5 class="title is-5">Sending Time Window</h5>
+      <p class="help mb-3">Restrict email sending to specific hours of the day (useful for avoiding night-time sends)</p>
+      <div class="columns">
+        <div class="column is-6">
+          <b-field label="Send Start Time (24h format)" label-position="on-border"
+            message="Time to start sending emails each day (e.g., 08:00). Leave empty for 24/7 sending.">
+            <b-input v-model="data['app.send_time_start']" name="app.send_time_start"
+              placeholder="08:00" pattern="[0-2][0-9]:[0-5][0-9]" :maxlength="5" />
+          </b-field>
+        </div>
+        <div class="column is-6">
+          <b-field label="Send End Time (24h format)" label-position="on-border"
+            message="Time to stop sending emails each day (e.g., 20:00). Leave empty for 24/7 sending.">
+            <b-input v-model="data['app.send_time_end']" name="app.send_time_end"
+              placeholder="20:00" pattern="[0-2][0-9]:[0-5][0-9]" :maxlength="5" />
+          </b-field>
+        </div>
+      </div>
+    </div><!-- time window -->
+
+    <div>
+      <hr />
+      <h5 class="title is-5">Testing Mode</h5>
+      <b-field label="Enable Testing Mode"
+        message="⚠️ When enabled, emails will be simulated but NOT actually sent to recipients. Use this to safely test queue functionality without affecting your mail server reputation.">
+        <b-switch v-model="data['app.testing_mode']" name="app.testing_mode" type="is-warning" />
+      </b-field>
+      <b-notification v-if="data['app.testing_mode']" type="is-warning" :closable="false" class="mt-3">
+        <strong>Testing Mode is Active!</strong> No emails will be sent to actual recipients. All sends will be simulated.
+      </b-notification>
+    </div><!-- testing mode -->
+
+    <div>
+      <hr />
       <div class="columns">
         <div class="column is-4">
           <b-field :label="$t('settings.performance.cacheSlowQueries')"

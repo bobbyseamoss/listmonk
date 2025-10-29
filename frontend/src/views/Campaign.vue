@@ -88,6 +88,7 @@
                         :disabled="!canEdit" required expanded>
                         <template v-if="emailMessengers.length > 1">
                           <optgroup label="email">
+                            <option value="automatic">automatic (queue-based)</option>
                             <option v-for="m in emailMessengers" :value="m" :key="m">
                               {{ m }}
                             </option>

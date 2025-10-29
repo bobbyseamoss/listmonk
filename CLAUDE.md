@@ -249,3 +249,145 @@ Listmonk supports unlimited named SMTP servers with individual bounce mailboxes:
 - SMTP server names are automatically prefixed with `email-` and sanitized (alphanumeric + hyphens only)
 - Bounce mailbox scan intervals must be at least 1 minute
 - Each bounce mailbox runs in a separate goroutine, scanning at its configured interval
+
+## Queue-Based Email Delivery System
+
+A sophisticated queue-based email delivery system has been implemented to support daily sending limits, time windows, and automatic server selection across multiple SMTP servers.
+
+### Architecture Components
+
+**internal/queue/** - Queue processing system
+- `models.go` - Queue data structures (EmailQueueItem, ServerCapacity, DeliveryEstimate)
+- `processor.go` - Core queue processing logic with capacity management
+- `calculator.go` - Delivery estimation and capacity calculation
+
+### Database Schema
+
+**email_queue** - Stores all queued emails
+- Columns: id, campaign_id, subscriber_id, status, priority, scheduled_at, sent_at
+- Statuses: queued, sending, sent, failed, cancelled
+- Indexed on status, scheduled_at, campaign_id, assigned_smtp_server_uuid
+
+**smtp_daily_usage** - Tracks daily email counts per SMTP server
+- Columns: smtp_server_uuid, usage_date, emails_sent
+- Unique constraint on (smtp_server_uuid, usage_date)
+
+**smtp_rate_limit_state** - Tracks sliding window rate limits
+- Columns: smtp_server_uuid, window_start, emails_in_window
+
+**campaigns** - Extended with queue tracking
+- New columns: use_queue, queued_at, queue_completed_at
+
+### SMTP Server Configuration
+
+Each SMTP server now supports:
+- **from_email** - Default sender address (e.g., adam@mail2.bobbyseamoss.com)
+- **daily_limit** - Maximum emails per day (0 = unlimited)
+
+### Performance Settings
+
+**Time Window Configuration**:
+- **app.send_time_start** - Start time for sending (24h format, e.g., "08:00")
+- **app.send_time_end** - End time for sending (24h format, e.g., "20:00")
+- Empty values = 24/7 sending
+
+### Campaign Integration
+
+**Automatic Messenger**:
+- Select "automatic (queue-based)" in campaign messenger dropdown
+- Campaign emails are queued to database instead of sent immediately
+- Queue processor distributes emails across SMTP servers respecting capacity
+
+**Queue Lifecycle**:
+1. Campaign set to "running" with messenger="automatic"
+2. All emails added to email_queue table
+3. Campaign marked with use_queue=true, queued_at=NOW()
+4. Queue processor polls for emails within time window
+5. Processor selects server with most remaining capacity
+6. Emails sent respecting daily limits and sliding window
+7. Usage counters updated after each send
+
+### API Endpoints
+
+**GET /api/queue/stats** - Queue statistics
+- Returns: total_queued, total_sending, total_sent, total_failed
+
+**GET /api/queue/servers** - Server capacity information
+- Returns: Array of {uuid, name, daily_limit, daily_used, daily_remaining, from_email}
+
+### SQL Queries
+
+**queue-campaign-emails** - Queue all emails for a campaign
+**get-queued-email-count** - Count queued emails for campaign
+**get-queue-stats** - Get queue statistics
+**cancel-campaign-queue** - Cancel queued emails for campaign
+**update-campaign-as-queued** - Mark campaign as using queue
+
+### Frontend Components
+
+**SMTP Settings** (`frontend/src/views/settings/smtp.vue`):
+- From Email field per SMTP server
+- Daily Limit field per SMTP server (number input, min 0)
+
+**Performance Settings** (`frontend/src/views/settings/performance.vue`):
+- Send Start Time field (HH:MM format)
+- Send End Time field (HH:MM format)
+
+**Campaign Form** (`frontend/src/views/Campaign.vue`):
+- "automatic (queue-based)" option in messenger dropdown
+
+### Queue Processor Features
+
+**Capacity Management**:
+- Tracks daily usage per SMTP server
+- Respects daily limits (stops when limit reached)
+- Respects sliding window rate limits (existing feature)
+- Selects server with most remaining capacity
+
+**Time Window Enforcement**:
+- Only processes emails within configured time window
+- Calculates sending hours per day for estimates
+- Aligns scheduled times to window boundaries
+
+**Delivery Estimation**:
+- Calculates campaign completion time
+- Distributes emails proportionally across servers
+- Provides daily breakdown of sending schedule
+- Indicates if campaign fits within single day
+
+### Integration Points
+
+**Campaign Status Update** (`internal/core/campaigns.go:UpdateCampaignStatus`):
+- Detects messenger="automatic" when status set to "running"
+- Calls QueueCampaignEmails() to queue all emails
+- Logs number of emails queued
+
+**Campaign Cancellation** (`cmd/campaigns.go:UpdateCampaignStatus`):
+- Calls CancelCampaignQueue() when campaign paused/cancelled
+- Updates all queued emails to status="cancelled"
+
+### Migration
+
+**v6.0.0 Migration** (`internal/migrations/v6.0.0.go`):
+- Creates email_queue, smtp_daily_usage, smtp_rate_limit_state tables
+- Adds queue tracking columns to campaigns table
+- Registered in cmd/upgrade.go migList
+
+### Common Use Cases
+
+**Multi-Day Campaign**:
+1. Configure SMTP servers with daily_limit=1000 each
+2. Set time window to 08:00-20:00
+3. Create campaign with 50,000 recipients
+4. Select "automatic" messenger
+5. System queues and distributes over multiple days
+
+**Capacity Monitoring**:
+- GET /api/queue/servers to see real-time capacity
+- Shows daily_used, daily_remaining for each server
+- Resets daily at midnight
+
+**Queue Inspection**:
+- GET /api/queue/stats for overall queue status
+- Check email_queue table directly for detailed inspection
+

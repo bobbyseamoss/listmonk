@@ -3,7 +3,7 @@
     <div class="items mail-servers">
       <div class="block box" v-for="(item, n) in form.smtp" :key="n">
         <!-- Collapsed header view -->
-        <div v-if="item.collapsed" class="columns is-vcentered" style="cursor: pointer;" @click="toggleCollapse(n)">
+        <div v-if="item.collapsed" class="columns is-vcentered" style="cursor: pointer;" @click="toggleCollapse(n)" @keydown.enter="toggleCollapse(n)" tabindex="0">
           <div class="column is-narrow">
             <b-icon :icon="item.collapsed ? 'chevron-right' : 'chevron-down'" />
           </div>
@@ -25,7 +25,7 @@
         <div v-else>
           <div class="columns is-vcentered mb-2">
             <div class="column is-narrow">
-              <a @click.prevent="toggleCollapse(n)" style="cursor: pointer;">
+              <a @click.prevent="toggleCollapse(n)" @keydown.enter.prevent="toggleCollapse(n)" style="cursor: pointer;" tabindex="0" :aria-label="item.collapsed ? 'Expand' : 'Collapse'">
                 <b-icon :icon="item.collapsed ? 'chevron-right' : 'chevron-down'" size="is-medium" />
               </a>
             </div>
@@ -194,6 +194,47 @@
                       {{ box.name || box.host }}
                     </option>
                   </b-select>
+                </b-field>
+              </div>
+            </div>
+
+            <div class="columns">
+              <div class="column is-6">
+                <b-field label="From Email" label-position="on-border"
+                  message="Default sender email address for this SMTP server (e.g., adam@mail2.bobbyseamoss.com)">
+                  <b-input v-model="item.from_email" name="from_email"
+                    placeholder="sender@yourdomain.com" :maxlength="200" />
+                </b-field>
+              </div>
+              <div class="column is-6">
+                <b-field label="Daily Limit" label-position="on-border"
+                  message="Maximum number of emails this server can send per day. Set to 0 for unlimited.">
+                  <b-numberinput v-model="item.daily_limit" name="daily_limit" type="is-light"
+                    controls-position="compact" placeholder="1000" min="0" />
+                </b-field>
+              </div>
+            </div>
+
+            <div class="columns">
+              <div class="column is-4">
+                <b-field label="Enable sliding window limit" label-position="on-border"
+                  message="Limit the number of messages sent in a specific time window for this SMTP server.">
+                  <b-switch v-model="item.sliding_window" name="sliding_window" />
+                </b-field>
+              </div>
+              <div class="column is-4">
+                <b-field label="Sliding window rate" label-position="on-border"
+                  message="Maximum number of messages to send within the window duration.">
+                  <b-numberinput v-model="item.sliding_window_rate" name="sliding_window_rate"
+                    placeholder="100" type="is-light" controls-position="compact" min="0"
+                    :disabled="!item.sliding_window" />
+                </b-field>
+              </div>
+              <div class="column is-4">
+                <b-field label="Sliding window duration" label-position="on-border"
+                  message="Time window duration (e.g., 1h, 30m, 1h30m).">
+                  <b-input v-model="item.sliding_window_duration" name="sliding_window_duration"
+                    placeholder="1h" :maxlength="10" :disabled="!item.sliding_window" />
                 </b-field>
               </div>
             </div>
@@ -376,6 +417,11 @@ export default Vue.extend({
           tls_type: 'STARTTLS',
           tls_skip_verify: false,
           bounce_mailbox_uuid: '',
+          from_email: '',
+          daily_limit: 0,
+          sliding_window: false,
+          sliding_window_rate: 0,
+          sliding_window_duration: '1h',
           collapsed: false,
         };
       }
@@ -460,10 +506,6 @@ export default Vue.extend({
         document.querySelector(`.smtp-username-${n}`).focus();
       });
     },
-  },
-
-  computed: {
-    ...mapState(['settings']),
   },
 });
 </script>

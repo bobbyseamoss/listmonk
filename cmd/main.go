@@ -25,6 +25,7 @@ import (
 	"github.com/knadh/listmonk/internal/manager"
 	"github.com/knadh/listmonk/internal/media"
 	"github.com/knadh/listmonk/internal/messenger/email"
+	"github.com/knadh/listmonk/internal/queue"
 	"github.com/knadh/listmonk/internal/subimporter"
 	"github.com/knadh/listmonk/models"
 	"github.com/knadh/paginator"
@@ -33,25 +34,26 @@ import (
 
 // App contains the "global" shared components, controllers and fields.
 type App struct {
-	cfg        *Config
-	urlCfg     *UrlConfig
-	fs         stuffbin.FileSystem
-	db         *sqlx.DB
-	queries    *models.Queries
-	core       *core.Core
-	manager    *manager.Manager
-	messengers []manager.Messenger
-	emailMsgr  manager.Messenger
-	importer   *subimporter.Importer
-	auth       *auth.Auth
-	media      media.Store
-	bounce     *bounce.Manager
-	captcha    *captcha.Captcha
-	i18n       *i18n.I18n
-	pg         *paginator.Paginator
-	events     *events.Events
-	log        *log.Logger
-	bufLog     *buflog.BufLog
+	cfg          *Config
+	urlCfg       *UrlConfig
+	fs           stuffbin.FileSystem
+	db           *sqlx.DB
+	queries      *models.Queries
+	core         *core.Core
+	manager      *manager.Manager
+	messengers   []manager.Messenger
+	emailMsgr    manager.Messenger
+	importer     *subimporter.Importer
+	auth         *auth.Auth
+	media        media.Store
+	bounce       *bounce.Manager
+	captcha      *captcha.Captcha
+	i18n         *i18n.I18n
+	pg           *paginator.Paginator
+	events       *events.Events
+	log          *log.Logger
+	bufLog       *buflog.BufLog
+	queueProc    *queue.Processor
 
 	about         about
 	fnOptinNotify func(models.Subscriber, []int) (int, error)
@@ -186,8 +188,8 @@ func main() {
 		// Crud core.
 		core = initCore(fbOptinNotify, queries, db, i18n, ko)
 
-		// Initialize all messengers, SMTP and postback.
-		msgrs = append(initSMTPMessengers(), initPostbackMessengers(ko)...)
+		// Initialize all messengers: SMTP, postback, and automatic.
+		msgrs = append(append(initSMTPMessengers(), initPostbackMessengers(ko)...), initAutomaticMessenger(db))
 
 		// Campaign manager.
 		mgr = initCampaignManager(msgrs, queries, urlCfg, core, media, i18n, ko)
@@ -240,6 +242,14 @@ func main() {
 	// messages) get processed at the specified interval.
 	go mgr.Run()
 
+	// Initialize and start the queue processor for automatic campaigns
+	// Get settings to configure the processor
+	settings, err := core.GetSettings()
+	if err != nil {
+		lo.Fatalf("error getting settings for queue processor: %v", err)
+	}
+	queueProc := initQueueProcessor(db, settings)
+
 	// =========================================================================
 	// Initialize the App{} with all the global shared components, controllers and fields.
 	app := &App{
@@ -261,6 +271,7 @@ func main() {
 		log:        lo,
 		events:     evStream,
 		bufLog:     bufLog,
+		queueProc:  queueProc,
 
 		pg: paginator.New(paginator.Opt{
 			DefaultPerPage: 20,
@@ -302,6 +313,11 @@ func main() {
 
 		// Close the campaign manager.
 		mgr.Close()
+
+		// Stop the queue processor.
+		if app.queueProc != nil {
+			app.queueProc.Stop()
+		}
 
 		// Close the DB pool.
 		db.Close()

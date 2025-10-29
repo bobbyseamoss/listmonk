@@ -87,9 +87,37 @@ func (p *pipe) NextSubscribers() (bool, error) {
 	}
 
 	// Is there a sliding window limit configured?
-	hasSliding := p.m.cfg.SlidingWindow &&
-		p.m.cfg.SlidingWindowRate > 0 &&
-		p.m.cfg.SlidingWindowDuration.Seconds() > 1
+	// Skip sliding window for automatic campaigns as they go to the queue.
+	// Try to get messenger-specific sliding window settings first, fallback to global settings.
+	var (
+		hasSliding      bool
+		slidingRate     int
+		slidingDuration time.Duration
+	)
+
+	if p.camp.Messenger != "automatic" {
+		// Check if the messenger supports sliding window configuration.
+		if msgr, ok := p.m.messengers[p.camp.Messenger]; ok {
+			if msgrWithSliding, ok := msgr.(MessengerWithSlidingWindow); ok {
+				enabled, durStr, rate := msgrWithSliding.GetSlidingWindow()
+				if enabled && rate > 0 {
+					// Parse the duration string.
+					if dur, err := time.ParseDuration(durStr); err == nil && dur.Seconds() > 1 {
+						hasSliding = true
+						slidingRate = rate
+						slidingDuration = dur
+					}
+				}
+			}
+		}
+
+		// If messenger doesn't have sliding window config, use global settings.
+		if !hasSliding && p.m.cfg.SlidingWindow && p.m.cfg.SlidingWindowRate > 0 && p.m.cfg.SlidingWindowDuration.Seconds() > 1 {
+			hasSliding = true
+			slidingRate = p.m.cfg.SlidingWindowRate
+			slidingDuration = p.m.cfg.SlidingWindowDuration
+		}
+	}
 
 	// Push messages.
 	for _, s := range subs {
@@ -105,28 +133,44 @@ func (p *pipe) NextSubscribers() (bool, error) {
 
 		// Check if the sliding window is active.
 		if hasSliding {
-			diff := time.Since(p.m.slidingStart)
+			// Get or create the sliding window state for this messenger.
+			p.m.slidingWindowsMut.Lock()
+			state, exists := p.m.slidingWindows[p.camp.Messenger]
+			if !exists {
+				state = &slidingWindowState{
+					start: time.Now(),
+					count: 0,
+				}
+				p.m.slidingWindows[p.camp.Messenger] = state
+			}
+
+			diff := time.Since(state.start)
 
 			// Window has expired. Reset the clock.
-			if diff >= p.m.cfg.SlidingWindowDuration {
-				p.m.slidingStart = time.Now()
-				p.m.slidingCount = 0
+			if diff >= slidingDuration {
+				state.start = time.Now()
+				state.count = 0
+				p.m.slidingWindowsMut.Unlock()
 				continue
 			}
 
 			// Have the messages exceeded the limit?
-			p.m.slidingCount++
-			if p.m.slidingCount >= p.m.cfg.SlidingWindowRate {
-				wait := p.m.cfg.SlidingWindowDuration - diff
+			state.count++
+			if state.count >= slidingRate {
+				wait := slidingDuration - diff
 
-				p.m.log.Printf("messages exceeded (%d) for the window (%v since %s). Sleeping for %s.",
-					p.m.slidingCount,
-					p.m.cfg.SlidingWindowDuration,
-					p.m.slidingStart.Format(time.RFC822Z),
+				p.m.log.Printf("messages exceeded (%d) for messenger '%s' in window (%v since %s). Sleeping for %s.",
+					state.count,
+					p.camp.Messenger,
+					slidingDuration,
+					state.start.Format(time.RFC822Z),
 					wait.Round(time.Second)*1)
 
-				p.m.slidingCount = 0
+				state.count = 0
+				p.m.slidingWindowsMut.Unlock()
 				time.Sleep(wait)
+			} else {
+				p.m.slidingWindowsMut.Unlock()
 			}
 		}
 	}

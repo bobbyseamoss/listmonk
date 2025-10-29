@@ -348,6 +348,52 @@ export const deleteCampaign = async (id) => http.delete(
   { loading: models.campaigns },
 );
 
+// Queue.
+export const getQueueItems = async (params) => http.get(
+  '/api/queue/items',
+  { params, loading: models.queue },
+);
+
+export const getQueueStats = async () => http.get(
+  '/api/queue/stats',
+  { loading: models.queue },
+);
+
+export const getSMTPServerCapacity = async () => http.get(
+  '/api/queue/servers',
+  { loading: models.queue },
+);
+
+export const cancelQueueItem = async (id) => http.put(
+  `/api/queue/${id}/cancel`,
+  {},
+  { loading: models.queue },
+);
+
+export const retryQueueItem = async (id) => http.put(
+  `/api/queue/${id}/retry`,
+  {},
+  { loading: models.queue },
+);
+
+export const clearAllQueuedEmails = async () => http.post(
+  '/api/queue/clear',
+  {},
+  { loading: models.queue },
+);
+
+export const toggleQueuePause = async (paused) => http.put(
+  '/api/queue/pause',
+  { paused },
+  { loading: models.queue },
+);
+
+export const sendAllQueuedEmails = async () => http.post(
+  '/api/queue/send-all',
+  {},
+  { loading: models.queue },
+);
+
 // Media.
 export const getMedia = async (params) => http.get(
   '/api/media',

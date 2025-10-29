@@ -236,6 +236,7 @@ INSERT INTO settings (key, value) VALUES
     ('app.message_sliding_window_rate', '10000'),
     ('app.cache_slow_queries', 'false'),
     ('app.cache_slow_queries_interval', '"0 3 * * *"'),
+    ('app.testing_mode', 'false'),
     ('app.enable_public_archive', 'true'),
     ('app.enable_public_subscription_page', 'true'),
     ('app.enable_public_archive_rss_content', 'true'),

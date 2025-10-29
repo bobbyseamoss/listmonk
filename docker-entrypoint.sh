@@ -66,6 +66,37 @@ fi
 
 echo "Launching listmonk with user=[${USER_NAME}] group=[${GROUP_NAME}] PUID=[${PUID}] PGID=[${PGID}]"
 
+# Auto-installation and configuration initialization
+if [ "${AUTO_INSTALL}" = "true" ] || [ "${AUTO_INSTALL}" = "1" ]; then
+  echo "AUTO_INSTALL enabled - checking database initialization..."
+
+  # Check if database is already initialized by trying to query settings table
+  if ! ./listmonk --check-db 2>/dev/null; then
+    echo "Database not initialized. Running installation..."
+
+    # Run install command
+    ./listmonk --install --yes --idempotent
+
+    echo "✓ Database initialized"
+
+    # Run configuration initialization if script exists
+    if [ -f /listmonk/deployment/scripts/init_config.sh ]; then
+      echo "Running configuration initialization..."
+      /bin/sh /listmonk/deployment/scripts/init_config.sh
+      echo "✓ Configuration initialized"
+    else
+      echo "⚠️  Warning: init_config.sh not found, skipping configuration initialization"
+    fi
+  else
+    echo "✓ Database already initialized"
+  fi
+
+  # Always run upgrade (idempotent)
+  echo "Running database upgrade..."
+  ./listmonk --upgrade --yes
+  echo "✓ Database up to date"
+fi
+
 # If running as root and PUID is not 0, then execute command as PUID
 # this allows us to run the container as a non-root user
 if [ "$(id -u)" = "0" ] && [ "${PUID}" != "0" ]; then
