@@ -138,11 +138,32 @@ func (m *Manager) Run() {
 
 // runMailboxScanner runs a blocking loop that scans the mailbox at given intervals.
 func (m *Manager) runMailboxScanner(uuid string, mb Mailbox) {
-	// Find the mailbox configuration to get the scan interval.
+	// Find the mailbox configuration to get the scan interval and details for logging.
 	var scanInterval time.Duration
+	var mailboxName string
+	var mailboxType string
+	var mailboxHost string
+	var mailboxUsername string
+	var mailboxPort int
+
 	for _, boxOpt := range m.opt.Mailboxes {
 		if boxOpt.UUID == uuid {
-			scanInterval = boxOpt.Opt.ScanInterval
+			// Parse the scan interval string (e.g., "15m", "1h", "30s")
+			if boxOpt.Opt.ScanInterval != "" {
+				d, err := time.ParseDuration(boxOpt.Opt.ScanInterval)
+				if err != nil {
+					m.log.Printf("error parsing scan interval '%s' for mailbox '%s': %v, using default 15m",
+						boxOpt.Opt.ScanInterval, boxOpt.Name, err)
+					scanInterval = 15 * time.Minute
+				} else {
+					scanInterval = d
+				}
+			}
+			mailboxName = boxOpt.Name
+			mailboxType = boxOpt.Type
+			mailboxHost = boxOpt.Opt.Host
+			mailboxUsername = boxOpt.Opt.Username
+			mailboxPort = boxOpt.Opt.Port
 			break
 		}
 	}
@@ -151,9 +172,12 @@ func (m *Manager) runMailboxScanner(uuid string, mb Mailbox) {
 		scanInterval = 15 * time.Minute // default
 	}
 
+	m.log.Printf("bounce mailbox '%s' (uuid=%s) will scan every %v", mailboxName, uuid, scanInterval)
+
 	for {
 		if err := mb.Scan(1000, m.queue); err != nil {
-			m.log.Printf("error scanning bounce mailbox %s: %v", uuid, err)
+			m.log.Printf("error scanning bounce mailbox '%s' (uuid=%s, type=%s, host=%s:%d, username=%s): %v",
+				mailboxName, uuid, mailboxType, mailboxHost, mailboxPort, mailboxUsername, err)
 		}
 
 		time.Sleep(scanInterval)

@@ -1437,6 +1437,21 @@ SELECT
     COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) as cancelled
 FROM email_queue;
 
+-- name: check-subscriber-smart-sending
+-- Check if a subscriber is eligible for sending based on Smart Sending rules
+-- Returns the last send time if found, or NULL if never sent or eligible
+SELECT last_campaign_send_at
+FROM subscriber_last_send
+WHERE subscriber_id = $1
+    AND last_campaign_send_at > NOW() - INTERVAL '1 hour' * $2;
+
+-- name: update-subscriber-last-send
+-- Record when a subscriber receives a campaign email
+INSERT INTO subscriber_last_send (subscriber_id, last_campaign_send_at, updated_at)
+VALUES ($1, NOW(), NOW())
+ON CONFLICT (subscriber_id)
+DO UPDATE SET last_campaign_send_at = NOW(), updated_at = NOW();
+
 -- name: get-next-scheduled-email
 -- Get the next email scheduled to be sent (only if it's in the future)
 -- This prevents showing old timestamps when emails are queued but throttled by rate limits

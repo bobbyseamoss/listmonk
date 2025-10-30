@@ -1,7 +1,5 @@
 package mailbox
 
-import "time"
-
 // Opt represents an e-mail POP/IMAP mailbox configuration.
 type Opt struct {
 	// Host is the server's hostname.
@@ -25,5 +23,6 @@ type Opt struct {
 	TLSEnabled    bool `json:"tls_enabled"`
 	TLSSkipVerify bool `json:"tls_skip_verify"`
 
-	ScanInterval time.Duration `json:"scan_interval"`
+	// ScanInterval is a duration string like "15m", "1h", etc.
+	ScanInterval string `json:"scan_interval"`
 }

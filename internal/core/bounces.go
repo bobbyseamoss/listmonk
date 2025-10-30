@@ -76,7 +76,13 @@ func (c *Core) RecordBounce(b models.Bounce) error {
 	if err != nil {
 		// Ignore the error if it complained of no subscriber.
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Column == "subscriber_id" {
-			c.log.Printf("bounced subscriber (%s / %s) not found", b.SubscriberUUID, b.Email)
+			// Include more diagnostic information to help identify the bounce source
+			metaStr := string(b.Meta)
+			if len(metaStr) > 200 {
+				metaStr = metaStr[:200] + "..." // Truncate if too long
+			}
+			c.log.Printf("bounced subscriber not found - uuid=%s, email=%s, type=%s, source=%s, campaign=%s, meta=%s",
+				b.SubscriberUUID, b.Email, b.Type, b.Source, b.CampaignUUID, metaStr)
 			return nil
 		}
 

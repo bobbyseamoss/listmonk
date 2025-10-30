@@ -116,13 +116,15 @@ func V6_0_0(db *sqlx.DB, fs stuffbin.FileSystem, ko *koanf.Koanf, lo *log.Logger
 			('app.send_time_start', '""'),
 			('app.send_time_end', '""'),
 			('app.account_rate_limit_per_minute', '30'),
-			('app.account_rate_limit_per_hour', '100')
+			('app.account_rate_limit_per_hour', '100'),
+			('app.smart_sending_enabled', 'false'),
+			('app.smart_sending_period_hours', '16')
 		ON CONFLICT (key) DO NOTHING;
 	`); err != nil {
 		return err
 	}
 
-	lo.Println("Added queue-related settings (testing_mode, queue_paused, send_time_start, send_time_end, account_rate_limit_per_minute, account_rate_limit_per_hour)")
+	lo.Println("Added queue-related settings (testing_mode, queue_paused, send_time_start, send_time_end, account_rate_limit_per_minute, account_rate_limit_per_hour, smart_sending_enabled, smart_sending_period_hours)")
 
 	// Create account-wide rate limit tracking table
 	if _, err := db.Exec(`
@@ -151,6 +153,21 @@ func V6_0_0(db *sqlx.DB, fs stuffbin.FileSystem, ko *koanf.Koanf, lo *log.Logger
 	}
 
 	lo.Println("Created account-wide rate limit tracking table")
+
+	// Create subscriber_last_send tracking table for Smart Sending
+	if _, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS subscriber_last_send (
+			subscriber_id INT PRIMARY KEY REFERENCES subscribers(id) ON DELETE CASCADE,
+			last_campaign_send_at TIMESTAMP WITH TIME ZONE NOT NULL,
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_subscriber_last_send_time ON subscriber_last_send(last_campaign_send_at);
+	`); err != nil {
+		return err
+	}
+
+	lo.Println("Created subscriber_last_send tracking table for Smart Sending")
 
 	return nil
 }

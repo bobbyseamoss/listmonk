@@ -36,6 +36,10 @@ type Settings struct {
 	AppAccountRateLimitPerMinute int `json:"app.account_rate_limit_per_minute"`
 	AppAccountRateLimitPerHour   int `json:"app.account_rate_limit_per_hour"`
 
+	// Smart Sending - prevents recipients from receiving too many messages within a time period
+	AppSmartSendingEnabled     bool `json:"app.smart_sending_enabled"`
+	AppSmartSendingPeriodHours int  `json:"app.smart_sending_period_hours"`
+
 	PrivacyIndividualTracking bool     `json:"privacy.individual_tracking"`
 	PrivacyUnsubHeader        bool     `json:"privacy.unsubscribe_header"`
 	PrivacyAllowBlocklist     bool     `json:"privacy.allow_blocklist"`

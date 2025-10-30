@@ -129,17 +129,62 @@ func (p *Processor) processQueue() error {
 		return fmt.Errorf("error getting server capacities: %w", err)
 	}
 
+	// Get settings for concurrency and message rate
+	settings, err := p.getSettings()
+	if err != nil {
+		return fmt.Errorf("error getting settings for rate limiting: %w", err)
+	}
+
 	// Track in-batch usage to prevent exceeding sliding window limits within a single batch
 	batchUsage := make(map[string]int)
 
-	// Use a semaphore to limit concurrent sends
-	// Azure Communication Services has a per-subscription rate limit that is easily exceeded
-	// with concurrent sends across multiple SMTP servers. Setting maxConcurrent to 1 ensures
-	// emails are sent sequentially, preventing "PerSubscriptionPerMinuteLimitExceeded" errors.
-	// Even though we have 30 SMTP servers, they all share the same Azure subscription rate limit.
-	maxConcurrent := 1
+	// Use settings-based concurrency for the semaphore
+	// This controls how many emails can be sent simultaneously
+	maxConcurrent := settings.AppConcurrency
+	if maxConcurrent < 1 {
+		maxConcurrent = 1 // Default to at least 1
+	}
 	semaphore := make(chan struct{}, maxConcurrent)
 	var wg sync.WaitGroup
+
+	// Create a rate limiter based on message rate setting AND account-wide limits
+	// CRITICAL: Account-wide limits take precedence over AppMessageRate
+	var rateLimiter *time.Ticker
+	var delayBetweenMessages time.Duration
+
+	// Start with AppMessageRate delay (if set)
+	if settings.AppMessageRate > 0 {
+		delayBetweenMessages = time.Second / time.Duration(settings.AppMessageRate)
+	}
+
+	// CRITICAL: Check account-wide per-minute limit and use LONGER delay if needed
+	if settings.AppAccountRateLimitPerMinute > 0 {
+		// Calculate delay: 60 seconds / X messages = Y seconds per message
+		minDelayFromMinuteLimit := time.Minute / time.Duration(settings.AppAccountRateLimitPerMinute)
+		if delayBetweenMessages == 0 || minDelayFromMinuteLimit > delayBetweenMessages {
+			p.log.Printf("⚠️  rate capped by account-wide minute limit: %d/min → 1 message every %v",
+				settings.AppAccountRateLimitPerMinute, minDelayFromMinuteLimit)
+			delayBetweenMessages = minDelayFromMinuteLimit
+		}
+	}
+
+	// CRITICAL: Check account-wide per-hour limit and use LONGER delay if needed
+	if settings.AppAccountRateLimitPerHour > 0 {
+		// Calculate delay: 3600 seconds / X messages = Y seconds per message
+		minDelayFromHourLimit := time.Hour / time.Duration(settings.AppAccountRateLimitPerHour)
+		if delayBetweenMessages == 0 || minDelayFromHourLimit > delayBetweenMessages {
+			p.log.Printf("⚠️  rate capped by account-wide hour limit: %d/hour → 1 message every %v",
+				settings.AppAccountRateLimitPerHour, minDelayFromHourLimit)
+			delayBetweenMessages = minDelayFromHourLimit
+		}
+	}
+
+	if delayBetweenMessages > 0 {
+		rateLimiter = time.NewTicker(delayBetweenMessages)
+		defer rateLimiter.Stop()
+		messagesPerSecond := float64(time.Second) / float64(delayBetweenMessages)
+		p.log.Printf("✓ rate limiter: %.2f messages/sec (delay: %v between sends)", messagesPerSecond, delayBetweenMessages)
+	}
 
 	// Process each email concurrently
 	for _, email := range emails {
@@ -168,6 +213,12 @@ func (p *Processor) processQueue() error {
 		// Update batch usage counter NOW (before spawning goroutine)
 		batchUsage[serverUUID]++
 
+		// Wait for rate limiter to allow next send
+		// This ensures we respect the configured message rate (messages per second)
+		if rateLimiter != nil {
+			<-rateLimiter.C
+		}
+
 		// Send the email in a goroutine for concurrency
 		wg.Add(1)
 		go func(em EmailQueueItem, srv string) {
@@ -176,6 +227,32 @@ func (p *Processor) processQueue() error {
 			// Acquire semaphore
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
+
+			// Check Smart Sending rules before sending
+			if settings.AppSmartSendingEnabled {
+				// Query the subscriber's last send time
+				var lastSendTime *time.Time
+				err := p.db.Get(&lastSendTime,
+					`SELECT last_campaign_send_at FROM subscriber_last_send
+					 WHERE subscriber_id = $1
+					 AND last_campaign_send_at > NOW() - INTERVAL '1 hour' * $2`,
+					em.SubscriberID, settings.AppSmartSendingPeriodHours)
+
+				// If we found a recent send time, skip this email
+				if err == nil && lastSendTime != nil {
+					// Subscriber received an email within the Smart Sending period
+					p.log.Printf("⏭️  skipping email %d (subscriber %d) - Smart Sending: last send was %v ago (period: %d hours)",
+						em.ID, em.SubscriberID, time.Since(*lastSendTime).Round(time.Minute), settings.AppSmartSendingPeriodHours)
+
+					// Mark email as cancelled (skipped by Smart Sending)
+					if _, err := p.db.Exec(`UPDATE email_queue SET status = $1, last_error = $2, updated_at = NOW() WHERE id = $3`,
+						StatusCancelled, "Skipped by Smart Sending - subscriber received email recently", em.ID); err != nil {
+						p.log.Printf("error marking email %d as cancelled: %v", em.ID, err)
+					}
+					return
+				}
+				// If err != nil (e.g., no rows found), subscriber is eligible - continue sending
+			}
 
 			// CRITICAL: Check account-wide rate limit before sending
 			// This is the primary rate limit that takes precedence over all others
@@ -213,6 +290,19 @@ func (p *Processor) processQueue() error {
 			if err := p.markSent(em.ID); err != nil {
 				p.log.Printf("error marking email %d as sent: %v", em.ID, err)
 				return
+			}
+
+			// Update Smart Sending tracking after successful send
+			if settings.AppSmartSendingEnabled {
+				if _, err := p.db.Exec(
+					`INSERT INTO subscriber_last_send (subscriber_id, last_campaign_send_at, updated_at)
+					 VALUES ($1, NOW(), NOW())
+					 ON CONFLICT (subscriber_id)
+					 DO UPDATE SET last_campaign_send_at = NOW(), updated_at = NOW()`,
+					em.SubscriberID); err != nil {
+					p.log.Printf("error updating subscriber_last_send for subscriber %d: %v", em.SubscriberID, err)
+					// Don't return - this is not critical enough to fail the send
+				}
 			}
 
 			// Update server usage counters

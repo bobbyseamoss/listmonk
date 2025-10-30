@@ -32,6 +32,7 @@ echo -e "${GREEN}✓ Docker image built with all components${NC}"
 echo ""
 
 # Step 2: Push to Azure Container Registry
+az acr login --name listmonk420acr
 echo -e "${YELLOW}[2/4] Pushing image to Azure Container Registry...${NC}"
 docker push ${FULL_IMAGE_NAME}
 echo -e "${GREEN}✓ Image pushed to ACR${NC}"

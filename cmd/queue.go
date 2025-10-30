@@ -310,15 +310,6 @@ func (a *App) ClearAllQueuedEmails(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "Insufficient permissions")
 	}
 
-	// Get current settings to check if test mode is enabled
-	settings, err := a.core.GetSettings()
-	if err != nil {
-		a.log.Printf("error getting settings: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error getting settings")
-	}
-
-	testMode := settings.AppTestingMode
-
 	// Clear all queued emails
 	res, err := a.queries.ClearAllQueuedEmails.Exec()
 	if err != nil {
@@ -335,57 +326,77 @@ func (a *App) ClearAllQueuedEmails(c echo.Context) error {
 
 	a.log.Printf("cleared %d queued emails", rowsAffected)
 
-	// If in test mode, also reset SMTP capacity and delete canceled/sent emails
+	// Always reset SMTP capacity and delete canceled/sent emails (regardless of test mode)
 	canceledCount := int64(0)
 	sentCount := int64(0)
+	failedCount := int64(0)
 	resetCapacity := false
 	resetSlidingWindow := false
-	if testMode {
-		// Delete all canceled emails (to reset canceled count)
-		cancelRes, err := a.db.Exec(`DELETE FROM email_queue WHERE status = 'cancelled'`)
-		if err != nil {
-			a.log.Printf("error deleting canceled emails: %v", err)
-		} else {
-			canceledCount, _ = cancelRes.RowsAffected()
-			a.log.Printf("test mode: deleted %d canceled emails", canceledCount)
-		}
+	resetAccountRateLimit := false
 
-		// Delete all sent emails (to reset sent count)
-		sentRes, err := a.db.Exec(`DELETE FROM email_queue WHERE status = 'sent'`)
-		if err != nil {
-			a.log.Printf("error deleting sent emails: %v", err)
-		} else {
-			sentCount, _ = sentRes.RowsAffected()
-			a.log.Printf("test mode: deleted %d sent emails", sentCount)
-		}
+	// Delete all canceled emails (to reset canceled count)
+	cancelRes, err := a.db.Exec(`DELETE FROM email_queue WHERE status = 'cancelled'`)
+	if err != nil {
+		a.log.Printf("error deleting canceled emails: %v", err)
+	} else {
+		canceledCount, _ = cancelRes.RowsAffected()
+		a.log.Printf("deleted %d canceled emails", canceledCount)
+	}
 
-		// Reset SMTP daily usage (to reset server capacity)
-		_, err = a.db.Exec(`DELETE FROM smtp_daily_usage`)
-		if err != nil {
-			a.log.Printf("error resetting SMTP daily usage: %v", err)
-		} else {
-			resetCapacity = true
-			a.log.Println("test mode: reset all SMTP server daily usage")
-		}
+	// Delete all sent emails (to reset sent count)
+	sentRes, err := a.db.Exec(`DELETE FROM email_queue WHERE status = 'sent'`)
+	if err != nil {
+		a.log.Printf("error deleting sent emails: %v", err)
+	} else {
+		sentCount, _ = sentRes.RowsAffected()
+		a.log.Printf("deleted %d sent emails", sentCount)
+	}
 
-		// Reset SMTP sliding window state (to reset rate limits)
-		_, err = a.db.Exec(`DELETE FROM smtp_rate_limit_state`)
-		if err != nil {
-			a.log.Printf("error resetting SMTP sliding window state: %v", err)
-		} else {
-			resetSlidingWindow = true
-			a.log.Println("test mode: reset all SMTP server sliding window state")
-		}
+	// Delete all failed emails (to reset failed count)
+	failedRes, err := a.db.Exec(`DELETE FROM email_queue WHERE status = 'failed'`)
+	if err != nil {
+		a.log.Printf("error deleting failed emails: %v", err)
+	} else {
+		failedCount, _ = failedRes.RowsAffected()
+		a.log.Printf("deleted %d failed emails", failedCount)
+	}
+
+	// Reset SMTP daily usage (to reset server capacity)
+	_, err = a.db.Exec(`DELETE FROM smtp_daily_usage`)
+	if err != nil {
+		a.log.Printf("error resetting SMTP daily usage: %v", err)
+	} else {
+		resetCapacity = true
+		a.log.Println("reset all SMTP server daily usage")
+	}
+
+	// Reset SMTP sliding window state (to reset rate limits)
+	_, err = a.db.Exec(`DELETE FROM smtp_rate_limit_state`)
+	if err != nil {
+		a.log.Printf("error resetting SMTP sliding window state: %v", err)
+	} else {
+		resetSlidingWindow = true
+		a.log.Println("reset all SMTP server sliding window state")
+	}
+
+	// Reset account-wide rate limit state (to reset account-wide counters)
+	_, err = a.db.Exec(`DELETE FROM account_rate_limit_state`)
+	if err != nil {
+		a.log.Printf("error resetting account rate limit state: %v", err)
+	} else {
+		resetAccountRateLimit = true
+		a.log.Println("reset account-wide rate limit state")
 	}
 
 	return c.JSON(http.StatusOK, okResp{map[string]interface{}{
-		"success":               true,
-		"count":                 rowsAffected,
-		"test_mode":             testMode,
-		"canceled_count":        canceledCount,
-		"sent_count":            sentCount,
-		"reset_capacity":        resetCapacity,
-		"reset_sliding_window":  resetSlidingWindow,
+		"success":                  true,
+		"queued_count":             rowsAffected,
+		"canceled_count":           canceledCount,
+		"sent_count":               sentCount,
+		"failed_count":             failedCount,
+		"reset_capacity":           resetCapacity,
+		"reset_sliding_window":     resetSlidingWindow,
+		"reset_account_rate_limit": resetAccountRateLimit,
 	}})
 }
 
