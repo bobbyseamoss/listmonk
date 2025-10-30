@@ -1,8 +1,17 @@
 <template>
   <section class="logs content relative">
-    <h1 class="title is-4">
-      {{ $t('logs.title') }}
-    </h1>
+    <div class="columns">
+      <div class="column">
+        <h1 class="title is-4">
+          {{ $t('logs.title') }}
+        </h1>
+      </div>
+      <div class="column has-text-right">
+        <b-button type="is-primary" icon-left="download" @click="exportLogs">
+          Export Logs
+        </b-button>
+      </div>
+    </div>
     <hr />
     <log-view :loading="loading.logs" :lines="lines" />
   </section>
@@ -29,6 +38,39 @@ export default Vue.extend({
     getLogs() {
       this.$api.getLogs().then((data) => {
         this.lines = data;
+      });
+    },
+
+    exportLogs() {
+      // Create log content with the same formatting as displayed on the page
+      const logContent = this.lines.join('\n');
+
+      // Create a blob with the log content
+      const blob = new Blob([logContent], { type: 'text/plain;charset=utf-8' });
+
+      // Create a download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      // Generate filename with timestamp
+      const now = new Date();
+      const timestamp = now.toISOString().replace(/[:.]/g, '-').substring(0, 19);
+      link.download = `listmonk-logs-${timestamp}.txt`;
+
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+
+      // Cleanup
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      // Show success notification
+      this.$buefy.toast.open({
+        message: 'Logs exported successfully',
+        type: 'is-success',
+        duration: 3000,
       });
     },
   },
