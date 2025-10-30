@@ -71,11 +71,11 @@ if [ "${AUTO_INSTALL}" = "true" ] || [ "${AUTO_INSTALL}" = "1" ]; then
   echo "AUTO_INSTALL enabled - checking database initialization..."
 
   # Check if database is already initialized by trying to query settings table
-  if ! ./listmonk --check-db 2>/dev/null; then
+  if ! /listmonk/listmonk --check-db 2>/dev/null; then
     echo "Database not initialized. Running installation..."
 
     # Run install command
-    ./listmonk --install --yes --idempotent
+    /listmonk/listmonk --install --yes --idempotent
 
     echo "✓ Database initialized"
 
@@ -93,7 +93,7 @@ if [ "${AUTO_INSTALL}" = "true" ] || [ "${AUTO_INSTALL}" = "1" ]; then
 
   # Always run upgrade (idempotent)
   echo "Running database upgrade..."
-  ./listmonk --upgrade --yes
+  /listmonk/listmonk --upgrade --yes
   echo "✓ Database up to date"
 fi
 

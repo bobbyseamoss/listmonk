@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -56,6 +57,11 @@ func New(db *sqlx.DB, cfg Config, log *log.Logger) *Processor {
 		stopChan: make(chan struct{}),
 		doneChan: make(chan struct{}),
 	}
+}
+
+// SetPushEmailCallback sets the callback function for actually sending emails
+func (p *Processor) SetPushEmailCallback(fn func(campaignID int, subID int, serverUUID string) error) {
+	p.pushEmail = fn
 }
 
 // Start begins processing the queue
@@ -126,7 +132,16 @@ func (p *Processor) processQueue() error {
 	// Track in-batch usage to prevent exceeding sliding window limits within a single batch
 	batchUsage := make(map[string]int)
 
-	// Process each email
+	// Use a semaphore to limit concurrent sends
+	// Azure Communication Services has a per-subscription rate limit that is easily exceeded
+	// with concurrent sends across multiple SMTP servers. Setting maxConcurrent to 1 ensures
+	// emails are sent sequentially, preventing "PerSubscriptionPerMinuteLimitExceeded" errors.
+	// Even though we have 30 SMTP servers, they all share the same Azure subscription rate limit.
+	maxConcurrent := 1
+	semaphore := make(chan struct{}, maxConcurrent)
+	var wg sync.WaitGroup
+
+	// Process each email concurrently
 	for _, email := range emails {
 		// Find a server that can send this email
 		serverUUID := p.selectServer(capacities, email)
@@ -150,28 +165,68 @@ func (p *Processor) processQueue() error {
 			continue
 		}
 
-		// Send the email (this will be implemented when we integrate with campaigns)
-		if err := p.sendEmail(email, serverUUID); err != nil {
-			p.log.Printf("error sending email %d: %v", email.ID, err)
-			if err := p.markFailed(email.ID, err.Error()); err != nil {
-				p.log.Printf("error marking email %d as failed: %v", email.ID, err)
-			}
-			continue
-		}
-
-		// Mark email as sent
-		if err := p.markSent(email.ID); err != nil {
-			p.log.Printf("error marking email %d as sent: %v", email.ID, err)
-			continue
-		}
-
-		// Update server usage counters
-		if err := p.incrementServerUsage(serverUUID); err != nil {
-			p.log.Printf("error incrementing usage for server %s: %v", serverUUID, err)
-		}
-
-		// Update batch usage counter and capacity
+		// Update batch usage counter NOW (before spawning goroutine)
 		batchUsage[serverUUID]++
+
+		// Send the email in a goroutine for concurrency
+		wg.Add(1)
+		go func(em EmailQueueItem, srv string) {
+			defer wg.Done()
+
+			// Acquire semaphore
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			// CRITICAL: Check account-wide rate limit before sending
+			// This is the primary rate limit that takes precedence over all others
+			canSend, err := p.checkAccountRateLimit()
+			if err != nil {
+				p.log.Printf("error checking account rate limit: %v", err)
+				// On error, be conservative and don't send
+				if err := p.markFailed(em.ID, fmt.Sprintf("account rate limit check failed: %v", err)); err != nil {
+					p.log.Printf("error marking email %d as failed: %v", em.ID, err)
+				}
+				return
+			}
+
+			if !canSend {
+				// We've hit the account-wide rate limit, skip this email for now
+				// It will be retried in the next batch
+				p.log.Printf("skipping email %d due to account-wide rate limit", em.ID)
+				// Mark it back to queued so it gets picked up later
+				if _, err := p.db.Exec(`UPDATE email_queue SET status = $1, updated_at = NOW() WHERE id = $2`, StatusQueued, em.ID); err != nil {
+					p.log.Printf("error resetting email %d to queued: %v", em.ID, err)
+				}
+				return
+			}
+
+			// Send the email
+			if err := p.sendEmail(em, srv); err != nil {
+				p.log.Printf("error sending email %d: %v", em.ID, err)
+				if err := p.markFailed(em.ID, err.Error()); err != nil {
+					p.log.Printf("error marking email %d as failed: %v", em.ID, err)
+				}
+				return
+			}
+
+			// Mark email as sent
+			if err := p.markSent(em.ID); err != nil {
+				p.log.Printf("error marking email %d as sent: %v", em.ID, err)
+				return
+			}
+
+			// Update server usage counters
+			if err := p.incrementServerUsage(srv); err != nil {
+				p.log.Printf("error incrementing usage for server %s: %v", srv, err)
+			}
+
+			// CRITICAL: Increment account-wide rate limit counters AFTER successful send
+			if err := p.incrementAccountRateLimit(); err != nil {
+				p.log.Printf("error incrementing account rate limit: %v", err)
+			}
+		}(email, serverUUID)
+
+		// Update capacity tracking
 		if cap, exists := capacities[serverUUID]; exists {
 			// Decrement daily remaining capacity
 			if cap.DailyLimit > 0 {
@@ -181,6 +236,70 @@ func (p *Processor) processQueue() error {
 				}
 			}
 		}
+	}
+
+	// Wait for all sends to complete
+	wg.Wait()
+
+	// Check if any campaigns are complete and mark them as finished
+	if err := p.checkCompletedCampaigns(); err != nil {
+		p.log.Printf("error checking completed campaigns: %v", err)
+	}
+
+	return nil
+}
+
+// checkCompletedCampaigns checks for queue-based campaigns where all emails have been processed
+// (sent, failed, or cancelled) and marks them as finished
+func (p *Processor) checkCompletedCampaigns() error {
+	// Find campaigns that:
+	// 1. Are currently running
+	// 2. Use the queue (use_queue=true)
+	// 3. Have no queued or sending emails left
+	query := `
+		SELECT DISTINCT c.id, c.name
+		FROM campaigns c
+		WHERE c.status = 'running'
+		  AND c.use_queue = true
+		  AND NOT EXISTS (
+		    SELECT 1
+		    FROM email_queue eq
+		    WHERE eq.campaign_id = c.id
+		      AND eq.status IN ('queued', 'sending')
+		  )
+		  AND EXISTS (
+		    SELECT 1
+		    FROM email_queue eq
+		    WHERE eq.campaign_id = c.id
+		  )
+	`
+
+	type campaignInfo struct {
+		ID   int    `db:"id"`
+		Name string `db:"name"`
+	}
+
+	var campaigns []campaignInfo
+	if err := p.db.Select(&campaigns, query); err != nil {
+		return fmt.Errorf("error querying completed campaigns: %w", err)
+	}
+
+	// Mark each completed campaign as finished
+	for _, camp := range campaigns {
+		updateQuery := `
+			UPDATE campaigns
+			SET status = 'finished',
+			    queue_completed_at = NOW(),
+			    updated_at = NOW()
+			WHERE id = $1
+		`
+
+		if _, err := p.db.Exec(updateQuery, camp.ID); err != nil {
+			p.log.Printf("error marking campaign %d (%s) as finished: %v", camp.ID, camp.Name, err)
+			continue
+		}
+
+		p.log.Printf("campaign %d (%s) marked as finished - all queued emails processed", camp.ID, camp.Name)
 	}
 
 	return nil
@@ -491,4 +610,114 @@ func (p *Processor) GetQueueStats() (QueueStats, error) {
 	stats.NewestScheduled = tr.Newest
 
 	return stats, nil
+}
+
+// checkAccountRateLimit checks if sending an email would exceed account-wide rate limits
+// Returns true if we can send, false if we need to wait
+func (p *Processor) checkAccountRateLimit() (bool, error) {
+	settings, err := p.getSettings()
+	if err != nil {
+		return false, fmt.Errorf("error getting settings: %w", err)
+	}
+
+	// If limits are 0 or not set, don't enforce
+	if settings.AppAccountRateLimitPerMinute <= 0 && settings.AppAccountRateLimitPerHour <= 0 {
+		return true, nil
+	}
+
+	// Get current account-wide usage
+	var state struct {
+		MinuteWindowStart time.Time `db:"minute_window_start"`
+		EmailsInMinute    int       `db:"emails_in_minute"`
+		HourWindowStart   time.Time `db:"hour_window_start"`
+		EmailsInHour      int       `db:"emails_in_hour"`
+	}
+
+	err = p.db.Get(&state, `SELECT minute_window_start, emails_in_minute, hour_window_start, emails_in_hour FROM account_rate_limit_state LIMIT 1`)
+	if err != nil && err != sql.ErrNoRows {
+		return false, fmt.Errorf("error getting account rate limit state: %w", err)
+	}
+
+	now := time.Now()
+
+	// Check minute window
+	if settings.AppAccountRateLimitPerMinute > 0 {
+		// Reset window if expired
+		if now.Sub(state.MinuteWindowStart) >= time.Minute {
+			// Window has expired, we can send
+			return true, nil
+		}
+
+		// Check if we've exceeded the limit
+		if state.EmailsInMinute >= settings.AppAccountRateLimitPerMinute {
+			p.log.Printf("account-wide rate limit: %d emails sent in last minute (limit: %d), waiting...",
+				state.EmailsInMinute, settings.AppAccountRateLimitPerMinute)
+			return false, nil
+		}
+	}
+
+	// Check hour window
+	if settings.AppAccountRateLimitPerHour > 0 {
+		// Reset window if expired
+		if now.Sub(state.HourWindowStart) >= time.Hour {
+			// Window has expired, we can send
+			return true, nil
+		}
+
+		// Check if we've exceeded the limit
+		if state.EmailsInHour >= settings.AppAccountRateLimitPerHour {
+			p.log.Printf("account-wide rate limit: %d emails sent in last hour (limit: %d), waiting...",
+				state.EmailsInHour, settings.AppAccountRateLimitPerHour)
+			return false, nil
+		}
+	}
+
+	// We haven't exceeded either limit
+	return true, nil
+}
+
+// incrementAccountRateLimit increments the account-wide rate limit counters
+func (p *Processor) incrementAccountRateLimit() error {
+	settings, err := p.getSettings()
+	if err != nil {
+		return fmt.Errorf("error getting settings: %w", err)
+	}
+
+	// If limits are not set, don't track
+	if settings.AppAccountRateLimitPerMinute <= 0 && settings.AppAccountRateLimitPerHour <= 0 {
+		return nil
+	}
+
+	now := time.Now()
+
+	// Update account-wide counters with window reset logic
+	_, err = p.db.Exec(`
+		UPDATE account_rate_limit_state
+		SET
+			-- Minute window: reset if more than 1 minute has passed
+			minute_window_start = CASE
+				WHEN NOW() - minute_window_start > interval '1 minute'
+				THEN $1
+				ELSE minute_window_start
+			END,
+			emails_in_minute = CASE
+				WHEN NOW() - minute_window_start > interval '1 minute'
+				THEN 1
+				ELSE emails_in_minute + 1
+			END,
+			-- Hour window: reset if more than 1 hour has passed
+			hour_window_start = CASE
+				WHEN NOW() - hour_window_start > interval '1 hour'
+				THEN $1
+				ELSE hour_window_start
+			END,
+			emails_in_hour = CASE
+				WHEN NOW() - hour_window_start > interval '1 hour'
+				THEN 1
+				ELSE emails_in_hour + 1
+			END,
+			updated_at = NOW()
+	`, now)
+
+	return err
 }

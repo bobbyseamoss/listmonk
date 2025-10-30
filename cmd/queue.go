@@ -335,9 +335,11 @@ func (a *App) ClearAllQueuedEmails(c echo.Context) error {
 
 	a.log.Printf("cleared %d queued emails", rowsAffected)
 
-	// If in test mode, also reset SMTP capacity and delete canceled emails
+	// If in test mode, also reset SMTP capacity and delete canceled/sent emails
 	canceledCount := int64(0)
+	sentCount := int64(0)
 	resetCapacity := false
+	resetSlidingWindow := false
 	if testMode {
 		// Delete all canceled emails (to reset canceled count)
 		cancelRes, err := a.db.Exec(`DELETE FROM email_queue WHERE status = 'cancelled'`)
@@ -348,6 +350,15 @@ func (a *App) ClearAllQueuedEmails(c echo.Context) error {
 			a.log.Printf("test mode: deleted %d canceled emails", canceledCount)
 		}
 
+		// Delete all sent emails (to reset sent count)
+		sentRes, err := a.db.Exec(`DELETE FROM email_queue WHERE status = 'sent'`)
+		if err != nil {
+			a.log.Printf("error deleting sent emails: %v", err)
+		} else {
+			sentCount, _ = sentRes.RowsAffected()
+			a.log.Printf("test mode: deleted %d sent emails", sentCount)
+		}
+
 		// Reset SMTP daily usage (to reset server capacity)
 		_, err = a.db.Exec(`DELETE FROM smtp_daily_usage`)
 		if err != nil {
@@ -356,14 +367,25 @@ func (a *App) ClearAllQueuedEmails(c echo.Context) error {
 			resetCapacity = true
 			a.log.Println("test mode: reset all SMTP server daily usage")
 		}
+
+		// Reset SMTP sliding window state (to reset rate limits)
+		_, err = a.db.Exec(`DELETE FROM smtp_rate_limit_state`)
+		if err != nil {
+			a.log.Printf("error resetting SMTP sliding window state: %v", err)
+		} else {
+			resetSlidingWindow = true
+			a.log.Println("test mode: reset all SMTP server sliding window state")
+		}
 	}
 
 	return c.JSON(http.StatusOK, okResp{map[string]interface{}{
-		"success":         true,
-		"count":           rowsAffected,
-		"test_mode":       testMode,
-		"canceled_count":  canceledCount,
-		"reset_capacity":  resetCapacity,
+		"success":               true,
+		"count":                 rowsAffected,
+		"test_mode":             testMode,
+		"canceled_count":        canceledCount,
+		"sent_count":            sentCount,
+		"reset_capacity":        resetCapacity,
+		"reset_sliding_window":  resetSlidingWindow,
 	}})
 }
 

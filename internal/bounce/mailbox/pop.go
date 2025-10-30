@@ -115,7 +115,10 @@ func (p *POP) Scan(limit int, ch chan models.Bounce) error {
 
 		// Reset the "unread portion" pointer of the message buffer.
 		// If you don't do this, you can't read the entire body because the pointer will not point to the beginning.
-		b, _ = c.RetrRaw(id)
+		b, err = c.RetrRaw(id)
+		if err != nil {
+			return err
+		}
 
 		// Lookup headers in the e-mail. If a header isn't found, fall back to regexp lookups.
 		hdr := make(map[string]string, 7)

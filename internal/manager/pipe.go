@@ -267,6 +267,13 @@ func (p *pipe) cleanup() {
 		return
 	}
 
+	// For queue-based campaigns (messenger='automatic'), subscribers are queued
+	// but not yet sent. Don't mark as finished - let the queue processor handle that.
+	if p.camp.Messenger == "automatic" {
+		p.m.log.Printf("campaign (%s) subscribers queued, queue processor will handle completion", p.camp.Name)
+		return
+	}
+
 	// If a running campaign has exhausted subscribers, it's finished.
 	if c.Status == models.CampaignStatusRunning || c.Status == models.CampaignStatusScheduled {
 		c.Status = models.CampaignStatusFinished

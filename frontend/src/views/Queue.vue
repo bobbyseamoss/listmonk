@@ -86,6 +86,9 @@
                 ({{ countdown(stats.nextScheduledAt) }})
               </span>
             </p>
+            <p class="title is-6 has-text-grey" v-else-if="stats.queued > 0">
+              Processing queue ({{ stats.queued }} emails ready)
+            </p>
             <p class="title is-6 has-text-grey" v-else>No emails scheduled</p>
           </div>
         </div>
@@ -577,8 +580,14 @@ export default Vue.extend({
               if (response.canceled_count > 0) {
                 extras.push(`${response.canceled_count} canceled emails deleted`);
               }
+              if (response.sent_count > 0) {
+                extras.push(`${response.sent_count} sent emails deleted`);
+              }
               if (response.reset_capacity) {
                 extras.push('SMTP capacity reset');
+              }
+              if (response.reset_sliding_window) {
+                extras.push('sliding window state reset');
               }
               if (extras.length > 0) {
                 message += ` (Test Mode: ${extras.join(', ')})`;

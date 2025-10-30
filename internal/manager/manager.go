@@ -36,6 +36,8 @@ type Store interface {
 	NextCampaigns(currentIDs []int64, sentCounts []int64) ([]*models.Campaign, error)
 	NextSubscribers(campID, limit int) ([]models.Subscriber, error)
 	GetCampaign(campID int) (*models.Campaign, error)
+	GetSubscriber(id int, uuid, email string) (models.Subscriber, error)
+	GetSettings() (models.Settings, error)
 	GetAttachment(mediaID int) (models.Attachment, error)
 	UpdateCampaignStatus(campID int, status string) error
 	UpdateCampaignCounts(campID int, toSend int, sent int, lastSubID int) error
@@ -223,6 +225,134 @@ func (m *Manager) PushMessage(msg models.Message) error {
 	}
 
 	return nil
+}
+
+// PushCampaignMessageByID creates and sends a campaign message for a specific subscriber
+// This is used by the queue processor to send individual emails via a specific SMTP server
+// It sends directly through the messenger without using the campaign manager's queue
+func (m *Manager) PushCampaignMessageByID(campaignID int, subscriberID int, serverUUID string) error {
+	// Get the campaign
+	camp, err := m.store.GetCampaign(campaignID)
+	if err != nil {
+		return fmt.Errorf("error fetching campaign %d: %w", campaignID, err)
+	}
+
+	// Compile the campaign template
+	if err := camp.CompileTemplate(m.TemplateFuncs(camp)); err != nil {
+		return fmt.Errorf("error compiling template for campaign %d: %w", campaignID, err)
+	}
+
+	// Get the specific subscriber by ID
+	sub, err := m.store.GetSubscriber(subscriberID, "", "")
+	if err != nil {
+		return fmt.Errorf("error fetching subscriber %d: %w", subscriberID, err)
+	}
+
+	// Load any media/attachments for this campaign
+	if err := m.attachMedia(camp); err != nil {
+		return fmt.Errorf("error loading media for campaign %d: %w", campaignID, err)
+	}
+
+	// Create the campaign message
+	msg, err := m.NewCampaignMessage(camp, sub)
+	if err != nil {
+		return fmt.Errorf("error creating message for campaign %d, subscriber %d: %w", campaignID, subscriberID, err)
+	}
+
+	// Get the SMTP server's name, username, and from_email for the selected server
+	// This is critical because we need to use the specific messenger for this server
+	// to ensure the email is sent through the correct SMTP server with matching credentials
+	serverName, serverUsername, serverFromEmail, err := m.getServerInfoByUUID(serverUUID)
+	if err != nil {
+		return fmt.Errorf("error getting server info for server %s: %w", serverUUID, err)
+	}
+
+	// Log the server details for debugging
+	// This confirms we're using the correct SMTP server with the correct username for authentication
+	// and the correct from_email for the message sender
+	m.log.Printf("campaign %d, subscriber %d: using SMTP server '%s' (uuid=%s) with username='%s', from_email='%s' (campaign.from_email was '%s')",
+		campaignID, subscriberID, serverName, serverUUID, serverUsername, serverFromEmail, msg.from)
+
+	// Get the specific messenger for this SMTP server
+	// We must use the server-specific messenger (e.g., "email-mail2") instead of the pooled "email" messenger
+	// The pooled messenger randomly selects among all servers, which would cause domain mismatch errors
+	messenger, exists := m.messengers[serverName]
+	if !exists {
+		return fmt.Errorf("messenger '%s' not found for server %s", serverName, serverUUID)
+	}
+
+	// Convert CampaignMessage to models.Message for sending
+	// Use the SMTP server's from_email instead of the campaign's from_email
+	out := models.Message{
+		From:        serverFromEmail,
+		To:          []string{msg.to},
+		Subject:     msg.subject,
+		ContentType: msg.Campaign.ContentType,
+		Body:        msg.body,
+		AltBody:     msg.altBody,
+		Subscriber:  msg.Subscriber,
+		Campaign:    msg.Campaign,
+		Attachments: msg.Campaign.Attachments,
+	}
+
+	// Set headers
+	h := textproto.MIMEHeader{}
+	h.Set(models.EmailHeaderCampaignUUID, msg.Campaign.UUID)
+	h.Set(models.EmailHeaderSubscriberUUID, msg.Subscriber.UUID)
+
+	// Attach List-Unsubscribe headers if configured
+	if m.cfg.UnsubHeader {
+		h.Set("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
+		h.Set("List-Unsubscribe", `<`+msg.unsubURL+`>`)
+	}
+
+	// Attach any custom headers
+	if len(msg.Campaign.Headers) > 0 {
+		for _, set := range msg.Campaign.Headers {
+			for hdr, val := range set {
+				h.Add(hdr, val)
+			}
+		}
+	}
+
+	out.Headers = h
+
+	// Send directly through the messenger
+	// Push() is synchronous and will block until SMTP send completes
+	// The queue processor handles concurrency, so this blocking is acceptable
+	if err := messenger.Push(out); err != nil {
+		return fmt.Errorf("error sending email for campaign %d, subscriber %d: %w", campaignID, subscriberID, err)
+	}
+
+	return nil
+}
+
+// getServerInfoByUUID looks up an SMTP server by UUID and returns its name, username, and configured from_email
+// The name is used to select the correct messenger, from_email is used as the message sender,
+// and username is logged to verify correct SMTP authentication
+func (m *Manager) getServerInfoByUUID(serverUUID string) (name string, username string, fromEmail string, err error) {
+	settings, err := m.store.GetSettings()
+	if err != nil {
+		return "", "", "", fmt.Errorf("error fetching settings: %w", err)
+	}
+
+	// Find the SMTP server with the matching UUID
+	for _, smtp := range settings.SMTP {
+		if smtp.UUID == serverUUID {
+			if smtp.FromEmail == "" {
+				return "", "", "", fmt.Errorf("SMTP server %s has no from_email configured", serverUUID)
+			}
+			if smtp.Name == "" {
+				return "", "", "", fmt.Errorf("SMTP server %s has no name configured", serverUUID)
+			}
+			if smtp.Username == "" {
+				return "", "", "", fmt.Errorf("SMTP server %s has no username configured", serverUUID)
+			}
+			return smtp.Name, smtp.Username, smtp.FromEmail, nil
+		}
+	}
+
+	return "", "", "", fmt.Errorf("SMTP server with UUID %s not found", serverUUID)
 }
 
 // PushCampaignMessage pushes a campaign messages into a queue to be sent out by the workers.

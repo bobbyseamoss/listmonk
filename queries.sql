@@ -679,6 +679,26 @@ WHERE campaigns.id = $1;
 -- name: get-campaign-status
 SELECT id, status, to_send, sent, started_at, updated_at FROM campaigns WHERE status=$1;
 
+-- name: get-campaign-queue-stats
+-- Get queue stats for running campaigns that use the queue (messenger='automatic')
+SELECT
+    c.id,
+    c.status,
+    c.use_queue,
+    c.messenger,
+    COALESCE(SUM(CASE WHEN eq.status = 'queued' THEN 1 ELSE 0 END), 0)::INT AS queue_queued,
+    COALESCE(SUM(CASE WHEN eq.status = 'sending' THEN 1 ELSE 0 END), 0)::INT AS queue_sending,
+    COALESCE(SUM(CASE WHEN eq.status = 'sent' THEN 1 ELSE 0 END), 0)::INT AS queue_sent,
+    COALESCE(SUM(CASE WHEN eq.status = 'failed' THEN 1 ELSE 0 END), 0)::INT AS queue_failed,
+    COALESCE(SUM(CASE WHEN eq.status = 'cancelled' THEN 1 ELSE 0 END), 0)::INT AS queue_cancelled,
+    COUNT(eq.id)::INT AS queue_total,
+    c.started_at,
+    c.updated_at
+FROM campaigns c
+LEFT JOIN email_queue eq ON eq.campaign_id = c.id
+WHERE c.status = 'running' AND c.use_queue = true
+GROUP BY c.id, c.status, c.use_queue, c.messenger, c.started_at, c.updated_at;
+
 -- name: campaign-has-lists
 -- Returns TRUE if the campaign $1 has any of the lists given in $2.
 SELECT EXISTS (
@@ -1336,13 +1356,14 @@ DELETE FROM roles WHERE id=$1;
 
 -- name: queue-campaign-emails
 -- Queue all emails for a campaign to be sent via the queue system
+-- Emails are scheduled 2 minutes in the future to give the queue processor time to start
 INSERT INTO email_queue (campaign_id, subscriber_id, status, priority, scheduled_at, created_at, updated_at)
-SELECT 
+SELECT
     $1 as campaign_id,
     sl.subscriber_id,
     'queued' as status,
     0 as priority,
-    NOW() as scheduled_at,
+    NOW() + INTERVAL '2 minutes' as scheduled_at,
     NOW() as created_at,
     NOW() as updated_at
 FROM campaign_lists cl
@@ -1417,10 +1438,12 @@ SELECT
 FROM email_queue;
 
 -- name: get-next-scheduled-email
--- Get the next email scheduled to be sent
+-- Get the next email scheduled to be sent (only if it's in the future)
+-- This prevents showing old timestamps when emails are queued but throttled by rate limits
 SELECT scheduled_at
 FROM email_queue
 WHERE status = 'queued'
+  AND scheduled_at > NOW() + INTERVAL '5 seconds'
 ORDER BY scheduled_at ASC
 LIMIT 1;
 

@@ -126,13 +126,43 @@
             <label for="#">{{ $t('campaigns.clicks') }}</label>
             <span>{{ $utils.formatNumber(props.row.clicks) }}</span>
           </p>
-          <p>
-            <label for="#">{{ $t('campaigns.sent') }}</label>
-            <span>
-              {{ $utils.formatNumber(stats.sent) }} /
-              {{ $utils.formatNumber(stats.toSend) }}
-            </span>
-          </p>
+
+          <!-- For queue-based campaigns, show queue stats -->
+          <template v-if="stats.use_queue || stats.useQueue">
+            <p>
+              <label for="#">Queued</label>
+              <span>{{ $utils.formatNumber(stats.queue_queued || stats.queueQueued) }}</span>
+            </p>
+            <p>
+              <label for="#">Sending</label>
+              <span>{{ $utils.formatNumber(stats.queue_sending || stats.queueSending) }}</span>
+            </p>
+            <p>
+              <label for="#">{{ $t('campaigns.sent') }}</label>
+              <span>
+                {{ $utils.formatNumber(stats.queue_sent || stats.queueSent) }} /
+                {{ $utils.formatNumber(stats.queue_total || stats.queueTotal) }}
+              </span>
+            </p>
+            <p v-if="(stats.queue_failed || stats.queueFailed) > 0">
+              <label for="#" class="has-text-danger">Failed</label>
+              <span class="has-text-danger">
+                {{ $utils.formatNumber(stats.queue_failed || stats.queueFailed) }}
+              </span>
+            </p>
+          </template>
+
+          <!-- For regular campaigns, show regular stats -->
+          <template v-else>
+            <p>
+              <label for="#">{{ $t('campaigns.sent') }}</label>
+              <span>
+                {{ $utils.formatNumber(stats.sent) }} /
+                {{ $utils.formatNumber(stats.toSend) }}
+              </span>
+            </p>
+          </template>
+
           <p>
             <label for="#">{{ $t('globals.terms.bounces') }}</label>
             <span>
@@ -141,7 +171,7 @@
               </router-link>
             </span>
           </p>
-          <p v-if="stats.rate">
+          <p v-if="stats.rate && !(stats.use_queue || stats.useQueue)">
             <label for="#"><b-icon icon="speedometer" size="is-small" /></label>
             <span class="send-rate">
               <b-tooltip
@@ -159,7 +189,10 @@
               </span>
             </label>
             <span>
-              <b-progress :value="stats.sent / stats.toSend * 100" size="is-small" />
+              <b-progress
+                :value="getProgressPercent(stats)"
+                size="is-small"
+              />
             </span>
           </p>
         </div>
@@ -354,6 +387,20 @@ export default Vue.extend({
         order: this.queryParams.order,
         no_body: true,
       });
+    },
+
+    // Calculate progress percentage for both queue-based and regular campaigns
+    getProgressPercent(stats) {
+      if (stats.use_queue || stats.useQueue) {
+        // Queue-based campaign: calculate based on queue_sent / queue_total
+        const total = stats.queue_total || stats.queueTotal || 0;
+        const sent = stats.queue_sent || stats.queueSent || 0;
+        if (total === 0) return 0;
+        return (sent / total) * 100;
+      }
+      // Regular campaign: calculate based on sent / toSend
+      if (stats.toSend === 0) return 0;
+      return (stats.sent / stats.toSend) * 100;
     },
 
     // Stats returns the campaign object with stats (sent, toSend etc.)

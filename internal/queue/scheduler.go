@@ -132,8 +132,8 @@ func (s *Scheduler) ScheduleCampaign(campaignID int, settings models.Settings) e
 	sendingHoursPerDay := s.calculateSendingHours()
 
 	// Calculate send rate (emails per minute)
-	// If sliding window is configured, respect it
-	sendRatePerMinute := s.calculateSendRate(totalCapacity, sendingHoursPerDay)
+	// This will respect both sliding window limits AND account-wide limits
+	sendRatePerMinute := s.calculateSendRate(totalCapacity, sendingHoursPerDay, settings)
 
 	// Check if we should schedule for immediate sending
 	// This happens when: no time window is configured AND we're not severely capacity constrained
@@ -390,7 +390,7 @@ func (s *Scheduler) isWithinSendingWindow(t time.Time) bool {
 }
 
 // calculateSendRate calculates how many emails can be sent per minute
-func (s *Scheduler) calculateSendRate(totalCapacity int, sendingHoursPerDay int) int {
+func (s *Scheduler) calculateSendRate(totalCapacity int, sendingHoursPerDay int, settings models.Settings) int {
 	if totalCapacity == 0 || sendingHoursPerDay == 0 {
 		return 1 // Default to 1 email per minute
 	}
@@ -405,7 +405,30 @@ func (s *Scheduler) calculateSendRate(totalCapacity int, sendingHoursPerDay int)
 		emailsPerMinute = 1
 	}
 
-	// Cap at sliding window limit if configured
+	// CRITICAL: Cap at account-wide rate limits (takes highest precedence)
+	// These are subscription-level limits that apply to ALL servers combined
+	if settings.AppAccountRateLimitPerMinute > 0 {
+		if emailsPerMinute > settings.AppAccountRateLimitPerMinute {
+			s.log.Printf("⚠️  ACCOUNT-WIDE LIMIT APPLIED: capping send rate from %d to %d emails/minute (subscription limit)",
+				emailsPerMinute, settings.AppAccountRateLimitPerMinute)
+			emailsPerMinute = settings.AppAccountRateLimitPerMinute
+		}
+	}
+
+	// Also check hourly limit (convert to per-minute)
+	if settings.AppAccountRateLimitPerHour > 0 {
+		maxPerMinuteFromHourly := settings.AppAccountRateLimitPerHour / 60
+		if maxPerMinuteFromHourly < 1 {
+			maxPerMinuteFromHourly = 1
+		}
+		if emailsPerMinute > maxPerMinuteFromHourly {
+			s.log.Printf("⚠️  ACCOUNT-WIDE HOURLY LIMIT APPLIED: capping send rate from %d to %d emails/minute (hourly limit of %d)",
+				emailsPerMinute, maxPerMinuteFromHourly, settings.AppAccountRateLimitPerHour)
+			emailsPerMinute = maxPerMinuteFromHourly
+		}
+	}
+
+	// Cap at sliding window limit if configured (secondary constraint)
 	if s.cfg.SlidingWindowDuration > 0 && s.cfg.SlidingWindowLimit > 0 {
 		windowMinutes := int(s.cfg.SlidingWindowDuration.Minutes())
 		maxPerMinute := s.cfg.SlidingWindowLimit / windowMinutes

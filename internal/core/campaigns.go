@@ -390,6 +390,34 @@ func (c *Core) GetRunningCampaignStats() ([]models.CampaignStats, error) {
 		return nil, nil
 	}
 
+	// Fetch queue stats for campaigns using the queue system
+	queueStats := []models.CampaignStats{}
+	if err := c.q.GetCampaignQueueStats.Select(&queueStats); err != nil && err != sql.ErrNoRows {
+		c.log.Printf("error fetching campaign queue stats: %v", err)
+		// Don't fail the entire request if queue stats fail - just log and continue
+	}
+
+	// Merge queue stats into the main campaign stats
+	// Create a map for quick lookup
+	queueStatsMap := make(map[int]models.CampaignStats)
+	for _, qs := range queueStats {
+		queueStatsMap[qs.ID] = qs
+	}
+
+	// Update campaign stats with queue data if available
+	for i, camp := range out {
+		if qs, ok := queueStatsMap[camp.ID]; ok {
+			out[i].UseQueue = qs.UseQueue
+			out[i].Messenger = qs.Messenger
+			out[i].QueueQueued = qs.QueueQueued
+			out[i].QueueSending = qs.QueueSending
+			out[i].QueueSent = qs.QueueSent
+			out[i].QueueFailed = qs.QueueFailed
+			out[i].QueueCancelled = qs.QueueCancelled
+			out[i].QueueTotal = qs.QueueTotal
+		}
+	}
+
 	return out, nil
 }
 

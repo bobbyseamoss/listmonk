@@ -73,6 +73,16 @@ func (s *store) GetCampaign(campID int) (*models.Campaign, error) {
 	return out, err
 }
 
+// GetSubscriber fetches a subscriber from the database.
+func (s *store) GetSubscriber(id int, uuid, email string) (models.Subscriber, error) {
+	return s.core.GetSubscriber(id, uuid, email)
+}
+
+// GetSettings fetches the application settings from the database.
+func (s *store) GetSettings() (models.Settings, error) {
+	return s.core.GetSettings()
+}
+
 // UpdateCampaignStatus updates a campaign's status.
 func (s *store) UpdateCampaignStatus(campID int, status string) error {
 	_, err := s.queries.UpdateCampaignStatus.Exec(campID, status)

@@ -289,6 +289,16 @@ type CampaignStats struct {
 	UpdatedAt null.Time `db:"updated_at" json:"updated_at"`
 	Rate      int       `json:"rate"`
 	NetRate   int       `json:"net_rate"`
+
+	// Queue-specific stats (for campaigns using messenger='automatic')
+	UseQueue       bool   `db:"use_queue" json:"use_queue"`
+	Messenger      string `db:"messenger" json:"messenger"`
+	QueueQueued    int    `db:"queue_queued" json:"queue_queued"`
+	QueueSending   int    `db:"queue_sending" json:"queue_sending"`
+	QueueSent      int    `db:"queue_sent" json:"queue_sent"`
+	QueueFailed    int    `db:"queue_failed" json:"queue_failed"`
+	QueueCancelled int    `db:"queue_cancelled" json:"queue_cancelled"`
+	QueueTotal     int    `db:"queue_total" json:"queue_total"`
 }
 
 type CampaignAnalyticsCount struct {

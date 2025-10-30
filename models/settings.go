@@ -32,6 +32,10 @@ type Settings struct {
 	AppMessageSlidingWindowDuration string `json:"app.message_sliding_window_duration"`
 	AppMessageSlidingWindowRate     int    `json:"app.message_sliding_window_rate"`
 
+	// Account-wide rate limits (subscription-level limits for all SMTP servers combined)
+	AppAccountRateLimitPerMinute int `json:"app.account_rate_limit_per_minute"`
+	AppAccountRateLimitPerHour   int `json:"app.account_rate_limit_per_hour"`
+
 	PrivacyIndividualTracking bool     `json:"privacy.individual_tracking"`
 	PrivacyUnsubHeader        bool     `json:"privacy.unsubscribe_header"`
 	PrivacyAllowBlocklist     bool     `json:"privacy.allow_blocklist"`

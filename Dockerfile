@@ -24,8 +24,9 @@ COPY deployment ./deployment
 # Copy the entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/
 
-# Make the entrypoint script and deployment scripts executable
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
+# Make the binary, entrypoint script and deployment scripts executable
+RUN chmod +x /listmonk/listmonk && \
+    chmod +x /usr/local/bin/docker-entrypoint.sh && \
     chmod +x /listmonk/deployment/scripts/*.sh
 
 # Expose the application port
@@ -35,4 +36,4 @@ EXPOSE 9000
 ENTRYPOINT ["docker-entrypoint.sh"]
 
 # Define the command to run the application
-CMD ["./listmonk"]
+CMD ["/listmonk/listmonk"]

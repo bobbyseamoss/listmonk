@@ -51,11 +51,16 @@ COPY --from=backend-builder /app/i18n ./i18n
 COPY --from=backend-builder /app/schema.sql .
 COPY --from=backend-builder /app/queries.sql .
 COPY --from=backend-builder /app/permissions.json .
+# Copy migrations directory
+COPY --from=backend-builder /app/migrations ./migrations
+# Copy deployment directory
+COPY --from=backend-builder /app/deployment ./deployment
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
-    chmod +x ./listmonk
+    chmod +x ./listmonk && \
+    chmod +x ./deployment/scripts/*.sh
 
 EXPOSE 9000
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["./listmonk"]
+CMD ["/listmonk/listmonk"]

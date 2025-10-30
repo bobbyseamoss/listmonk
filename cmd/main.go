@@ -250,6 +250,12 @@ func main() {
 	}
 	queueProc := initQueueProcessor(db, settings)
 
+	// Wire up the email sending callback for the queue processor
+	// This allows the processor to actually send emails via the campaign manager
+	queueProc.SetPushEmailCallback(func(campaignID int, subID int, serverUUID string) error {
+		return mgr.PushCampaignMessageByID(campaignID, subID, serverUUID)
+	})
+
 	// =========================================================================
 	// Initialize the App{} with all the global shared components, controllers and fields.
 	app := &App{

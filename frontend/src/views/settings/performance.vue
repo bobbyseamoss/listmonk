@@ -76,6 +76,36 @@
 
     <div>
       <hr />
+      <h5 class="title is-5">Account-Wide Speed Limits</h5>
+      <p class="help mb-3">
+        <strong>⚠️ Critical:</strong> These limits apply to ALL SMTP servers combined (subscription-wide limit).
+        This is the primary rate limit that will be enforced strictly to prevent Azure subscription throttling.
+        Set these to match your email service provider's subscription limits.
+      </p>
+      <div class="columns">
+        <div class="column is-6">
+          <b-field label="Emails Per Minute (Account-Wide)" label-position="on-border"
+            message="Maximum total emails across ALL servers per minute. Azure default: 30">
+            <b-numberinput v-model="data['app.account_rate_limit_per_minute']" name="app.account_rate_limit_per_minute"
+              type="is-light" placeholder="30" min="1" max="1000" />
+          </b-field>
+        </div>
+        <div class="column is-6">
+          <b-field label="Emails Per Hour (Account-Wide)" label-position="on-border"
+            message="Maximum total emails across ALL servers per hour. Azure default: 100">
+            <b-numberinput v-model="data['app.account_rate_limit_per_hour']" name="app.account_rate_limit_per_hour"
+              type="is-light" placeholder="100" min="1" max="100000" />
+          </b-field>
+        </div>
+      </div>
+      <b-notification type="is-info" :closable="false" class="mt-2">
+        <strong>Note:</strong> These account-wide limits take precedence over per-server sliding window limits.
+        The queue processor will send emails sequentially to ensure these limits are never exceeded.
+      </b-notification>
+    </div><!-- account-wide rate limits -->
+
+    <div>
+      <hr />
       <h5 class="title is-5">Testing Mode</h5>
       <b-field label="Enable Testing Mode"
         message="⚠️ When enabled, emails will be simulated but NOT actually sent to recipients. Use this to safely test queue functionality without affecting your mail server reputation.">

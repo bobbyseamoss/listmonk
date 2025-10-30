@@ -108,16 +108,49 @@ func V6_0_0(db *sqlx.DB, fs stuffbin.FileSystem, ko *koanf.Koanf, lo *log.Logger
 
 	lo.Println("Queue system tables and testing mode column created successfully")
 
-	// Add app.testing_mode setting if it doesn't exist
+	// Add queue-related settings if they don't exist
 	if _, err := db.Exec(`
-		INSERT INTO settings (key, value)
-		VALUES ('app.testing_mode', 'false')
+		INSERT INTO settings (key, value) VALUES
+			('app.testing_mode', 'false'),
+			('app.queue_paused', 'false'),
+			('app.send_time_start', '""'),
+			('app.send_time_end', '""'),
+			('app.account_rate_limit_per_minute', '30'),
+			('app.account_rate_limit_per_hour', '100')
 		ON CONFLICT (key) DO NOTHING;
 	`); err != nil {
 		return err
 	}
 
-	lo.Println("Added app.testing_mode setting")
+	lo.Println("Added queue-related settings (testing_mode, queue_paused, send_time_start, send_time_end, account_rate_limit_per_minute, account_rate_limit_per_hour)")
+
+	// Create account-wide rate limit tracking table
+	if _, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS account_rate_limit_state (
+			id BIGSERIAL PRIMARY KEY,
+
+			-- Minute window tracking
+			minute_window_start TIMESTAMP WITH TIME ZONE NOT NULL,
+			emails_in_minute INT NOT NULL DEFAULT 0,
+
+			-- Hour window tracking
+			hour_window_start TIMESTAMP WITH TIME ZONE NOT NULL,
+			emails_in_hour INT NOT NULL DEFAULT 0,
+
+			-- Timestamps
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+		);
+
+		-- Ensure only one row exists for account-wide tracking
+		INSERT INTO account_rate_limit_state (minute_window_start, hour_window_start, emails_in_minute, emails_in_hour)
+		VALUES (NOW(), NOW(), 0, 0)
+		ON CONFLICT DO NOTHING;
+	`); err != nil {
+		return err
+	}
+
+	lo.Println("Created account-wide rate limit tracking table")
 
 	return nil
 }
