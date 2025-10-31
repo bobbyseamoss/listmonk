@@ -461,6 +461,18 @@ func (c *Core) GetCampaignAnalyticsLinks(campIDs []int, typ, fromDate, toDate st
 	return out, nil
 }
 
+// GetCampaignUnsubscribers returns the list of subscribers who unsubscribed after receiving the campaign.
+func (c *Core) GetCampaignUnsubscribers(campID int) ([]models.CampaignUnsubscriber, error) {
+	out := []models.CampaignUnsubscriber{}
+	if err := c.q.GetCampaignUnsubscribers.Select(&out, campID); err != nil {
+		c.log.Printf("error fetching campaign unsubscribers: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "unsubscribers", "error", pqErrMsg(err)))
+	}
+
+	return out, nil
+}
+
 // RegisterCampaignView registers a subscriber's view on a campaign.
 func (c *Core) RegisterCampaignView(campUUID, subUUID string) error {
 	if _, err := c.q.RegisterCampaignView.Exec(campUUID, subUUID); err != nil {

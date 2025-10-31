@@ -615,6 +615,20 @@
       ]
     },
     {
+      "uid": "3b30befa8368be0ec35abd29ca54daa1",
+      "css": "tray-full",
+      "code": 987798,
+      "src": "custom_icons",
+      "selected": true,
+      "svg": {
+        "path": "M750 209H250V291H750V209ZM250 375H750V459H250V375ZM84 500H166V709H834V500H916V709Q916 742.2 891.6 766.6T834 791H166Q132.8 791 108.4 766.6T84 709V500ZM750 541H250V625H750V541Z",
+        "width": 1000
+      },
+      "search": [
+        "tray-full"
+      ]
+    },
+    {
       "uid": "f4ad3f6d071a0bfb3a8452b514ed0892",
       "css": "vector-square",
       "code": 983041,
@@ -66650,20 +66664,6 @@
       },
       "search": [
         "tray-alert"
-      ]
-    },
-    {
-      "uid": "3b30befa8368be0ec35abd29ca54daa1",
-      "css": "tray-full",
-      "code": 987798,
-      "src": "custom_icons",
-      "selected": false,
-      "svg": {
-        "path": "M750 209H250V291H750V209ZM250 375H750V459H250V375ZM84 500H166V709H834V500H916V709Q916 742.2 891.6 766.6T834 791H166Q132.8 791 108.4 766.6T84 709V500ZM750 541H250V625H750V541Z",
-        "width": 1000
-      },
-      "search": [
-        "tray-full"
       ]
     },
     {

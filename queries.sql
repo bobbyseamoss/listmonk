@@ -648,11 +648,16 @@ bounces AS (
     SELECT campaign_id, COUNT(campaign_id) as num FROM bounces
     WHERE campaign_id = ANY($1)
     GROUP BY campaign_id
+),
+sent_counts AS (
+    SELECT id as campaign_id, sent FROM campaigns
+    WHERE id = ANY($1)
 )
 SELECT id as campaign_id,
     COALESCE(v.num, 0) AS views,
     COALESCE(c.num, 0) AS clicks,
     COALESCE(b.num, 0) AS bounces,
+    COALESCE(s.sent, 0) AS sent,
     COALESCE(l.lists, '[]') AS lists,
     COALESCE(m.media, '[]') AS media
 FROM (SELECT id FROM UNNEST($1) AS id) x
@@ -661,6 +666,7 @@ LEFT JOIN media AS m ON (m.campaign_id = id)
 LEFT JOIN views AS v ON (v.campaign_id = id)
 LEFT JOIN clicks AS c ON (c.campaign_id = id)
 LEFT JOIN bounces AS b ON (b.campaign_id = id)
+LEFT JOIN sent_counts AS s ON (s.campaign_id = id)
 ORDER BY ARRAY_POSITION($1, id);
 
 -- name: get-campaign-for-preview
@@ -810,6 +816,18 @@ SELECT COUNT(%s) AS "count", url
     LEFT JOIN links ON (link_clicks.link_id = links.id)
     WHERE campaign_id=ANY($1) AND link_clicks.created_at >= $2 AND link_clicks.created_at <= $3
     GROUP BY links.url ORDER BY "count" DESC LIMIT 50;
+
+-- name: get-campaign-unsubscribers
+-- Get the list of subscribers who unsubscribed from any list that the campaign was sent to
+-- This tracks subscribers who unsubscribed after receiving the campaign email
+SELECT DISTINCT s.id, s.uuid, s.email, s.name, sl.updated_at AS unsubscribed_at
+    FROM subscribers s
+    INNER JOIN subscriber_lists sl ON s.id = sl.subscriber_id
+    INNER JOIN campaign_lists cl ON sl.list_id = cl.list_id
+    WHERE cl.campaign_id = $1
+    AND sl.status = 'unsubscribed'
+    AND sl.updated_at >= (SELECT COALESCE(started_at, created_at) FROM campaigns WHERE id = $1)
+    ORDER BY sl.updated_at DESC;
 
 -- name: get-running-campaign
 -- Returns the metadata for a running campaign that is required by next-campaign-subscribers to retrieve

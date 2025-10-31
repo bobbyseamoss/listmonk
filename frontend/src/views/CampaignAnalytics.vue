@@ -55,12 +55,46 @@
             <b-loading v-if="v.loading" :active="v.loading" :is-full-page="false" />
             <h4 v-if="v.chart !== null">
               {{ v.name }}
-              <span class="has-text-grey-light">({{ $utils.niceNumber(counts[k]) }})</span>
+              <span class="has-text-grey-light">
+                ({{ $utils.niceNumber(counts[k]) }}<template v-if="totalSent > 0 && (k === 'views' || k === 'clicks')"> - {{ getPercentage(counts[k], totalSent) }}%</template>)
+              </span>
             </h4>
             <chart :type="v.type" v-if="!v.loading" :data="v.data" :on-click="v.onClick" />
           </div>
           <div class="column is-2 donut-container">
             <chart type="donut" v-if="!v.loading" :data="v.donutData" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Unsubscribers Section -->
+      <div class="chart" v-if="form.campaigns.length === 1 && unsubscribers.length > 0">
+        <div class="columns">
+          <div class="column is-12">
+            <h4>
+              {{ $t('campaigns.unsubscribers') }}
+              <span class="has-text-grey-light">({{ unsubscribers.length }})</span>
+            </h4>
+            <b-table
+              :data="unsubscribers"
+              :hoverable="true"
+              :loading="unsubscribersLoading"
+              paginated
+              per-page="10"
+              pagination-position="both"
+              default-sort="unsubscribed_at"
+              default-sort-direction="desc"
+            >
+              <b-table-column field="email" :label="$t('subscribers.email')" sortable v-slot="props">
+                {{ props.row.email }}
+              </b-table-column>
+              <b-table-column field="name" :label="$t('globals.terms.name')" sortable v-slot="props">
+                {{ props.row.name }}
+              </b-table-column>
+              <b-table-column field="unsubscribed_at" :label="$t('campaigns.unsubscribedAt')" sortable v-slot="props">
+                {{ $utils.niceDate(props.row.unsubscribed_at, true) }}
+              </b-table-column>
+            </b-table>
           </div>
         </div>
       </div>
@@ -104,6 +138,9 @@ export default Vue.extend({
         bounces: 0,
         links: 0,
       },
+      totalSent: 0,
+      unsubscribers: [],
+      unsubscribersLoading: false,
       urls: [],
       charts: {
         views: {
@@ -288,6 +325,33 @@ export default Vue.extend({
         window.open(this.urls[bars[0].index], '_blank', 'noopener noreferrer');
       }
     },
+
+    getPercentage(count, total) {
+      if (total === 0) return '0.00';
+      return ((count / total) * 100).toFixed(2);
+    },
+
+    async getUnsubscribers() {
+      if (this.form.campaigns.length !== 1) {
+        this.unsubscribers = [];
+        return;
+      }
+
+      this.unsubscribersLoading = true;
+      try {
+        const data = await this.$api.getCampaignUnsubscribers(this.form.campaigns[0].id);
+        this.unsubscribers = data;
+      } catch (e) {
+        this.$utils.toast(e.message, 'is-danger');
+      } finally {
+        this.unsubscribersLoading = false;
+      }
+    },
+
+    getTotalSent() {
+      // Calculate total sent across all selected campaigns
+      this.totalSent = this.form.campaigns.reduce((sum, camp) => sum + (camp.sent || 0), 0);
+    },
   },
 
   computed: {
@@ -322,6 +386,12 @@ export default Vue.extend({
 
         this.$nextTick(() => {
           this.isSearchLoading = false;
+
+          // Calculate total sent across all campaigns
+          this.getTotalSent();
+
+          // Get unsubscribers if single campaign selected
+          this.getUnsubscribers();
 
           // Fetch count for each analytics type (views, counts, bounces);
           Object.keys(this.charts).forEach((k) => {

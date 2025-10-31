@@ -312,6 +312,15 @@ type CampaignAnalyticsLink struct {
 	Count int    `db:"count" json:"count"`
 }
 
+// CampaignUnsubscriber represents a subscriber who unsubscribed after receiving a campaign
+type CampaignUnsubscriber struct {
+	ID             int       `db:"id" json:"id"`
+	UUID           string    `db:"uuid" json:"uuid"`
+	Email          string    `db:"email" json:"email"`
+	Name           string    `db:"name" json:"name"`
+	UnsubscribedAt time.Time `db:"unsubscribed_at" json:"unsubscribed_at"`
+}
+
 // Campaigns represents a slice of Campaigns.
 type Campaigns []Campaign
 

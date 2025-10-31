@@ -324,6 +324,10 @@ func (m *Manager) PushCampaignMessageByID(campaignID int, subscriberID int, serv
 		return fmt.Errorf("error sending email for campaign %d, subscriber %d: %w", campaignID, subscriberID, err)
 	}
 
+	// Log successful push to messenger
+	m.log.Printf("✓ campaign %d, subscriber %d: successfully pushed to messenger '%s' (server uuid=%s)",
+		campaignID, subscriberID, serverName, serverUUID)
+
 	return nil
 }
 

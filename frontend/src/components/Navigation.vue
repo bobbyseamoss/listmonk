@@ -41,7 +41,7 @@
         :active="activeItem.campaignAnalytics" data-cy="analytics" icon="chart-bar"
         :label="$t('globals.terms.analytics')" />
       <b-menu-item v-if="$can('campaigns:get')" :to="{ name: 'queue' }" tag="router-link"
-        :active="activeItem.queue" data-cy="queue" icon="format-list-checkbox"
+        :active="activeItem.queue" data-cy="queue" icon="tray-full"
         label="Queue" />
     </b-menu-item><!-- campaigns -->
 

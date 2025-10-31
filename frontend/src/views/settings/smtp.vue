@@ -464,7 +464,16 @@ export default Vue.extend({
       }
 
       this.errMsg = '';
-      this.$api.testSMTP({ ...item, from_email: this.testFromEmail, email: this.testEmail }).then(() => {
+
+      // Create a copy of the item and convert strEmailHeaders to email_headers
+      const testData = { ...item, from_email: this.testFromEmail, email: this.testEmail };
+      if (testData.strEmailHeaders && testData.strEmailHeaders !== '[]') {
+        testData.email_headers = JSON.parse(testData.strEmailHeaders);
+      } else {
+        testData.email_headers = [];
+      }
+
+      this.$api.testSMTP(testData).then(() => {
         this.$utils.toast(this.$t('campaigns.testSent'));
       }).catch((err) => {
         if (err.response?.data?.message) {

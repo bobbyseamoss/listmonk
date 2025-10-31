@@ -192,7 +192,15 @@ func (p *Processor) processQueue() error {
 		serverUUID := p.selectServer(capacities, email)
 		if serverUUID == "" {
 			// No server available, skip for now
+			p.log.Printf("⚠️  no SMTP server available for email %d (campaign %d, subscriber %d) - all servers at capacity",
+				email.ID, email.CampaignID, email.SubscriberID)
 			continue
+		}
+
+		// Log server selection
+		if cap, exists := capacities[serverUUID]; exists {
+			p.log.Printf("📧 email %d (campaign %d, subscriber %d) → SMTP server '%s' (uuid: %s) | capacity: %d/%d daily remaining",
+				email.ID, email.CampaignID, email.SubscriberID, cap.Name, serverUUID, cap.DailyRemaining, cap.DailyLimit)
 		}
 
 		// Check if this server has sliding window limits and would exceed them in this batch
@@ -279,7 +287,13 @@ func (p *Processor) processQueue() error {
 
 			// Send the email
 			if err := p.sendEmail(em, srv); err != nil {
-				p.log.Printf("error sending email %d: %v", em.ID, err)
+				// Get server name for better error context
+				serverName := srv
+				if cap, exists := capacities[srv]; exists {
+					serverName = cap.Name
+				}
+				p.log.Printf("✗ error sending email %d (campaign %d, subscriber %d) via SMTP server '%s' (uuid: %s): %v",
+					em.ID, em.CampaignID, em.SubscriberID, serverName, srv, err)
 				if err := p.markFailed(em.ID, err.Error()); err != nil {
 					p.log.Printf("error marking email %d as failed: %v", em.ID, err)
 				}
@@ -291,6 +305,10 @@ func (p *Processor) processQueue() error {
 				p.log.Printf("error marking email %d as sent: %v", em.ID, err)
 				return
 			}
+
+			// Log successful delivery
+			p.log.Printf("✓ email %d (campaign %d, subscriber %d) delivered successfully via server %s",
+				em.ID, em.CampaignID, em.SubscriberID, srv)
 
 			// Update Smart Sending tracking after successful send
 			if settings.AppSmartSendingEnabled {

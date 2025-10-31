@@ -312,6 +312,11 @@ export const getCampaignLinkCounts = async (params) => http.get(
   { params, loading: models.campaigns },
 );
 
+export const getCampaignUnsubscribers = async (id) => http.get(
+  `/api/campaigns/${id}/unsubscribers`,
+  { loading: models.campaigns },
+);
+
 export const convertCampaignContent = async (data) => http.post(
   `/api/campaigns/${data.id}/content`,
   data,

@@ -228,7 +228,35 @@ func (e *Emailer) Push(m models.Message) error {
 		return nil
 	}
 
-	return srv.pool.Send(em)
+	// Log delivery attempt
+	if e.logger != nil {
+		serverName := srv.Name
+		if serverName == "" {
+			serverName = e.name
+		}
+		e.logger("→ Sending email via SMTP server '%s' (%s:%d) | from=%s to=%s subject='%s'",
+			serverName, srv.Host, srv.Port, m.From, m.To[0], m.Subject)
+	}
+
+	// Send the email
+	err := srv.pool.Send(em)
+
+	// Log delivery result
+	if e.logger != nil {
+		serverName := srv.Name
+		if serverName == "" {
+			serverName = e.name
+		}
+		if err != nil {
+			e.logger("✗ Failed to send email via SMTP server '%s' (%s:%d) | from=%s to=%s subject='%s' | error: %v",
+				serverName, srv.Host, srv.Port, m.From, m.To[0], m.Subject, err)
+		} else {
+			e.logger("✓ Successfully sent email via SMTP server '%s' (%s:%d) | from=%s to=%s subject='%s'",
+				serverName, srv.Host, srv.Port, m.From, m.To[0], m.Subject)
+		}
+	}
+
+	return err
 }
 
 // Flush flushes the message queue to the server.
