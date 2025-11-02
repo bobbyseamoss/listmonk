@@ -296,6 +296,10 @@
           </b-field>
         </section>
       </b-tab-item><!-- archive -->
+
+      <b-tab-item label="Azure Analytics" icon="microsoft-azure" value="azure-analytics" :disabled="isNew">
+        <campaign-azure-analytics v-if="data.id" :campaign-id="data.id" />
+      </b-tab-item><!-- azure-analytics -->
     </b-tabs>
 
     <b-modal scroll="keep" :aria-modal="true" :active.sync="isAttachModalOpen" :width="900">
@@ -323,6 +327,7 @@ import Editor from '../components/Editor.vue';
 import ListSelector from '../components/ListSelector.vue';
 import Media from './Media.vue';
 import CampaignPreview from '../components/CampaignPreview.vue';
+import CampaignAzureAnalytics from '../components/CampaignAzureAnalytics.vue';
 
 export default Vue.extend({
   components: {
@@ -331,6 +336,7 @@ export default Vue.extend({
     Media,
     CopyText,
     CampaignPreview,
+    CampaignAzureAnalytics,
   },
 
   data() {

@@ -39,9 +39,9 @@ RUN apk --no-cache add ca-certificates tzdata shadow su-exec postgresql-client
 WORKDIR /listmonk
 # Copy the binary
 COPY --from=backend-builder /app/listmonk .
-# Copy config files (rename sample to actual config)
+# Copy config files
 COPY --from=backend-builder /app/config.toml.sample ./config.toml.sample
-COPY --from=backend-builder /app/config.toml.sample ./config.toml
+COPY --from=backend-builder /app/config.toml.docker ./config.toml
 # Copy static assets from source
 COPY --from=backend-builder /app/static ./static
 # Copy built frontend to the expected location

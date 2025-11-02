@@ -7,7 +7,10 @@ import (
 	"net/smtp"
 	"net/textproto"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	"github.com/knadh/listmonk/models"
 	"github.com/knadh/smtppool/v2"
 )
@@ -57,18 +60,23 @@ type Emailer struct {
 	// Testing mode - when enabled, emails are not actually sent
 	testingMode bool
 	logger      func(string, ...interface{})
+
+	// Database connection for Azure message tracking
+	db *sqlx.DB
 }
 
 // New returns an SMTP e-mail Messenger backend with the given SMTP servers.
 // Group indicates whether the messenger represents a group of SMTP servers (1 or more)
 // that are used as a round-robin pool, or a single server.
 // testingMode when true will simulate sending without actually connecting to SMTP.
-func New(name string, testingMode bool, logger func(string, ...interface{}), servers ...Server) (*Emailer, error) {
+// db is the database connection used for Azure message tracking (can be nil to disable tracking).
+func New(name string, testingMode bool, db *sqlx.DB, logger func(string, ...interface{}), servers ...Server) (*Emailer, error) {
 	e := &Emailer{
 		servers:     make([]*Server, 0, len(servers)),
 		name:        name,
 		testingMode: testingMode,
 		logger:      logger,
+		db:          db,
 	}
 
 	// If this is a single-server messenger, use its sliding window configuration.
@@ -151,6 +159,10 @@ func (e *Emailer) Push(m models.Message) error {
 		srv = e.servers[0]
 	}
 
+	// Generate a tracking UUID for Azure message correlation
+	// This UUID will be used to correlate Azure Event Grid webhooks back to this send attempt
+	trackingID := uuid.New().String()
+
 	// Are there attachments?
 	var files []smtppool.Attachment
 	if m.Attachments != nil {
@@ -175,6 +187,20 @@ func (e *Emailer) Push(m models.Message) error {
 	}
 
 	em.Headers = textproto.MIMEHeader{}
+
+	// Set Message-ID header for tracking and RFC 5322 compliance
+	// Azure may use this or generate their own, but we'll use it for correlation
+	em.Headers.Set("Message-ID", fmt.Sprintf("<%s@listmonk>", trackingID))
+
+	// Add custom headers for additional correlation options
+	// These may be preserved in Azure Event Grid webhooks
+	em.Headers.Set("X-Listmonk-Message-ID", trackingID)
+	if m.Campaign != nil {
+		em.Headers.Set("X-Listmonk-Campaign-ID", fmt.Sprintf("%d", m.Campaign.ID))
+	}
+	if m.Subscriber.ID > 0 {
+		em.Headers.Set("X-Listmonk-Subscriber-ID", fmt.Sprintf("%d", m.Subscriber.ID))
+	}
 
 	// Attach SMTP level headers.
 	for k, v := range srv.EmailHeaders {
@@ -256,6 +282,11 @@ func (e *Emailer) Push(m models.Message) error {
 		}
 	}
 
+	// Track message for Azure webhook correlation (only if send was successful)
+	if err == nil {
+		e.trackAzureMessage(trackingID, m, srv)
+	}
+
 	return err
 }
 
@@ -270,4 +301,36 @@ func (e *Emailer) Close() error {
 		s.pool.Close()
 	}
 	return nil
+}
+
+// trackAzureMessage writes message tracking data to the database for Azure webhook correlation.
+// This allows incoming Azure Event Grid webhooks to be correlated back to campaigns and subscribers.
+func (e *Emailer) trackAzureMessage(trackingID string, m models.Message, srv *Server) {
+	// Only track if database is available
+	if e.db == nil {
+		return
+	}
+
+	// Only track for Azure Communication Services SMTP servers
+	if !strings.Contains(strings.ToLower(srv.Host), "azurecomm.net") {
+		return
+	}
+
+	// Only track campaign messages (not transactional/admin emails)
+	if m.Campaign == nil || m.Subscriber.ID == 0 {
+		return
+	}
+
+	// Write tracking record to database
+	_, err := e.db.Exec(`
+		INSERT INTO azure_message_tracking
+			(azure_message_id, campaign_id, subscriber_id, sent_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (azure_message_id) DO NOTHING
+	`, trackingID, m.Campaign.ID, m.Subscriber.ID, time.Now())
+
+	if err != nil && e.logger != nil {
+		e.logger("warning: failed to track Azure message for correlation: campaign_id=%d subscriber_id=%d error=%v",
+			m.Campaign.ID, m.Subscriber.ID, err)
+	}
 }

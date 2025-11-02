@@ -711,7 +711,7 @@ func makeOptinNotifyHook(unsubHeader bool, u *UrlConfig, q *models.Queries, i *i
 
 		// Send the e-mail.
 		if err := notifs.Notify([]string{sub.Email}, i.T("subscribers.optinSubject"), notifs.TplSubscriberOptin, out, hdr); err != nil {
-			lo.Printf("error sending opt-in e-mail for subscriber %d (%s): %s", sub.ID, sub.UUID, err)
+			lo.Printf("error sending opt-in e-mail for subscriber '%s' (ID: %d): %s", sub.Email, sub.ID, err)
 			return 0, err
 		}
 

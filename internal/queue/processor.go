@@ -199,8 +199,8 @@ func (p *Processor) processQueue() error {
 
 		// Log server selection
 		if cap, exists := capacities[serverUUID]; exists {
-			p.log.Printf("📧 email %d (campaign %d, subscriber %d) → SMTP server '%s' (uuid: %s) | capacity: %d/%d daily remaining",
-				email.ID, email.CampaignID, email.SubscriberID, cap.Name, serverUUID, cap.DailyRemaining, cap.DailyLimit)
+			p.log.Printf("📧 email %d (campaign %d, subscriber %d) → SMTP server '%s' | capacity: %d/%d daily remaining",
+				email.ID, email.CampaignID, email.SubscriberID, cap.Name, cap.DailyRemaining, cap.DailyLimit)
 		}
 
 		// Check if this server has sliding window limits and would exceed them in this batch
@@ -292,8 +292,8 @@ func (p *Processor) processQueue() error {
 				if cap, exists := capacities[srv]; exists {
 					serverName = cap.Name
 				}
-				p.log.Printf("✗ error sending email %d (campaign %d, subscriber %d) via SMTP server '%s' (uuid: %s): %v",
-					em.ID, em.CampaignID, em.SubscriberID, serverName, srv, err)
+				p.log.Printf("✗ error sending email %d (campaign %d, subscriber %d) via SMTP server '%s': %v",
+					em.ID, em.CampaignID, em.SubscriberID, serverName, err)
 				if err := p.markFailed(em.ID, err.Error()); err != nil {
 					p.log.Printf("error marking email %d as failed: %v", em.ID, err)
 				}
@@ -322,6 +322,14 @@ func (p *Processor) processQueue() error {
 					// Don't return - this is not critical enough to fail the send
 				}
 			}
+
+			// TODO: Azure Event Grid message tracking
+			// For Azure Communication Services, we need to store the Azure message ID for webhook correlation
+			// This requires either:
+			// 1. Capturing the Message-ID from SMTP response
+			// 2. Using custom X-headers that Azure preserves in webhooks
+			// 3. Pre-generating UUID and including in Message-ID header
+			// Implementation pending proper Message-ID capture mechanism
 
 			// Update server usage counters
 			if err := p.incrementServerUsage(srv); err != nil {
@@ -473,7 +481,7 @@ func (p *Processor) getServerCapacities() (map[string]*ServerCapacity, error) {
 		// Get daily usage
 		usage, err := p.getDailyUsage(smtp.UUID)
 		if err != nil {
-			p.log.Printf("error getting daily usage for %s: %v", smtp.UUID, err)
+			p.log.Printf("error getting daily usage for SMTP server '%s': %v", smtp.Name, err)
 			continue
 		}
 		capacity.DailyUsed = usage
@@ -482,7 +490,7 @@ func (p *Processor) getServerCapacities() (map[string]*ServerCapacity, error) {
 		// Get sliding window usage
 		windowUsage, err := p.getSlidingWindowUsage(smtp.UUID)
 		if err != nil {
-			p.log.Printf("error getting sliding window usage for %s: %v", smtp.UUID, err)
+			p.log.Printf("error getting sliding window usage for SMTP server '%s': %v", smtp.Name, err)
 			continue
 		}
 		capacity.SlidingWindowUsed = windowUsage
@@ -528,12 +536,27 @@ func (p *Processor) selectServer(capacities map[string]*ServerCapacity, email Em
 
 // Database operations
 func (p *Processor) markSending(emailID int64, serverUUID string) error {
-	_, err := p.db.Exec(`
+	result, err := p.db.Exec(`
 		UPDATE email_queue
 		SET status = $1, assigned_smtp_server_uuid = $2, updated_at = NOW()
-		WHERE id = $3
-	`, StatusSending, serverUUID, emailID)
-	return err
+		WHERE id = $3 AND status = $4
+	`, StatusSending, serverUUID, emailID, StatusQueued)
+	if err != nil {
+		return err
+	}
+
+	// Check if we actually updated a row
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		// Email was already claimed by another process
+		return fmt.Errorf("email %d already being processed", emailID)
+	}
+
+	return nil
 }
 
 func (p *Processor) markSent(emailID int64) error {

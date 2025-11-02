@@ -461,6 +461,22 @@ func (c *Core) GetCampaignAnalyticsLinks(campIDs []int, typ, fromDate, toDate st
 	return out, nil
 }
 
+// GetCampaignAzureDeliveryCounts returns Azure delivery event counts grouped by status.
+func (c *Core) GetCampaignAzureDeliveryCounts(campIDs []int, fromDate, toDate string) ([]models.CampaignAzureDeliveryCount, error) {
+	if !strHasLen(fromDate, 10, 30) || !strHasLen(toDate, 10, 30) {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("analytics.invalidDates"))
+	}
+
+	out := []models.CampaignAzureDeliveryCount{}
+	if err := c.q.GetCampaignAzureDeliveryCounts.Select(&out, pq.Array(campIDs), fromDate, toDate); err != nil {
+		c.log.Printf("error fetching campaign Azure delivery counts: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.analytics}", "error", pqErrMsg(err)))
+	}
+
+	return out, nil
+}
+
 // GetCampaignUnsubscribers returns the list of subscribers who unsubscribed after receiving the campaign.
 func (c *Core) GetCampaignUnsubscribers(campID int) ([]models.CampaignUnsubscriber, error) {
 	out := []models.CampaignUnsubscriber{}

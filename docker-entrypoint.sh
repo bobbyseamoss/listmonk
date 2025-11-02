@@ -97,6 +97,30 @@ if [ "${AUTO_INSTALL}" = "true" ] || [ "${AUTO_INSTALL}" = "1" ]; then
   echo "✓ Database up to date"
 fi
 
+# Enable bounce webhooks in config.toml if not already present
+echo "Configuring bounce webhooks..."
+if ! grep -q "^\[bounce\]" /listmonk/config.toml 2>/dev/null; then
+  echo "" >> /listmonk/config.toml
+  echo "[bounce]" >> /listmonk/config.toml
+  echo "webhooks_enabled = true" >> /listmonk/config.toml
+  echo "" >> /listmonk/config.toml
+  echo "[bounce.azure]" >> /listmonk/config.toml
+  echo "enabled = true" >> /listmonk/config.toml
+  echo "✓ Bounce webhooks enabled in config"
+else
+  # Update existing bounce section
+  if ! grep -q "webhooks_enabled" /listmonk/config.toml 2>/dev/null; then
+    sed -i '/^\[bounce\]/a webhooks_enabled = true' /listmonk/config.toml
+    echo "✓ Added webhooks_enabled to existing [bounce] section"
+  fi
+  if ! grep -q "^\[bounce.azure\]" /listmonk/config.toml 2>/dev/null; then
+    echo "" >> /listmonk/config.toml
+    echo "[bounce.azure]" >> /listmonk/config.toml
+    echo "enabled = true" >> /listmonk/config.toml
+    echo "✓ Added [bounce.azure] section"
+  fi
+fi
+
 # If running as root and PUID is not 0, then execute command as PUID
 # this allows us to run the container as a non-root user
 if [ "$(id -u)" = "0" ] && [ "${PUID}" != "0" ]; then

@@ -270,8 +270,8 @@ func (m *Manager) PushCampaignMessageByID(campaignID int, subscriberID int, serv
 	// Log the server details for debugging
 	// This confirms we're using the correct SMTP server with the correct username for authentication
 	// and the correct from_email for the message sender
-	m.log.Printf("campaign %d, subscriber %d: using SMTP server '%s' (uuid=%s) with username='%s', from_email='%s' (campaign.from_email was '%s')",
-		campaignID, subscriberID, serverName, serverUUID, serverUsername, serverFromEmail, msg.from)
+	m.log.Printf("campaign '%s' (%d), subscriber '%s' (%d): using SMTP server '%s' with username='%s', from_email='%s' (campaign.from_email was '%s')",
+		camp.Name, campaignID, sub.Email, subscriberID, serverName, serverUsername, serverFromEmail, msg.from)
 
 	// Get the specific messenger for this SMTP server
 	// We must use the server-specific messenger (e.g., "email-mail2") instead of the pooled "email" messenger
@@ -325,8 +325,8 @@ func (m *Manager) PushCampaignMessageByID(campaignID int, subscriberID int, serv
 	}
 
 	// Log successful push to messenger
-	m.log.Printf("✓ campaign %d, subscriber %d: successfully pushed to messenger '%s' (server uuid=%s)",
-		campaignID, subscriberID, serverName, serverUUID)
+	m.log.Printf("✓ campaign '%s' (%d), subscriber '%s' (%d): successfully pushed to messenger '%s'",
+		camp.Name, campaignID, sub.Email, subscriberID, serverName)
 
 	return nil
 }

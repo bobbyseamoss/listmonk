@@ -285,6 +285,8 @@ type CampaignStats struct {
 	Status    string    `db:"status" json:"status"`
 	ToSend    int       `db:"to_send" json:"to_send"`
 	Sent      int       `db:"sent" json:"sent"`
+	Views     int       `db:"views" json:"views"`
+	Clicks    int       `db:"clicks" json:"clicks"`
 	Started   null.Time `db:"started_at" json:"started_at"`
 	UpdatedAt null.Time `db:"updated_at" json:"updated_at"`
 	Rate      int       `json:"rate"`
@@ -310,6 +312,13 @@ type CampaignAnalyticsCount struct {
 type CampaignAnalyticsLink struct {
 	URL   string `db:"url" json:"url"`
 	Count int    `db:"count" json:"count"`
+}
+
+// CampaignAzureDeliveryCount represents Azure delivery event counts by status
+type CampaignAzureDeliveryCount struct {
+	CampaignID int    `db:"campaign_id" json:"campaign_id"`
+	Status     string `db:"status" json:"status"`
+	Count      int    `db:"count" json:"count"`
 }
 
 // CampaignUnsubscriber represents a subscriber who unsubscribed after receiving a campaign
@@ -360,6 +369,23 @@ type Bounce struct {
 
 	// Pseudofield for getting the total number of bounces
 	// in searches and queries.
+	Total int `db:"total" json:"-"`
+}
+
+// WebhookLog represents a logged webhook request.
+type WebhookLog struct {
+	ID             int64           `db:"id" json:"id"`
+	WebhookType    string          `db:"webhook_type" json:"webhook_type"`
+	EventType      null.String     `db:"event_type" json:"event_type"`
+	RequestHeaders json.RawMessage `db:"request_headers" json:"request_headers"`
+	RequestBody    string          `db:"request_body" json:"request_body"`
+	ResponseStatus int             `db:"response_status" json:"response_status"`
+	ResponseBody   null.String     `db:"response_body" json:"response_body"`
+	Processed      bool            `db:"processed" json:"processed"`
+	ErrorMessage   null.String     `db:"error_message" json:"error_message"`
+	CreatedAt      time.Time       `db:"created_at" json:"created_at"`
+
+	// Pseudofield for getting the total count in queries.
 	Total int `db:"total" json:"-"`
 }
 
@@ -770,4 +796,30 @@ func (h Headers) Value() (driver.Value, error) {
 	}
 
 	return "[]", nil
+}
+
+// AzureDeliveryEvent represents a delivery status event from Azure Event Grid.
+type AzureDeliveryEvent struct {
+	ID                    int64     `db:"id" json:"id"`
+	AzureMessageID        string    `db:"azure_message_id" json:"azure_message_id"`
+	CampaignID            int       `db:"campaign_id" json:"campaign_id"`
+	SubscriberID          int       `db:"subscriber_id" json:"subscriber_id"`
+	Status                string    `db:"status" json:"status"`
+	StatusReason          string    `db:"status_reason" json:"status_reason"`
+	DeliveryStatusDetails string    `db:"delivery_status_details" json:"delivery_status_details"`
+	EventTimestamp        time.Time `db:"event_timestamp" json:"event_timestamp"`
+	CreatedAt             time.Time `db:"created_at" json:"created_at"`
+}
+
+// AzureEngagementEvent represents an engagement event (view/click) from Azure Event Grid.
+type AzureEngagementEvent struct {
+	ID                int64     `db:"id" json:"id"`
+	AzureMessageID    string    `db:"azure_message_id" json:"azure_message_id"`
+	CampaignID        int       `db:"campaign_id" json:"campaign_id"`
+	SubscriberID      int       `db:"subscriber_id" json:"subscriber_id"`
+	EngagementType    string    `db:"engagement_type" json:"engagement_type"`
+	EngagementContext string    `db:"engagement_context" json:"engagement_context"`
+	UserAgent         string    `db:"user_agent" json:"user_agent"`
+	EventTimestamp    time.Time `db:"event_timestamp" json:"event_timestamp"`
+	CreatedAt         time.Time `db:"created_at" json:"created_at"`
 }

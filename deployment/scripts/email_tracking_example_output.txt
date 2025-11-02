@@ -1,0 +1,307 @@
+======================================================================
+Example Output: enable_email_tracking.sh
+======================================================================
+
+This file shows example output from running the email tracking script.
+Use this to understand what to expect when running the script.
+
+======================================================================
+SCENARIO 1: First Run (Some Domains Need Enabling)
+======================================================================
+
+$ ./enable_email_tracking.sh
+
+======================================================================
+Azure Email Communication Services - User Engagement Tracking
+======================================================================
+
+Azure CLI version: 2.67.0
+Checking Azure login status...
+✓ Logged in as: adam@example.com
+✓ Subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+Checking Azure Communication Services extension...
+✓ Extension version: 1.0.0
+
+======================================================================
+Step 1: Discovering Email Communication Services
+======================================================================
+
+Fetching Email Communication Services...
+✓ Found 1 Email Communication Service(s)
+
+Services:
+  - listmonk-email-service (Resource Group: rg-listmonk420)
+
+======================================================================
+Step 2: Processing Domains
+======================================================================
+
+Processing Email Service: listmonk-email-service
+  Resource Group: rg-listmonk420
+  Found 5 domain(s)
+
+  Domain: mail1.bobbyseamoss.com
+    Management Type: CustomerManaged
+    Current Tracking Status: Disabled
+    Enabling user engagement tracking... ✓ SUCCESS
+
+  Domain: mail2.bobbyseamoss.com
+    Management Type: CustomerManaged
+    Current Tracking Status: Disabled
+    Enabling user engagement tracking... ✓ SUCCESS
+
+  Domain: mail3.bobbyseamoss.com
+    Management Type: CustomerManaged
+    Current Tracking Status: Enabled
+    ✓ Already enabled
+
+  Domain: testdomain.azurecomm.net
+    Management Type: AzureManaged
+    Current Tracking Status: Unknown
+    ⚠️  SKIPPED - Azure Managed Domains do not support user engagement tracking
+
+  Domain: mail4.bobbyseamoss.com
+    Management Type: CustomerManaged
+    Current Tracking Status: Disabled
+    Enabling user engagement tracking... ✗ FAILED
+    Note: Domains with default sending limits cannot enable tracking.
+    Raise a support ticket to upgrade your service limits.
+
+======================================================================
+Summary
+======================================================================
+
+Total Email Services: 1
+Total Domains Processed: 5
+
+✓ Enabled: 2
+○ Already Enabled: 1
+⚠ Skipped (Azure Managed): 1
+✗ Failed: 1
+
+Failed domains:
+  - mail4.bobbyseamoss.com (Service: listmonk-email-service, RG: rg-listmonk420)
+
+======================================================================
+Important Notes
+======================================================================
+
+Azure Managed Domains:
+  User engagement tracking is not available for Azure Managed Domains
+  (e.g., xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.azurecomm.net)
+  Use custom domains instead.
+
+Default Sending Limits:
+  Domains with default sending limits cannot enable user engagement tracking.
+  To enable tracking:
+  1. Open a support ticket in Azure Portal
+  2. Request to upgrade from default sending limits
+  3. Once approved, run this script again
+
+======================================================================
+User Engagement Tracking Features
+======================================================================
+
+When enabled, the following tracking is available:
+  - Email opens (pixel-based tracking)
+  - Link clicks (URL redirect tracking)
+
+To view engagement data:
+  1. Azure Portal > Email Communication Service > Insights
+  2. Or subscribe to Email User Engagement operational logs
+  3. Or use Azure Monitor to query engagement events
+
+Note: Tracking only works for HTML emails, not plain text.
+
+
+======================================================================
+SCENARIO 2: All Already Enabled (Idempotent Run)
+======================================================================
+
+$ ./enable_email_tracking.sh
+
+======================================================================
+Azure Email Communication Services - User Engagement Tracking
+======================================================================
+
+Azure CLI version: 2.67.0
+Checking Azure login status...
+✓ Logged in as: adam@example.com
+✓ Subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+Checking Azure Communication Services extension...
+✓ Extension version: 1.0.0
+
+======================================================================
+Step 1: Discovering Email Communication Services
+======================================================================
+
+Fetching Email Communication Services...
+✓ Found 1 Email Communication Service(s)
+
+Services:
+  - listmonk-email-service (Resource Group: rg-listmonk420)
+
+======================================================================
+Step 2: Processing Domains
+======================================================================
+
+Processing Email Service: listmonk-email-service
+  Resource Group: rg-listmonk420
+  Found 3 domain(s)
+
+  Domain: mail1.bobbyseamoss.com
+    Management Type: CustomerManaged
+    Current Tracking Status: Enabled
+    ✓ Already enabled
+
+  Domain: mail2.bobbyseamoss.com
+    Management Type: CustomerManaged
+    Current Tracking Status: Enabled
+    ✓ Already enabled
+
+  Domain: mail3.bobbyseamoss.com
+    Management Type: CustomerManaged
+    Current Tracking Status: Enabled
+    ✓ Already enabled
+
+======================================================================
+Summary
+======================================================================
+
+Total Email Services: 1
+Total Domains Processed: 3
+
+✓ Enabled: 0
+○ Already Enabled: 3
+
+======================================================================
+User Engagement Tracking Features
+======================================================================
+
+When enabled, the following tracking is available:
+  - Email opens (pixel-based tracking)
+  - Link clicks (URL redirect tracking)
+
+To view engagement data:
+  1. Azure Portal > Email Communication Service > Insights
+  2. Or subscribe to Email User Engagement operational logs
+  3. Or use Azure Monitor to query engagement events
+
+Note: Tracking only works for HTML emails, not plain text.
+
+
+======================================================================
+SCENARIO 3: Dry Run Mode
+======================================================================
+
+$ ./enable_email_tracking.sh --dry-run
+
+======================================================================
+Azure Email Communication Services - User Engagement Tracking
+======================================================================
+
+Azure CLI version: 2.67.0
+Checking Azure login status...
+✓ Logged in as: adam@example.com
+✓ Subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+Checking Azure Communication Services extension...
+✓ Extension version: 1.0.0
+
+=== DRY RUN MODE - No changes will be made ===
+
+======================================================================
+Step 1: Discovering Email Communication Services
+======================================================================
+
+Fetching Email Communication Services...
+✓ Found 1 Email Communication Service(s)
+
+Services:
+  - listmonk-email-service (Resource Group: rg-listmonk420)
+
+======================================================================
+Step 2: Processing Domains
+======================================================================
+
+Processing Email Service: listmonk-email-service
+  Resource Group: rg-listmonk420
+  Found 2 domain(s)
+
+  Domain: mail1.bobbyseamoss.com
+    Management Type: CustomerManaged
+    Current Tracking Status: Disabled
+    [DRY RUN] Would enable user engagement tracking
+
+  Domain: mail2.bobbyseamoss.com
+    Management Type: CustomerManaged
+    Current Tracking Status: Disabled
+    [DRY RUN] Would enable user engagement tracking
+
+======================================================================
+Summary
+======================================================================
+
+Total Email Services: 1
+Total Domains Processed: 2
+
+[DRY RUN MODE]
+Would enable tracking on: 2 domain(s)
+○ Already Enabled: 0
+
+======================================================================
+User Engagement Tracking Features
+======================================================================
+
+When enabled, the following tracking is available:
+  - Email opens (pixel-based tracking)
+  - Link clicks (URL redirect tracking)
+
+To view engagement data:
+  1. Azure Portal > Email Communication Service > Insights
+  2. Or subscribe to Email User Engagement operational logs
+  3. Or use Azure Monitor to query engagement events
+
+Note: Tracking only works for HTML emails, not plain text.
+
+
+======================================================================
+SCENARIO 4: Resource Group Filter
+======================================================================
+
+$ ./enable_email_tracking.sh --resource-group rg-listmonk420
+
+======================================================================
+Azure Email Communication Services - User Engagement Tracking
+======================================================================
+
+Azure CLI version: 2.67.0
+Checking Azure login status...
+✓ Logged in as: adam@example.com
+✓ Subscription: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+Checking Azure Communication Services extension...
+✓ Extension version: 1.0.0
+
+======================================================================
+Step 1: Discovering Email Communication Services
+======================================================================
+
+Filtering by resource group: rg-listmonk420
+Fetching Email Communication Services...
+✓ Found 1 Email Communication Service(s)
+
+Services:
+  - listmonk-email-service (Resource Group: rg-listmonk420)
+
+======================================================================
+Step 2: Processing Domains
+======================================================================
+
+Processing Email Service: listmonk-email-service
+  Resource Group: rg-listmonk420
+  Found 3 domain(s)
+
+[... continues as normal ...]

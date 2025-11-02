@@ -144,6 +144,7 @@ type Config struct {
 	BounceSendgridEnabled     bool
 	BouncePostmarkEnabled     bool
 	BounceForwardemailEnabled bool
+	BounceAzureEnabled        bool
 
 	PermissionsRaw json.RawMessage
 	Permissions    map[string]struct{}
@@ -462,11 +463,21 @@ func initConstConfig(ko *koanf.Koanf) *Config {
 	c.Privacy.DomainBlocklist = ko.Strings("privacy.domain_blocklist")
 	c.Privacy.DomainAllowlist = ko.Strings("privacy.domain_allowlist")
 
+	// Debug: Check if key exists and what its raw value is
+	if ko.Exists("bounce.webhooks_enabled") {
+		rawVal := ko.Get("bounce.webhooks_enabled")
+		lo.Printf("DEBUG: bounce.webhooks_enabled EXISTS, raw value = %#v (type: %T)", rawVal, rawVal)
+	} else {
+		lo.Printf("DEBUG: bounce.webhooks_enabled does NOT exist in config")
+	}
 	c.BounceWebhooksEnabled = ko.Bool("bounce.webhooks_enabled")
+	lo.Printf("DEBUG: BounceWebhooksEnabled = %v (from config key 'bounce.webhooks_enabled')", c.BounceWebhooksEnabled)
 	c.BounceSESEnabled = ko.Bool("bounce.ses_enabled")
 	c.BounceSendgridEnabled = ko.Bool("bounce.sendgrid_enabled")
 	c.BouncePostmarkEnabled = ko.Bool("bounce.postmark.enabled")
 	c.BounceForwardemailEnabled = ko.Bool("bounce.forwardemail.enabled")
+	c.BounceAzureEnabled = ko.Bool("bounce.azure.enabled")
+	lo.Printf("DEBUG: BounceAzureEnabled = %v (from config key 'bounce.azure.enabled')", c.BounceAzureEnabled)
 	c.HasLegacyUser = ko.Exists("app.admin_username") || ko.Exists("app.admin_password")
 
 	b := md5.Sum([]byte(time.Now().String()))
@@ -614,7 +625,7 @@ func initImporter(q *models.Queries, db *sqlx.DB, core *core.Core, i *i18n.I18n,
 }
 
 // initSMTPMessenger initializes the combined and individual SMTP messengers.
-func initSMTPMessengers() []manager.Messenger {
+func initSMTPMessengers(db *sqlx.DB) []manager.Messenger {
 	var (
 		servers     = []email.Server{}
 		out         = []manager.Messenger{}
@@ -643,7 +654,7 @@ func initSMTPMessengers() []manager.Messenger {
 		// If the server has a name, initialize it as a standalone e-mail messenger
 		// allowing campaigns to select individual SMTPs. In the UI and config, it'll appear as `email / $name`.
 		if s.Name != "" {
-			msgr, err := email.New(s.Name, testingMode, lo.Printf, s)
+			msgr, err := email.New(s.Name, testingMode, db, lo.Printf, s)
 			if err != nil {
 				lo.Fatalf("error initializing e-mail messenger: %v", err)
 			}
@@ -652,7 +663,7 @@ func initSMTPMessengers() []manager.Messenger {
 	}
 
 	// Initialize the 'email' messenger with all SMTP servers.
-	msgr, err := email.New(email.MessengerName, testingMode, lo.Printf, servers...)
+	msgr, err := email.New(email.MessengerName, testingMode, db, lo.Printf, servers...)
 	if err != nil {
 		lo.Fatalf("error initializing e-mail messenger: %v", err)
 	}
@@ -833,6 +844,11 @@ func initBounceManager(cb func(models.Bounce) error, stmt *sqlx.Stmt, lo *log.Lo
 		}{
 			ko.Bool("bounce.forwardemail.enabled"),
 			ko.String("bounce.forwardemail.key"),
+		},
+		Azure: struct {
+			Enabled bool
+		}{
+			ko.Bool("bounce.azure.enabled"),
 		},
 		RecordBounceCB: cb,
 		Mailboxes:      []bounce.MailboxOpt{},

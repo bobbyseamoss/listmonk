@@ -65,6 +65,8 @@
         :active="activeItem.maintenance" data-cy="maintenance" icon="wrench-outline" :label="$t('menu.maintenance')" />
       <b-menu-item v-if="$can('settings:get')" :to="{ name: 'logs' }" tag="router-link" :active="activeItem.logs"
         data-cy="logs" icon="format-list-bulleted-square" :label="$t('menu.logs')" />
+      <b-menu-item v-if="$can('settings:get')" :to="{ name: 'webhook-logs' }" tag="router-link" :active="activeItem['webhook-logs']"
+        data-cy="webhook-logs" icon="webhook" :label="'Webhook Logs'" />
     </b-menu-item><!-- settings -->
 
     <b-menu-item v-if="isMobile" icon="logout-variant" :label="$t('users.logout')" @click.prevent="doLogout" />

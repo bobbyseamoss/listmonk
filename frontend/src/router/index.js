@@ -120,6 +120,12 @@ const routes = [
     component: () => import('../views/Logs.vue'),
   },
   {
+    path: '/settings/webhook-logs',
+    name: 'webhook-logs',
+    meta: { title: 'Webhook Logs', group: 'settings' },
+    component: () => import('../views/WebhookLogs.vue'),
+  },
+  {
     path: '/users',
     name: 'users',
     meta: { title: 'globals.terms.users', group: 'users' },

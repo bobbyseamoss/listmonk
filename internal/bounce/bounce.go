@@ -33,6 +33,9 @@ type Opt struct {
 		Enabled bool
 		Key     string
 	}
+	Azure struct {
+		Enabled bool
+	}
 
 	RecordBounceCB func(models.Bounce) error
 }
@@ -54,6 +57,7 @@ type Manager struct {
 	Sendgrid     *webhooks.Sendgrid
 	Postmark     *webhooks.Postmark
 	Forwardemail *webhooks.Forwardemail
+	Azure        *webhooks.Azure
 	queries      *Queries
 	opt          Opt
 	log          *log.Logger
@@ -111,6 +115,10 @@ func New(opt Opt, q *Queries, lo *log.Logger) (*Manager, error) {
 		if opt.ForwardEmail.Enabled {
 			fe := webhooks.NewForwardemail([]byte(opt.ForwardEmail.Key))
 			m.Forwardemail = fe
+		}
+
+		if opt.Azure.Enabled {
+			m.Azure = webhooks.NewAzure()
 		}
 	}
 
@@ -172,12 +180,12 @@ func (m *Manager) runMailboxScanner(uuid string, mb Mailbox) {
 		scanInterval = 15 * time.Minute // default
 	}
 
-	m.log.Printf("bounce mailbox '%s' (uuid=%s) will scan every %v", mailboxName, uuid, scanInterval)
+	m.log.Printf("bounce mailbox '%s' will scan every %v", mailboxName, scanInterval)
 
 	for {
 		if err := mb.Scan(1000, m.queue); err != nil {
-			m.log.Printf("error scanning bounce mailbox '%s' (uuid=%s, type=%s, host=%s:%d, username=%s): %v",
-				mailboxName, uuid, mailboxType, mailboxHost, mailboxPort, mailboxUsername, err)
+			m.log.Printf("error scanning bounce mailbox '%s' (type=%s, host=%s:%d, username=%s): %v",
+				mailboxName, mailboxType, mailboxHost, mailboxPort, mailboxUsername, err)
 		}
 
 		time.Sleep(scanInterval)

@@ -556,6 +556,16 @@ func (a *App) GetCampaignViewAnalytics(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("analytics.invalidDates"))
 	}
 
+	// Azure delivery stats.
+	if typ == "azure-delivery" {
+		out, err := a.core.GetCampaignAzureDeliveryCounts(ids, from, to)
+		if err != nil {
+			return err
+		}
+
+		return c.JSON(http.StatusOK, okResp{out})
+	}
+
 	// Campaign link stats.
 	if typ == "links" {
 		out, err := a.core.GetCampaignAnalyticsLinks(ids, typ, from, to)

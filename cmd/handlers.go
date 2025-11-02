@@ -118,6 +118,8 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/subscribers/:id/export", pm(hasID(a.ExportSubscriberData), "subscribers:get_all", "subscribers:get"))
 		g.GET("/api/subscribers/:id/bounces", pm(hasID(a.GetSubscriberBounces), "bounces:get"))
 		g.DELETE("/api/subscribers/:id/bounces", pm(hasID(a.DeleteSubscriberBounces), "bounces:manage"))
+		g.GET("/api/subscribers/:id/azure-delivery-events", pm(hasID(a.GetSubscriberAzureDeliveryEvents), "subscribers:get_all", "subscribers:get"))
+		g.GET("/api/subscribers/:id/azure-engagement-events", pm(hasID(a.GetSubscriberAzureEngagementEvents), "subscribers:get_all", "subscribers:get"))
 		g.POST("/api/subscribers", pm(a.CreateSubscriber, "subscribers:manage"))
 		g.PUT("/api/subscribers/:id", pm(hasID(a.UpdateSubscriber), "subscribers:manage"))
 		g.POST("/api/subscribers/:id/optin", pm(hasID(a.SubscriberSendOptin), "subscribers:manage"))
@@ -133,6 +135,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/bounces/:id", pm(hasID(a.GetBounce), "bounces:get"))
 		g.DELETE("/api/bounces", pm(a.DeleteBounces, "bounces:manage"))
 		g.DELETE("/api/bounces/:id", pm(hasID(a.DeleteBounce), "bounces:manage"))
+
+		g.GET("/api/webhook-logs", pm(a.GetWebhookLogs, "settings:get"))
+		g.DELETE("/api/webhook-logs", pm(a.DeleteWebhookLogs, "settings:manage"))
 
 		// Subscriber operations based on arbitrary SQL queries.
 		// These aren't very REST-like.
@@ -170,6 +175,11 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PUT("/api/campaigns/:id/status", pm(hasID(a.UpdateCampaignStatus), "campaigns:manage_all", "campaigns:manage"))
 		g.PUT("/api/campaigns/:id/archive", pm(hasID(a.UpdateCampaignArchive), "campaigns:manage_all", "campaigns:manage"))
 		g.DELETE("/api/campaigns/:id", pm(hasID(a.DeleteCampaign), "campaigns:manage_all", "campaigns:manage"))
+
+		// Azure Event Grid Analytics API endpoints
+		g.GET("/api/campaigns/:id/azure-analytics", pm(hasID(a.GetCampaignAzureAnalytics), "campaigns:get_analytics"))
+		g.GET("/api/campaigns/:id/azure-delivery-events", pm(hasID(a.GetCampaignAzureDeliveryEvents), "campaigns:get_analytics"))
+		g.GET("/api/campaigns/:id/azure-engagement-events", pm(hasID(a.GetCampaignAzureEngagementEvents), "campaigns:get_analytics"))
 
 		// Queue system API endpoints
 		g.GET("/api/queue/items", pm(a.GetQueueItems, "campaigns:get_all", "campaigns:get"))
@@ -231,9 +241,13 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// Public unauthenticated endpoints.
 		g := e.Group("")
 
+		a.log.Printf("DEBUG: Checking if bounce webhooks should be registered: BounceWebhooksEnabled=%v", a.cfg.BounceWebhooksEnabled)
 		if a.cfg.BounceWebhooksEnabled {
 			// Public bounce endpoints for webservices like SES.
 			g.POST("/webhooks/service/:service", a.BounceWebhook)
+			a.log.Printf("DEBUG: Registered webhook route: POST /webhooks/service/:service")
+		} else {
+			a.log.Printf("DEBUG: Webhook routes NOT registered - BounceWebhooksEnabled is false")
 		}
 
 		// Landing page.

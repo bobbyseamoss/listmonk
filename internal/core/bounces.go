@@ -81,8 +81,8 @@ func (c *Core) RecordBounce(b models.Bounce) error {
 			if len(metaStr) > 200 {
 				metaStr = metaStr[:200] + "..." // Truncate if too long
 			}
-			c.log.Printf("bounced subscriber not found - uuid=%s, email=%s, type=%s, source=%s, campaign=%s, meta=%s",
-				b.SubscriberUUID, b.Email, b.Type, b.Source, b.CampaignUUID, metaStr)
+			c.log.Printf("bounced subscriber not found - email=%s, type=%s, source=%s, meta=%s",
+				b.Email, b.Type, b.Source, metaStr)
 			return nil
 		}
 

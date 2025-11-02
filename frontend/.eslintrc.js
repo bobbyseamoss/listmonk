@@ -28,5 +28,4 @@ module.exports = {
       comments: 200,
     }],
   },
-  ignorePatterns: ['src/email-builder.js'],
 };

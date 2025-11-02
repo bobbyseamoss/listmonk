@@ -120,11 +120,11 @@
         <div class="fields stats" :set="stats = getCampaignStats(props.row)">
           <p>
             <label for="#">{{ $t('campaigns.views') }}</label>
-            <span>{{ $utils.formatNumber(props.row.views) }}</span>
+            <span>{{ $utils.formatNumber(stats.views) }}</span>
           </p>
           <p>
             <label for="#">{{ $t('campaigns.clicks') }}</label>
-            <span>{{ $utils.formatNumber(props.row.clicks) }}</span>
+            <span>{{ $utils.formatNumber(stats.clicks) }}</span>
           </p>
 
           <!-- For queue-based campaigns, show queue stats -->

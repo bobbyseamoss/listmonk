@@ -683,10 +683,42 @@ LEFT JOIN templates ON (templates.id = (CASE WHEN $2=0 THEN campaigns.template_i
 WHERE campaigns.id = $1;
 
 -- name: get-campaign-status
-SELECT id, status, to_send, sent, started_at, updated_at FROM campaigns WHERE status=$1;
+WITH views AS (
+    SELECT campaign_id, COUNT(*) as count FROM campaign_views
+    WHERE campaign_id IN (SELECT id FROM campaigns WHERE status=$1)
+    GROUP BY campaign_id
+),
+clicks AS (
+    SELECT campaign_id, COUNT(*) as count FROM link_clicks
+    WHERE campaign_id IN (SELECT id FROM campaigns WHERE status=$1)
+    GROUP BY campaign_id
+)
+SELECT
+    c.id,
+    c.status,
+    c.to_send,
+    c.sent,
+    COALESCE(v.count, 0)::INT AS views,
+    COALESCE(cl.count, 0)::INT AS clicks,
+    c.started_at,
+    c.updated_at
+FROM campaigns c
+LEFT JOIN views v ON v.campaign_id = c.id
+LEFT JOIN clicks cl ON cl.campaign_id = c.id
+WHERE c.status=$1;
 
 -- name: get-campaign-queue-stats
 -- Get queue stats for running campaigns that use the queue (messenger='automatic')
+WITH views AS (
+    SELECT campaign_id, COUNT(*) as count FROM campaign_views
+    WHERE campaign_id IN (SELECT id FROM campaigns WHERE status = 'running' AND use_queue = true)
+    GROUP BY campaign_id
+),
+clicks AS (
+    SELECT campaign_id, COUNT(*) as count FROM link_clicks
+    WHERE campaign_id IN (SELECT id FROM campaigns WHERE status = 'running' AND use_queue = true)
+    GROUP BY campaign_id
+)
 SELECT
     c.id,
     c.status,
@@ -698,12 +730,16 @@ SELECT
     COALESCE(SUM(CASE WHEN eq.status = 'failed' THEN 1 ELSE 0 END), 0)::INT AS queue_failed,
     COALESCE(SUM(CASE WHEN eq.status = 'cancelled' THEN 1 ELSE 0 END), 0)::INT AS queue_cancelled,
     COUNT(eq.id)::INT AS queue_total,
+    COALESCE(v.count, 0)::INT AS views,
+    COALESCE(cl.count, 0)::INT AS clicks,
     c.started_at,
     c.updated_at
 FROM campaigns c
 LEFT JOIN email_queue eq ON eq.campaign_id = c.id
+LEFT JOIN views v ON v.campaign_id = c.id
+LEFT JOIN clicks cl ON cl.campaign_id = c.id
 WHERE c.status = 'running' AND c.use_queue = true
-GROUP BY c.id, c.status, c.use_queue, c.messenger, c.started_at, c.updated_at;
+GROUP BY c.id, c.status, c.use_queue, c.messenger, c.started_at, c.updated_at, v.count, cl.count;
 
 -- name: campaign-has-lists
 -- Returns TRUE if the campaign $1 has any of the lists given in $2.
@@ -816,6 +852,14 @@ SELECT COUNT(%s) AS "count", url
     LEFT JOIN links ON (link_clicks.link_id = links.id)
     WHERE campaign_id=ANY($1) AND link_clicks.created_at >= $2 AND link_clicks.created_at <= $3
     GROUP BY links.url ORDER BY "count" DESC LIMIT 50;
+
+-- name: get-campaign-azure-delivery-counts
+-- Get counts of Azure delivery events by status for campaigns
+SELECT campaign_id, status, COUNT(*) AS "count"
+    FROM azure_delivery_events
+    WHERE campaign_id=ANY($1) AND event_timestamp >= $2 AND event_timestamp <= $3
+    GROUP BY campaign_id, status
+    ORDER BY campaign_id, status;
 
 -- name: get-campaign-unsubscribers
 -- Get the list of subscribers who unsubscribed from any list that the campaign was sent to
@@ -1162,6 +1206,29 @@ b AS (
 )
 UPDATE subscriber_lists SET status='unsubscribed', updated_at=NOW()
     WHERE subscriber_id = ANY(SELECT subscriber_id FROM subs);
+
+-- webhook logs
+-- name: create-webhook-log
+INSERT INTO webhook_logs (webhook_type, event_type, request_headers, request_body, response_status, response_body, processed, error_message)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id;
+
+-- name: get-webhook-logs
+SELECT * FROM webhook_logs
+    WHERE ($1 = '' OR webhook_type = $1)
+    AND ($2 = '' OR event_type = $2)
+    ORDER BY created_at DESC
+    OFFSET $3 LIMIT $4;
+
+-- name: get-webhook-logs-count
+SELECT COUNT(*) AS total FROM webhook_logs
+    WHERE ($1 = '' OR webhook_type = $1)
+    AND ($2 = '' OR event_type = $2);
+
+-- name: delete-webhook-logs
+DELETE FROM webhook_logs WHERE id = ANY($1);
+
+-- name: delete-all-webhook-logs
+DELETE FROM webhook_logs;
 
 -- name: get-db-info
 SELECT JSON_BUILD_OBJECT('version', (SELECT VERSION()),

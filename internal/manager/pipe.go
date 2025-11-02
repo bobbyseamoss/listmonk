@@ -86,6 +86,13 @@ func (p *pipe) NextSubscribers() (bool, error) {
 		return false, nil
 	}
 
+	// For queue-based campaigns (messenger='automatic'), the queue processor
+	// handles all subscriber processing and sending. Don't fetch or process
+	// subscribers in the pipe to avoid double-processing.
+	if p.camp.Messenger == "automatic" {
+		return false, nil
+	}
+
 	// Is there a sliding window limit configured?
 	// Skip sliding window for automatic campaigns as they go to the queue.
 	// Try to get messenger-specific sliding window settings first, fallback to global settings.

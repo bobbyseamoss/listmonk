@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -77,7 +76,8 @@ var (
 	// Buffered log writer for storing N lines of log entries for the UI.
 	evStream = events.New()
 	bufLog   = buflog.New(5000)
-	lo       = log.New(io.MultiWriter(os.Stdout, bufLog, evStream.ErrWriter()), "", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
+	// Use timezone-aware writer that prefixes logs with EST/EDT timestamps
+	lo       = log.New(newTZWriter(os.Stdout, bufLog, evStream.ErrWriter()), "", 0)
 
 	ko      = koanf.New(".")
 	fs      stuffbin.FileSystem
@@ -189,7 +189,7 @@ func main() {
 		core = initCore(fbOptinNotify, queries, db, i18n, ko)
 
 		// Initialize all messengers: SMTP, postback, and automatic.
-		msgrs = append(append(initSMTPMessengers(), initPostbackMessengers(ko)...), initAutomaticMessenger(db))
+		msgrs = append(append(initSMTPMessengers(db), initPostbackMessengers(ko)...), initAutomaticMessenger(db))
 
 		// Campaign manager.
 		mgr = initCampaignManager(msgrs, queries, urlCfg, core, media, i18n, ko)

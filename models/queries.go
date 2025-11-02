@@ -71,11 +71,12 @@ type Queries struct {
 	// These two queries are read as strings and based on settings.individual_tracking=on/off,
 	// are interpolated and copied to view and click counts. Same query, different tables.
 	GetCampaignAnalyticsCounts string     `query:"get-campaign-analytics-counts"`
-	GetCampaignViewCounts      *sqlx.Stmt `query:"get-campaign-view-counts"`
-	GetCampaignClickCounts     *sqlx.Stmt `query:"get-campaign-click-counts"`
-	GetCampaignLinkCounts      *sqlx.Stmt `query:"get-campaign-link-counts"`
-	GetCampaignBounceCounts    *sqlx.Stmt `query:"get-campaign-bounce-counts"`
-	GetCampaignUnsubscribers   *sqlx.Stmt `query:"get-campaign-unsubscribers"`
+	GetCampaignViewCounts           *sqlx.Stmt `query:"get-campaign-view-counts"`
+	GetCampaignClickCounts          *sqlx.Stmt `query:"get-campaign-click-counts"`
+	GetCampaignLinkCounts           *sqlx.Stmt `query:"get-campaign-link-counts"`
+	GetCampaignBounceCounts         *sqlx.Stmt `query:"get-campaign-bounce-counts"`
+	GetCampaignAzureDeliveryCounts  *sqlx.Stmt `query:"get-campaign-azure-delivery-counts"`
+	GetCampaignUnsubscribers        *sqlx.Stmt `query:"get-campaign-unsubscribers"`
 	DeleteCampaignViews        *sqlx.Stmt `query:"delete-campaign-views"`
 	DeleteCampaignLinkClicks   *sqlx.Stmt `query:"delete-campaign-link-clicks"`
 
@@ -128,7 +129,14 @@ type Queries struct {
 	BlocklistBouncedSubscribers *sqlx.Stmt `query:"blocklist-bounced-subscribers"`
 	DeleteBounces               *sqlx.Stmt `query:"delete-bounces"`
 	DeleteBouncesBySubscriber   *sqlx.Stmt `query:"delete-bounces-by-subscriber"`
-	GetDBInfo                   string     `query:"get-db-info"`
+
+	CreateWebhookLog       *sqlx.Stmt `query:"create-webhook-log"`
+	GetWebhookLogs         *sqlx.Stmt `query:"get-webhook-logs"`
+	GetWebhookLogsCount    *sqlx.Stmt `query:"get-webhook-logs-count"`
+	DeleteWebhookLogs      *sqlx.Stmt `query:"delete-webhook-logs"`
+	DeleteAllWebhookLogs   *sqlx.Stmt `query:"delete-all-webhook-logs"`
+
+	GetDBInfo              string     `query:"get-db-info"`
 
 	CreateUser        *sqlx.Stmt `query:"create-user"`
 	UpdateUser        *sqlx.Stmt `query:"update-user"`

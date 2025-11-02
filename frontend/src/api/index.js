@@ -271,6 +271,17 @@ export const getBounces = async (params) => http.get(
   { params, loading: models.bounces },
 );
 
+// Webhook Logs.
+export const getWebhookLogs = async (params) => http.get(
+  '/api/webhook-logs',
+  { params },
+);
+
+export const deleteWebhookLogs = async (ids) => {
+  const params = ids === 'all' ? { all: true } : { id: ids };
+  return http.delete('/api/webhook-logs', { params });
+};
+
 // Campaigns.
 export const getCampaigns = async (params) => http.get('/api/campaigns', {
   params,
@@ -307,6 +318,11 @@ export const getCampaignBounceCounts = async (params) => http.get(
   { params, loading: models.campaigns },
 );
 
+export const getCampaignAzureDeliveryCounts = async (params) => http.get(
+  '/api/campaigns/analytics/azure-delivery',
+  { params, loading: models.campaigns },
+);
+
 export const getCampaignLinkCounts = async (params) => http.get(
   '/api/campaigns/analytics/links',
   { params, loading: models.campaigns },
@@ -315,6 +331,32 @@ export const getCampaignLinkCounts = async (params) => http.get(
 export const getCampaignUnsubscribers = async (id) => http.get(
   `/api/campaigns/${id}/unsubscribers`,
   { loading: models.campaigns },
+);
+
+// Azure Event Grid Analytics
+export const getCampaignAzureAnalytics = async (id) => http.get(
+  `/api/campaigns/${id}/azure-analytics`,
+  { loading: models.campaigns },
+);
+
+export const getCampaignAzureDeliveryEvents = async (id, params) => http.get(
+  `/api/campaigns/${id}/azure-delivery-events`,
+  { params, loading: models.campaigns },
+);
+
+export const getCampaignAzureEngagementEvents = async (id, params) => http.get(
+  `/api/campaigns/${id}/azure-engagement-events`,
+  { params, loading: models.campaigns },
+);
+
+export const getSubscriberAzureDeliveryEvents = async (id, params) => http.get(
+  `/api/subscribers/${id}/azure-delivery-events`,
+  { params, loading: models.subscribers },
+);
+
+export const getSubscriberAzureEngagementEvents = async (id, params) => http.get(
+  `/api/subscribers/${id}/azure-engagement-events`,
+  { params, loading: models.subscribers },
 );
 
 export const convertCampaignContent = async (data) => http.post(

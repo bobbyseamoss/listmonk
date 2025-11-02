@@ -67,6 +67,25 @@
         </div>
       </div>
 
+      <!-- Azure Delivery Status Counts -->
+      <div class="chart" v-if="azureDeliveryCounts.length > 0">
+        <div class="columns">
+          <div class="column is-12">
+            <h4>Azure Delivery Status</h4>
+            <div class="box">
+              <div class="columns is-multiline">
+                <div class="column is-3" v-for="item in azureDeliveryCountsSummary" :key="item.status">
+                  <div class="has-text-centered">
+                    <p class="heading">{{ item.status }}</p>
+                    <p class="title">{{ $utils.niceNumber(item.count) }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Unsubscribers Section -->
       <div class="chart" v-if="form.campaigns.length === 1 && unsubscribers.length > 0">
         <div class="columns">
@@ -141,6 +160,7 @@ export default Vue.extend({
       totalSent: 0,
       unsubscribers: [],
       unsubscribersLoading: false,
+      azureDeliveryCounts: [],
       urls: [],
       charts: {
         views: {
@@ -352,10 +372,44 @@ export default Vue.extend({
       // Calculate total sent across all selected campaigns
       this.totalSent = this.form.campaigns.reduce((sum, camp) => sum + (camp.sent || 0), 0);
     },
+
+    getAzureDeliveryCounts() {
+      if (this.form.campaigns.length === 0) {
+        this.azureDeliveryCounts = [];
+        return;
+      }
+
+      this.$api.getCampaignAzureDeliveryCounts({
+        id: this.form.campaigns.map((c) => c.id),
+        from: this.form.from,
+        to: this.form.to,
+      }).then((data) => {
+        this.azureDeliveryCounts = data;
+      }).catch(() => {
+        // Silently fail if there are no Azure delivery events
+        this.azureDeliveryCounts = [];
+      });
+    },
   },
 
   computed: {
-    ...mapState(['settings']),
+    ...mapState(['settings', 'loading']),
+
+    azureDeliveryCountsSummary() {
+      // Aggregate counts by status across all campaigns
+      const statusMap = {};
+      this.azureDeliveryCounts.forEach((item) => {
+        if (!statusMap[item.status]) {
+          statusMap[item.status] = 0;
+        }
+        statusMap[item.status] += item.count;
+      });
+
+      // Convert to array and sort by count descending
+      return Object.keys(statusMap)
+        .map((status) => ({ status, count: statusMap[status] }))
+        .sort((a, b) => b.count - a.count);
+    },
   },
 
   created() {
@@ -392,6 +446,9 @@ export default Vue.extend({
 
           // Get unsubscribers if single campaign selected
           this.getUnsubscribers();
+
+          // Get Azure delivery counts
+          this.getAzureDeliveryCounts();
 
           // Fetch count for each analytics type (views, counts, bounces);
           Object.keys(this.charts).forEach((k) => {
