@@ -504,10 +504,18 @@ func (a *App) BounceWebhook(c echo.Context) error {
 
 				switch engagement.EngagementType {
 				case "view":
-					// Insert into campaign_views
+					// Insert into campaign_views (with de-duplication to prevent double-counting
+					// when both native {{TrackView}} and Azure engagement tracking are enabled)
+					// Only insert if this exact view doesn't already exist (same campaign, subscriber, and timestamp within 5 seconds)
 					_, err := a.db.Exec(`
 						INSERT INTO campaign_views (campaign_id, subscriber_id, created_at)
-						VALUES ($1, $2, $3)
+						SELECT $1, $2, $3
+						WHERE NOT EXISTS (
+							SELECT 1 FROM campaign_views
+							WHERE campaign_id = $1
+							AND subscriber_id = $2
+							AND created_at BETWEEN $3 - INTERVAL '5 seconds' AND $3 + INTERVAL '5 seconds'
+						)
 					`, campaignID, subscriberID, actionTime)
 					if err != nil {
 						a.log.Printf("error recording Azure view: %v", err)
@@ -534,10 +542,19 @@ func (a *App) BounceWebhook(c echo.Context) error {
 						continue
 					}
 
-					// Insert click record
+					// Insert click record (with de-duplication to prevent double-counting
+					// when both native {{TrackLink}} and Azure engagement tracking are enabled)
+					// Only insert if this exact click doesn't already exist (same campaign, subscriber, link, and timestamp within 5 seconds)
 					_, err = a.db.Exec(`
 						INSERT INTO link_clicks (campaign_id, subscriber_id, link_id, created_at)
-						VALUES ($1, $2, $3, $4)
+						SELECT $1, $2, $3, $4
+						WHERE NOT EXISTS (
+							SELECT 1 FROM link_clicks
+							WHERE campaign_id = $1
+							AND subscriber_id = $2
+							AND link_id = $3
+							AND created_at BETWEEN $4 - INTERVAL '5 seconds' AND $4 + INTERVAL '5 seconds'
+						)
 					`, campaignID, subscriberID, linkID, actionTime)
 
 					if err != nil {
