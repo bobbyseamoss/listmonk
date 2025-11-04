@@ -514,7 +514,7 @@ func (a *App) BounceWebhook(c echo.Context) error {
 							SELECT 1 FROM campaign_views
 							WHERE campaign_id = $1
 							AND subscriber_id = $2
-							AND created_at BETWEEN $3 - INTERVAL '5 seconds' AND $3 + INTERVAL '5 seconds'
+							AND ABS(EXTRACT(EPOCH FROM (created_at - $3))) <= 5
 						)
 					`, campaignID, subscriberID, actionTime)
 					if err != nil {
@@ -553,7 +553,7 @@ func (a *App) BounceWebhook(c echo.Context) error {
 							WHERE campaign_id = $1
 							AND subscriber_id = $2
 							AND link_id = $3
-							AND created_at BETWEEN $4 - INTERVAL '5 seconds' AND $4 + INTERVAL '5 seconds'
+							AND ABS(EXTRACT(EPOCH FROM (created_at - $4))) <= 5
 						)
 					`, campaignID, subscriberID, linkID, actionTime)
 
