@@ -310,56 +310,42 @@ func (a *App) ClearAllQueuedEmails(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusForbidden, "Insufficient permissions")
 	}
 
-	// Clear all queued emails
-	res, err := a.queries.ClearAllQueuedEmails.Exec()
+	// Get counts before clearing
+	var counts struct {
+		Queued    int `db:"queued"`
+		Cancelled int `db:"cancelled"`
+		Sent      int `db:"sent"`
+		Failed    int `db:"failed"`
+	}
+	err := a.db.Get(&counts, `
+		SELECT
+			COALESCE(SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END), 0) as queued,
+			COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) as cancelled,
+			COALESCE(SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END), 0) as sent,
+			COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed
+		FROM email_queue
+	`)
 	if err != nil {
-		a.log.Printf("error clearing all queued emails: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error clearing queued emails")
+		a.log.Printf("error getting queue counts: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error getting queue counts")
 	}
 
-	// Get number of rows affected
-	rowsAffected, err := res.RowsAffected()
+	a.log.Printf("clearing queue: %d queued, %d cancelled, %d sent, %d failed",
+		counts.Queued, counts.Cancelled, counts.Sent, counts.Failed)
+
+	// Use TRUNCATE for fast clearing of the entire table
+	// This is much faster than DELETE and releases locks immediately
+	_, err = a.db.Exec(`TRUNCATE email_queue`)
 	if err != nil {
-		a.log.Printf("error getting rows affected: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error checking clear status")
+		a.log.Printf("error truncating email_queue: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error clearing queue")
 	}
 
-	a.log.Printf("cleared %d queued emails", rowsAffected)
+	a.log.Printf("truncated email_queue table")
 
-	// Always reset SMTP capacity and delete canceled/sent emails (regardless of test mode)
-	canceledCount := int64(0)
-	sentCount := int64(0)
-	failedCount := int64(0)
 	resetCapacity := false
 	resetSlidingWindow := false
 	resetAccountRateLimit := false
-
-	// Delete all canceled emails (to reset canceled count)
-	cancelRes, err := a.db.Exec(`DELETE FROM email_queue WHERE status = 'cancelled'`)
-	if err != nil {
-		a.log.Printf("error deleting canceled emails: %v", err)
-	} else {
-		canceledCount, _ = cancelRes.RowsAffected()
-		a.log.Printf("deleted %d canceled emails", canceledCount)
-	}
-
-	// Delete all sent emails (to reset sent count)
-	sentRes, err := a.db.Exec(`DELETE FROM email_queue WHERE status = 'sent'`)
-	if err != nil {
-		a.log.Printf("error deleting sent emails: %v", err)
-	} else {
-		sentCount, _ = sentRes.RowsAffected()
-		a.log.Printf("deleted %d sent emails", sentCount)
-	}
-
-	// Delete all failed emails (to reset failed count)
-	failedRes, err := a.db.Exec(`DELETE FROM email_queue WHERE status = 'failed'`)
-	if err != nil {
-		a.log.Printf("error deleting failed emails: %v", err)
-	} else {
-		failedCount, _ = failedRes.RowsAffected()
-		a.log.Printf("deleted %d failed emails", failedCount)
-	}
 
 	// Reset SMTP daily usage (to reset server capacity)
 	_, err = a.db.Exec(`DELETE FROM smtp_daily_usage`)
@@ -390,10 +376,10 @@ func (a *App) ClearAllQueuedEmails(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, okResp{map[string]interface{}{
 		"success":                  true,
-		"queued_count":             rowsAffected,
-		"canceled_count":           canceledCount,
-		"sent_count":               sentCount,
-		"failed_count":             failedCount,
+		"queued_count":             counts.Queued,
+		"canceled_count":           counts.Cancelled,
+		"sent_count":               counts.Sent,
+		"failed_count":             counts.Failed,
 		"reset_capacity":           resetCapacity,
 		"reset_sliding_window":     resetSlidingWindow,
 		"reset_account_rate_limit": resetAccountRateLimit,
