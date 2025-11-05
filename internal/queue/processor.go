@@ -214,7 +214,11 @@ func (p *Processor) processQueue() error {
 
 		// Mark email as sending
 		if err := p.markSending(email.ID, serverUUID); err != nil {
-			p.log.Printf("error marking email %d as sending: %v", email.ID, err)
+			// If email is already being processed, silently skip (expected with concurrent polling)
+			// Only log actual database errors
+			if err.Error() != fmt.Sprintf("email %d already being processed", email.ID) {
+				p.log.Printf("error marking email %d as sending: %v", email.ID, err)
+			}
 			continue
 		}
 
@@ -236,31 +240,12 @@ func (p *Processor) processQueue() error {
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			// Check Smart Sending rules before sending
-			if settings.AppSmartSendingEnabled {
-				// Query the subscriber's last send time
-				var lastSendTime *time.Time
-				err := p.db.Get(&lastSendTime,
-					`SELECT last_campaign_send_at FROM subscriber_last_send
-					 WHERE subscriber_id = $1
-					 AND last_campaign_send_at > NOW() - INTERVAL '1 hour' * $2`,
-					em.SubscriberID, settings.AppSmartSendingPeriodHours)
-
-				// If we found a recent send time, skip this email
-				if err == nil && lastSendTime != nil {
-					// Subscriber received an email within the Smart Sending period
-					p.log.Printf("⏭️  skipping email %d (subscriber %d) - Smart Sending: last send was %v ago (period: %d hours)",
-						em.ID, em.SubscriberID, time.Since(*lastSendTime).Round(time.Minute), settings.AppSmartSendingPeriodHours)
-
-					// Mark email as cancelled (skipped by Smart Sending)
-					if _, err := p.db.Exec(`UPDATE email_queue SET status = $1, last_error = $2, updated_at = NOW() WHERE id = $3`,
-						StatusCancelled, "Skipped by Smart Sending - subscriber received email recently", em.ID); err != nil {
-						p.log.Printf("error marking email %d as cancelled: %v", em.ID, err)
-					}
-					return
-				}
-				// If err != nil (e.g., no rows found), subscriber is eligible - continue sending
-			}
+			// OPTIMIZATION: Smart Sending check moved to getNextBatch() SQL query
+			// Emails fetched from queue have already been filtered for Smart Sending eligibility
+			// This dramatically improves performance by:
+			// 1. Eliminating N individual database queries (one per email)
+			// 2. Preventing rate limit consumption for emails that would be skipped
+			// 3. Allowing queue processor to move through Smart Sending-blocked subscribers instantly
 
 			// CRITICAL: Check account-wide rate limit before sending
 			// This is the primary rate limit that takes precedence over all others
@@ -439,18 +424,50 @@ func (p *Processor) isWithinTimeWindow() bool {
 func (p *Processor) getNextBatch() ([]EmailQueueItem, error) {
 	var emails []EmailQueueItem
 
-	query := `
-		SELECT id, campaign_id, subscriber_id, status, priority,
-		       scheduled_at, sent_at, assigned_smtp_server_uuid,
-		       retry_count, last_error, created_at, updated_at
-		FROM email_queue
-		WHERE status = $1
-		  AND scheduled_at <= NOW()
-		ORDER BY priority DESC, scheduled_at ASC
-		LIMIT $2
-	`
+	// Get settings to check if Smart Sending is enabled
+	settings, err := p.getSettings()
+	if err != nil {
+		return nil, fmt.Errorf("error getting settings: %w", err)
+	}
 
-	if err := p.db.Select(&emails, query, StatusQueued, p.cfg.BatchSize); err != nil {
+	var query string
+	var args []interface{}
+
+	if settings.AppSmartSendingEnabled {
+		// OPTIMIZED: Filter Smart Sending subscribers at SQL level
+		// This prevents fetching emails that will be skipped, avoiding rate limit waste
+		query = `
+			SELECT eq.id, eq.campaign_id, eq.subscriber_id, eq.status, eq.priority,
+			       eq.scheduled_at, eq.sent_at, eq.assigned_smtp_server_uuid,
+			       eq.retry_count, eq.last_error, eq.created_at, eq.updated_at
+			FROM email_queue eq
+			LEFT JOIN subscriber_last_send sls ON eq.subscriber_id = sls.subscriber_id
+			WHERE eq.status = $1
+			  AND eq.scheduled_at <= NOW()
+			  AND (
+			    sls.last_campaign_send_at IS NULL
+			    OR sls.last_campaign_send_at <= NOW() - INTERVAL '1 hour' * $2
+			  )
+			ORDER BY eq.priority DESC, eq.scheduled_at ASC
+			LIMIT $3
+		`
+		args = []interface{}{StatusQueued, settings.AppSmartSendingPeriodHours, p.cfg.BatchSize}
+	} else {
+		// Smart Sending disabled, fetch all queued emails
+		query = `
+			SELECT id, campaign_id, subscriber_id, status, priority,
+			       scheduled_at, sent_at, assigned_smtp_server_uuid,
+			       retry_count, last_error, created_at, updated_at
+			FROM email_queue
+			WHERE status = $1
+			  AND scheduled_at <= NOW()
+			ORDER BY priority DESC, scheduled_at ASC
+			LIMIT $2
+		`
+		args = []interface{}{StatusQueued, p.cfg.BatchSize}
+	}
+
+	if err := p.db.Select(&emails, query, args...); err != nil {
 		return nil, err
 	}
 
