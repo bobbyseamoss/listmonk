@@ -1,19 +1,19 @@
 <template>
-  <section class="logs content relative" style="max-width: 100vw; overflow: hidden; box-sizing: border-box;">
-    <div class="columns">
-      <div class="column">
+  <section class="logs content relative" style="max-width: 100%; width: 100%; overflow: hidden; box-sizing: border-box; padding: 20px;">
+    <div class="columns" style="max-width: 100%; width: 100%; box-sizing: border-box; margin: 0;">
+      <div class="column" style="max-width: 100%; box-sizing: border-box;">
         <h1 class="title is-4">
           {{ $t('logs.title') }}
         </h1>
       </div>
-      <div class="column has-text-right">
+      <div class="column has-text-right" style="max-width: 100%; box-sizing: border-box; flex-shrink: 0;">
         <b-button type="is-primary" icon-left="download" @click="exportLogs">
           Export Logs
         </b-button>
       </div>
     </div>
-    <hr />
-    <log-view :loading="loading.logs" :lines="lines" style="max-width: calc(100vw - 100px); box-sizing: border-box;" />
+    <hr style="max-width: 100%;" />
+    <log-view :loading="loading.logs" :lines="lines" style="max-width: 100%; width: 100%; box-sizing: border-box;" />
   </section>
 </template>
 
