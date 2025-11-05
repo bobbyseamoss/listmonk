@@ -1,7 +1,7 @@
 <template>
   <section class="log-view">
     <b-loading :active="loading" :is-full-page="false" />
-    <div class="lines" ref="lines" style="max-width: calc(100vw - 120px); overflow-x: auto; overflow-y: auto;">
+    <div class="lines" ref="lines">
       <template v-for="(l, i) in lines">
         <template v-if="l">
           <span :set="line = splitLine(l)" :key="i" class="line">

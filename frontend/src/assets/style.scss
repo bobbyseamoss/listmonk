@@ -1111,7 +1111,7 @@ section.logs {
 
   .lines {
     width: 100%;
-    max-width: calc(100vw - 100px);
+    max-width: 100%;
     max-height: 70vh;
     overflow-y: auto;
     overflow-x: auto;
@@ -1128,6 +1128,9 @@ section.logs {
       display: block;
       margin-bottom: 3px;
       white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .timestamp, .file {
@@ -1135,19 +1138,26 @@ section.logs {
       display: inline-block;
       margin-right: 8px;
       user-select: auto;
+      max-width: 100%;
     }
 
     .timestamp {
       min-width: 180px;
+      max-width: 200px;
     }
 
     .file {
       min-width: 120px;
+      max-width: 150px;
     }
 
     .log-message {
       color: #333;
       word-wrap: break-word;
+      max-width: 100%;
+      display: inline-block;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .line:hover {
