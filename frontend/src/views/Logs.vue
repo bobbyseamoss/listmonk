@@ -1,5 +1,5 @@
 <template>
-  <section class="logs content relative">
+  <section class="logs content relative" style="max-width: 100vw; overflow: hidden; box-sizing: border-box;">
     <div class="columns">
       <div class="column">
         <h1 class="title is-4">
@@ -13,7 +13,7 @@
       </div>
     </div>
     <hr />
-    <log-view :loading="loading.logs" :lines="lines" />
+    <log-view :loading="loading.logs" :lines="lines" style="max-width: calc(100vw - 100px); box-sizing: border-box;" />
   </section>
 </template>
 
