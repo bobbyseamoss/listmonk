@@ -1095,9 +1095,18 @@ section.analytics {
 }
 
 /* Logs */
+section.logs {
+  max-width: 100%;
+  overflow: hidden;
+}
+
 .log-view {
+  max-width: 100%;
+  overflow: hidden;
+
   .lines {
     max-height: 70vh;
+    max-width: 100%;
     overflow-y: auto;
     overflow-x: auto;
     font-family: monospace;
@@ -1107,6 +1116,7 @@ section.analytics {
     padding: 15px;
     border: 1px solid $grey-lightest;
     background: #fafafa;
+    box-sizing: border-box;
 
     .line {
       display: block;
