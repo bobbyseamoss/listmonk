@@ -502,7 +502,14 @@ func (p *Processor) getServerCapacities() (map[string]*ServerCapacity, error) {
 			continue
 		}
 		capacity.DailyUsed = usage
-		capacity.DailyRemaining = capacity.DailyLimit - capacity.DailyUsed
+
+		// If daily limit is 0 (unlimited), set DailyRemaining to max int
+		// Otherwise calculate remaining capacity
+		if capacity.DailyLimit == 0 {
+			capacity.DailyRemaining = 999999999 // Effectively unlimited
+		} else {
+			capacity.DailyRemaining = capacity.DailyLimit - capacity.DailyUsed
+		}
 
 		// Get sliding window usage
 		windowUsage, err := p.getSlidingWindowUsage(smtp.UUID)
