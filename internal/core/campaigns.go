@@ -307,6 +307,18 @@ func (c *Core) UpdateCampaignStatus(id int, status string) (models.Campaign, err
 		return models.Campaign{}, echo.NewHTTPError(http.StatusBadRequest, errMsg)
 	}
 
+	// CRITICAL: If campaign is being set to running and messenger is "automatic",
+	// queue emails FIRST before changing status. This prevents race condition where
+	// campaign manager sees status="running" with use_queue=false and starts sending immediately.
+	if status == models.CampaignStatusRunning && cm.Messenger == "automatic" {
+		count, err := c.QueueCampaignEmails(cm.ID)
+		if err != nil {
+			return models.Campaign{}, err
+		}
+		c.log.Printf("queued %d emails for campaign %d (%s)", count, cm.ID, cm.Name)
+	}
+
+	// Now update status - campaign manager will see use_queue=true
 	res, err := c.q.UpdateCampaignStatus.Exec(cm.ID, status)
 	if err != nil {
 		c.log.Printf("error updating campaign status: %v", err)
@@ -318,15 +330,6 @@ func (c *Core) UpdateCampaignStatus(id int, status string) (models.Campaign, err
 	if n, _ := res.RowsAffected(); n == 0 {
 		return models.Campaign{}, echo.NewHTTPError(http.StatusBadRequest,
 			c.i18n.Ts("globals.messages.notFound", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
-	}
-
-	// If campaign is being set to running and messenger is "automatic", queue all emails
-	if status == models.CampaignStatusRunning && cm.Messenger == "automatic" {
-		count, err := c.QueueCampaignEmails(cm.ID)
-		if err != nil {
-			return models.Campaign{}, err
-		}
-		c.log.Printf("queued %d emails for campaign %d (%s)", count, cm.ID, cm.Name)
 	}
 
 	cm.Status = status
