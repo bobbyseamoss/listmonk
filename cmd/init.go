@@ -659,6 +659,7 @@ func initSMTPMessengers(db *sqlx.DB) []manager.Messenger {
 				lo.Fatalf("error initializing e-mail messenger: %v", err)
 			}
 			out = append(out, msgr)
+			lo.Printf("initialized named email messenger: email-%s", s.Name)
 		}
 	}
 
@@ -668,11 +669,13 @@ func initSMTPMessengers(db *sqlx.DB) []manager.Messenger {
 		lo.Fatalf("error initializing e-mail messenger: %v", err)
 	}
 
-	// If it's just one server, return the default "email" messenger.
-	if len(servers) == 1 {
+	// If it's just one server WITHOUT a name, return only the default "email" messenger.
+	// If it has a name, we already created the named messenger above and should use that.
+	if len(servers) == 1 && servers[0].Name == "" {
 		return []manager.Messenger{msgr}
 	}
 
+	// If it's a single server WITH a name, return both the named messenger and the default "email" messenger.
 	// If there are multiple servers, prepend the group "email" to be the first one.
 	out = append([]manager.Messenger{msgr}, out...)
 
