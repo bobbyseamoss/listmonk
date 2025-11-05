@@ -29,27 +29,15 @@ func newTZWriter(writers ...io.Writer) *tzWriter {
 	}
 }
 
-// Write implements io.Writer and prefixes the log message with an EST/EDT timestamp.
+// Write implements io.Writer and writes to all configured writers.
+// Note: Go's log package already adds timestamps, so we don't add another one.
 func (w *tzWriter) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// Get current time in EST/EDT
-	now := time.Now().In(w.loc)
-
-	// Format: 2025/11/01 10:23:45.123456 EST
-	timestamp := now.Format("2006/01/02 15:04:05.000000 MST")
-
-	// Prefix the message with timestamp
-	prefixed := []byte(timestamp + " ")
-
-	// Write to all writers
+	// Write to all writers without adding timestamp prefix
+	// (Go's logger already includes timestamp in the format we configured)
 	for _, writer := range w.writers {
-		// Write timestamp prefix
-		if _, err := writer.Write(prefixed); err != nil {
-			return 0, err
-		}
-		// Write original message
 		if _, err := writer.Write(p); err != nil {
 			return 0, err
 		}
