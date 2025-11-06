@@ -18,8 +18,9 @@
 <script>
 // Regexp for splitting log lines in the following format to
 // [timestamp] [file] [message].
-// 2021/05/01 00:00:00:00 init.go:99: reading config: config.toml
-const reFormatLine = /^([0-9\s:/]+\.[0-9]{6}) (.+?\.go:[0-9]+|\*):\s(.+)$/;
+// 2021/05/01 00:00:00 init.go:99: reading config: config.toml
+// or with microseconds: 2021/05/01 00:00:00.123456 init.go:99: reading config
+const reFormatLine = /^([0-9\s:/]+(?:\.[0-9]{6})?) (.+?\.go:[0-9]+|\*):\s(.+)$/;
 
 export default {
   name: 'LogView',
