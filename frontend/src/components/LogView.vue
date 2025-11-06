@@ -5,7 +5,6 @@
       <template v-for="(l, i) in lines">
         <template v-if="l">
           <span :set="line = splitLine(l)" :key="i" class="line">
-            <span class="timestamp">{{ line.timestamp }}&nbsp;</span>
             <span v-if="line.file !== '*'" class="file">{{ line.file }}:&nbsp;</span>
             <span class="log-message">{{ line.message }}</span>
           </span>
@@ -62,3 +61,18 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+.line {
+  display: block;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.line span {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+</style>
