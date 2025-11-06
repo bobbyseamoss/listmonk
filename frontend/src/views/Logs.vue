@@ -1,20 +1,14 @@
 <template>
   <section class="logs content relative">
-    <div class="columns">
-      <div class="column">
-        <h1 class="title is-4">
-          {{ $t('logs.title') }}
-        </h1>
-      </div>
-    </div>
+    <h1 class="title is-4">
+      {{ $t('logs.title') }}
+    </h1>
     <hr />
-    <div class="log-container">
-      <log-view :loading="loading.logs" :lines="lines" />
-      <div class="log-export-footer">
-        <b-button type="is-primary" icon-left="download" @click="exportLogs">
-          Export Logs
-        </b-button>
-      </div>
+    <log-view :loading="loading.logs" :lines="lines" />
+    <div class="log-export-footer">
+      <b-button type="is-primary" icon-left="download" @click="exportLogs">
+        Export Logs
+      </b-button>
     </div>
   </section>
 </template>
@@ -95,10 +89,6 @@ export default Vue.extend({
 </script>
 
 <style scoped>
-.log-container {
-  position: relative;
-}
-
 .log-export-footer {
   margin-top: 1rem;
   text-align: left;
