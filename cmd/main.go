@@ -76,8 +76,8 @@ var (
 	// Buffered log writer for storing N lines of log entries for the UI.
 	evStream = events.New()
 	bufLog   = buflog.New(5000)
-	// Logger with timestamps and file info for log parsing in UI
-	lo       = log.New(newTZWriter(os.Stdout, bufLog, evStream.ErrWriter()), "", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
+	// Logger with file info only - tzWriter adds EST 12-hour timestamps
+	lo       = log.New(newTZWriter(os.Stdout, bufLog, evStream.ErrWriter()), "", log.Lshortfile)
 
 	ko      = koanf.New(".")
 	fs      stuffbin.FileSystem
