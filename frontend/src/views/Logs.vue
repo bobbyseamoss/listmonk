@@ -6,14 +6,16 @@
           {{ $t('logs.title') }}
         </h1>
       </div>
-      <div class="column has-text-right">
+    </div>
+    <hr />
+    <div class="log-container">
+      <log-view :loading="loading.logs" :lines="lines" />
+      <div class="log-export-footer">
         <b-button type="is-primary" icon-left="download" @click="exportLogs">
           Export Logs
         </b-button>
       </div>
     </div>
-    <hr />
-    <log-view :loading="loading.logs" :lines="lines" />
   </section>
 </template>
 
@@ -91,3 +93,14 @@ export default Vue.extend({
   },
 });
 </script>
+
+<style scoped>
+.log-container {
+  position: relative;
+}
+
+.log-export-footer {
+  margin-top: 1rem;
+  text-align: left;
+}
+</style>
