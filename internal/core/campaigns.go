@@ -308,14 +308,20 @@ func (c *Core) UpdateCampaignStatus(id int, status string) (models.Campaign, err
 	}
 
 	// CRITICAL: If campaign is being set to running and messenger is "automatic",
-	// queue emails FIRST before changing status. This prevents race condition where
-	// campaign manager sees status="running" with use_queue=false and starts sending immediately.
+	// queue emails ASYNCHRONOUSLY to prevent HTTP timeout on large campaigns (200K+ subscribers).
+	// This allows the HTTP response to return immediately while emails queue in the background.
 	if status == models.CampaignStatusRunning && cm.Messenger == "automatic" {
-		count, err := c.QueueCampaignEmails(cm.ID)
-		if err != nil {
-			return models.Campaign{}, err
-		}
-		c.log.Printf("queued %d emails for campaign %d (%s)", count, cm.ID, cm.Name)
+		go func(campaignID int, campaignName string) {
+			count, err := c.QueueCampaignEmails(campaignID)
+			if err != nil {
+				c.log.Printf("error queuing emails for campaign %d (%s): %v", campaignID, campaignName, err)
+				return
+			}
+			c.log.Printf("queued %d emails for campaign %d (%s)", count, campaignID, campaignName)
+		}(cm.ID, cm.Name)
+
+		// Log that queueing has started in background
+		c.log.Printf("queueing emails for campaign %d (%s) in background", cm.ID, cm.Name)
 	}
 
 	// Now update status - campaign manager will see use_queue=true
