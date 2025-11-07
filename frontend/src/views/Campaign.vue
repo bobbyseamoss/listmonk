@@ -177,6 +177,21 @@
                   </b-button>
                 </b-field>
               </div>
+
+              <div v-if="data.messenger === 'automatic' && !isNew" class="box">
+                <h3 class="title is-size-6">
+                  Remove Sent Subscribers
+                </h3>
+                <p class="is-size-7 has-text-grey mb-3">
+                  Remove all subscribers who received this campaign from the campaign's lists. Useful for preventing duplicate sends in future campaigns.
+                </p>
+                <b-field>
+                  <b-button @click="removeSentFromLists" :loading="removeSubscribersLoading"
+                    type="is-warning" icon-left="account-remove">
+                    Remove Sent Subscribers
+                  </b-button>
+                </b-field>
+              </div>
             </div>
           </div>
         </section>
@@ -356,6 +371,7 @@ export default Vue.extend({
       isAttachModalOpen: false,
       isPreviewingArchive: false,
       activeTab: 'campaign',
+      removeSubscribersLoading: false,
 
       data: {},
 
@@ -660,6 +676,24 @@ export default Vue.extend({
       this.$api.changeCampaignStatus(this.data.id, 'draft').then((d) => {
         this.data = d;
       });
+    },
+
+    removeSentFromLists() {
+      this.$utils.confirm(
+        'Remove all subscribers who received this campaign from its associated lists? This cannot be undone.',
+        () => {
+          this.removeSubscribersLoading = true;
+
+          this.$api.removeSentSubscribersFromLists(this.data.id)
+            .then((data) => {
+              this.$utils.toast(data.message || 'Subscribers removed successfully');
+              this.removeSubscribersLoading = false;
+            })
+            .catch(() => {
+              this.removeSubscribersLoading = false;
+            });
+        },
+      );
     },
   },
 

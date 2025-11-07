@@ -1224,6 +1224,10 @@ SELECT COUNT(*) AS total FROM webhook_logs
     WHERE ($1 = '' OR webhook_type = $1)
     AND ($2 = '' OR event_type = $2);
 
+-- name: get-all-webhook-logs
+SELECT * FROM webhook_logs
+    ORDER BY created_at DESC;
+
 -- name: delete-webhook-logs
 DELETE FROM webhook_logs WHERE id = ANY($1);
 
@@ -1597,3 +1601,23 @@ WHERE status = 'queued';
 UPDATE email_queue
 SET scheduled_at = NOW(), updated_at = NOW()
 WHERE status = 'queued';
+
+-- name: get-sent-subscribers-today
+-- Get subscriber IDs who were sent a campaign (all time)
+SELECT DISTINCT subscriber_id
+FROM email_queue
+WHERE campaign_id = $1
+  AND status = 'sent';
+
+-- name: requeue-cancelled-emails
+-- Re-queue cancelled emails for a campaign (excluding already sent)
+-- This is used when resuming a paused queue-based campaign
+UPDATE email_queue
+SET status = 'queued', updated_at = NOW()
+WHERE campaign_id = $1
+  AND status = 'cancelled'
+  AND subscriber_id NOT IN (
+      SELECT DISTINCT subscriber_id
+      FROM email_queue
+      WHERE campaign_id = $1 AND status = 'sent'
+  );

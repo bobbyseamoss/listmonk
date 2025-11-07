@@ -1,0 +1,590 @@
+{
+    "version": "1.0",
+    "description": "Skill activation triggers for Claude Code. Controls when skills automatically suggest or block actions.",
+    "skills": {
+        "skill-developer": {
+            "type": "domain",
+            "enforcement": "suggest",
+            "priority": "high",
+            "description": "Meta-skill for creating and managing Claude Code skills",
+            "promptTriggers": {
+                "keywords": [
+                    "skill system",
+                    "create skill",
+                    "add skill",
+                    "skill triggers",
+                    "skill rules",
+                    "hook system",
+                    "skill development",
+                    "skill-rules.json"
+                ],
+                "intentPatterns": [
+                    "(how do|how does|explain).*?skill",
+                    "(create|add|modify|build).*?skill",
+                    "skill.*?(work|trigger|activate|system)"
+                ]
+            }
+        },
+         "backend-dev-guidelines": {
+          "type": "domain",
+          "enforcement": "suggest",
+          "priority": "high",
+          "description": "Backend development patterns for Go/Echo/PostgreSQL in listmonk",
+          "promptTriggers": {
+              "keywords": [
+                  "backend",
+                  "Go",
+                  "golang",
+                  "handler",
+                  "core",
+                  "API",
+                  "endpoint",
+                  "route",
+                  "Echo",
+                  "HTTP",
+                  "middleware",
+                  "database",
+                  "query",
+                  "PostgreSQL",
+                  "sqlx",
+                  "goyesql",
+                  "messenger",
+                  "manager",
+                  "campaign",
+                  "subscriber",
+                  "migration",
+                  "model"
+              ],
+              "intentPatterns": [
+                  "(create|add|implement|build).*?(handler|endpoint|API|route|core.*?function|messenger)",
+                  "(fix|handle|debug).*?(error|handler|database|query)",
+                  "(add|implement).*?(middleware|validation|migration)",
+                  "(organize|structure|refactor).*?(backend|handler|core)",
+                  "(how to|best practice).*?(Go|Echo|handler|database.*?query)",
+                  "(add|create).*?(table|column|migration|query)"
+              ]
+          },
+          "fileTriggers": {
+              "pathPatterns": [
+                  "cmd/**/*.go",
+                  "internal/**/*.go",
+                  "models/**/*.go",
+                  "queries.sql",
+                  "schema.sql"
+              ],
+              "pathExclusions": [
+                  "**/*_test.go",
+                  "**/vendor/**",
+                  "**/migrations/**"
+              ],
+              "contentPatterns": [
+                  "echo\\.Context",
+                  "echo\\.HTTPError",
+                  "func \\(h \\*handler\\)",
+                  "app\\.core\\.",
+                  "app\\.queries\\.",
+                  "-- name:",
+                  "sqlx\\.",
+                  "db\\.Get",
+                  "db\\.Exec",
+                  "core\\..*\\(",
+                  "models\\..*"
+              ]
+          },
+          "guidelines": {
+              "architecture": {
+                  "handlers": {
+                      "location": "cmd/ directory organized by domain (campaigns.go, subscribers.go, etc.)",
+                      "pattern": "Handler methods take echo.Context, call core functions, return error",
+                      "errorHandling": "Return echo.NewHTTPError(statusCode, message) or core errors directly",
+                      "example": "func handleGetCampaign(c echo.Context) error {\n  return app.core.GetCampaign(id)\n}"
+                  },
+                  "core": {
+                      "location": "internal/core/ - business logic layer",
+                      "pattern": "CRUD operations that return echo.HTTPError",
+                      "usage": "Called by handlers, performs validation and DB operations",
+                      "example": "Returns errors that can be directly used in HTTP responses"
+                  },
+                  "models": {
+                      "location": "models/ - data structures and query management",
+                      "files": [
+                          "models.go - Core structs (Subscriber, Campaign, List, etc.)",
+                          "queries.go - Database query loader using goyesql",
+                          "settings.go - Application settings structures"
+                      ]
+                  },
+                  "queries": {
+                      "location": "queries.sql - All SQL queries in one file",
+                      "pattern": "Named queries with -- name: query-name markers",
+                      "loading": "Loaded via goyesql into models.Queries struct",
+                      "access": "app.queries.QueryName.Exec() or .Get()"
+                  },
+                  "migrations": {
+                      "location": "internal/migrations/ - version-specific Go files",
+                      "pattern": "Named v{major}.{minor}.{patch}.go",
+                      "registration": "Add to migList in cmd/upgrade.go"
+                  }
+              },
+              "patterns": {
+                  "handlerPattern": {
+                      "description": "HTTP handlers bind params, validate, call core, return errors",
+                      "code": "func handleGetResource(c echo.Context) error {\n  id, _ := strconv.Atoi(c.Param(\"id\"))\n  return app.core.GetResource(id)\n}"
+                  },
+                  "corePattern": {
+                      "description": "Core functions validate, query DB, return echo.HTTPError",
+                      "code": "func (c *Core) GetResource(id int) error {\n  var res models.Resource\n  if err := c.q.GetResource.Get(&res, id); err != nil {\n    return echo.NewHTTPError(http.StatusNotFound, \"not found\")\n  }\n  return c.JSON(http.StatusOK, res)\n}"
+                  },
+                  "queryPattern": {
+                      "description": "Add queries to queries.sql with -- name: marker",
+                      "code": "-- name: get-resource\nSELECT * FROM resources WHERE id = $1;"
+                  },
+                  "messengerPattern": {
+                      "description": "Messengers implement standard interface",
+                      "interface": "Name() string, Push(models.Message) error, Flush() error, Close() error"
+                  },
+                  "migrationPattern": {
+                      "description": "Migrations are idempotent and version-specific",
+                      "steps": [
+                          "1. Create internal/migrations/v{version}.go",
+                          "2. Implement up{Version}() function",
+                          "3. Add to migList in cmd/upgrade.go",
+                          "4. Update schema.sql with final state"
+                      ]
+                  }
+              },
+              "database": {
+                  "queries": {
+                      "location": "queries.sql only - do not inline SQL in .go files",
+                      "naming": "-- name: get-resource, create-resource, update-resource",
+                      "placeholders": "Use $1, $2, etc. for PostgreSQL"
+                  },
+                  "schema": {
+                      "file": "schema.sql - source of truth for DB structure",
+                      "migrations": "internal/migrations/ - incremental changes",
+                      "testing": "Use --install for fresh DB, --upgrade for migrations"
+                  },
+                  "access": {
+                      "queries": "app.queries.QueryName.Get(&dest, args...)",
+                      "exec": "app.queries.QueryName.Exec(args...)",
+                      "transactions": "Use app.db.Begin() for multi-query operations"
+                  }
+              },
+              "errorHandling": {
+                  "httpErrors": "Use echo.NewHTTPError(statusCode, message)",
+                  "coreErrors": "Core methods return echo.HTTPError directly",
+                  "wrapping": "Use fmt.Errorf(\"context: %w\", err) for wrapping",
+                  "logging": "Use app.log for logging, not fmt.Println"
+              },
+              "commonMistakes": [
+                  "❌ Don't inline SQL - add to queries.sql instead",
+                  "❌ Don't use fmt.Println - use app.log",
+                  "❌ Don't mutate settings without UPDATE query",
+                  "❌ Don't forget to register migrations in migList",
+                  "❌ Don't use ? placeholders - use $1, $2 for PostgreSQL",
+                  "❌ Don't call DB directly in handlers - use core functions",
+                  "✅ DO return core errors directly from handlers",
+                  "✅ DO use goyesql queries from queries.sql",
+                  "✅ DO validate input before calling core functions",
+                  "✅ DO make migrations idempotent (IF NOT EXISTS, etc.)"
+              ],
+              "exampleFiles": [
+                  "cmd/handlers.go - Generic HTTP handler utilities",
+                  "cmd/campaigns.go - Campaign HTTP handlers",
+                  "internal/core/campaigns.go - Campaign business logic",
+                  "internal/queue/processor.go - Queue processing system",
+                  "internal/messenger/email/email.go - Email messenger implementation",
+                  "models/models.go - Core data structures",
+                  "queries.sql - All SQL queries",
+                  "internal/migrations/v6.0.0.go - Example migration"
+              ],
+              "tools": {
+                  "framework": "Echo v4 - HTTP routing and middleware",
+                  "database": "sqlx - SQL toolkit with struct scanning",
+                  "queries": "goyesql - SQL query file loader",
+                  "config": "koanf - Configuration management",
+                  "embedding": "stuffbin - Asset embedding for distribution"
+              }
+          },
+          "suggestMessage": "💡 Backend Development Guidelines for listmonk (Go/Echo/PostgreSQL)\n\n📂 ARCHITECTURE:\n- cmd/ - HTTP handlers (echo.Context, return errors)\n-internal/core/ - Business logic (validation, DB operations)\n- models/ - Data structures and query loader\n- queries.sql - All SQL queries with -- name: markers\n-internal/migrations/ - Version-specific migrations\n\n🔧 COMMON PATTERNS:\n1. Handler → Core → Database\n2. Return echo.HTTPError from core functions\n3. Access queries via app.queries.QueryName\n4. Log with app.log, not fmt.Println\n5. Add SQL to queries.sql, not inline\n\n📚 REFERENCE FILES:\n- cmd/campaigns.go - HTTP handler example\n-internal/core/campaigns.go - Business logic example\n- queries.sql - Query naming and structure\n- internal/migrations/v6.0.0.go - Migration pattern\n\nFile: {file_path}"
+      },
+        "frontend-dev-guidelines": {
+          "type": "guardrail",
+          "enforcement": "block",
+          "priority": "high",
+          "description": "Vue 2.7 + Buefy + Bulma best practices for listmonk frontend development",
+          "promptTriggers": {
+              "keywords": [
+                  "UI",
+                  "component",
+                  "page",
+                  "modal",
+                  "dialog",
+                  "form",
+                  "Buefy",
+                  "b-button",
+                  "b-field",
+                  "b-input",
+                  "Bulma",
+                  "css",
+                  "scss",
+                  "styling",
+                  "frontend",
+                  "Vue",
+                  "view",
+                  "router",
+                  "vuex",
+                  "state"
+              ],
+              "intentPatterns": [
+                  "(create|add|make|build|update|modify|edit).*?(component|UI|page|view|modal|dialog|form)",
+                  "(how to|best practice).*?(Vue|Buefy|component)",
+                  "(style|design|layout).*?(component|UI|page)",
+                  "(navigate|routing|route).*?(page|view)",
+                  "(state|store|data).*?(management|update|mutation)"
+              ]
+          },
+          "fileTriggers": {
+              "pathPatterns": [
+                  "frontend/src/**/*.vue",
+                  "frontend/src/**/*.js",
+                  "frontend/src/**/*.scss",
+                  "frontend/email-builder/**/*.ts",
+                  "frontend/email-builder/**/*.vue"
+              ],
+              "pathExclusions": [
+                  "**/*.test.js",
+                  "**/*.spec.js",
+                  "**/vite.config.js",
+                  "**/node_modules/**"
+              ],
+              "contentPatterns": [
+                  "<template>",
+                  "<script>",
+                  "export default",
+                  "Vue.extend",
+                  "from 'vue'",
+                  "from 'vuex'",
+                  "from 'vue-router'",
+                  "this.$buefy",
+                  "this.$api",
+                  "this.$t(",
+                  "mapState",
+                  "mapActions",
+                  "<b-",
+                  "class=\".*?(?:is-|has-).*?\""
+              ]
+          },
+          "blockMessage": "⚠️ BLOCKED - Vue 2.7 + Buefy Frontend Guidelines Required\n\n📋 REQUIRED ACTION:\n1. Use Skill tool: 'frontend-dev-guidelines'\n2. Review Vue 2.7 Options API patterns (data(), computed, methods)\n3. Use Buefy components (b-button, b-field, b-input, etc.)\n4. Use Bulma CSS classes for layout (columns, section, is-*, has-*)\n5. Follow existing patterns in frontend/src/views/ and frontend/src/components/\n\n⚠️ COMMON MISTAKES TO AVOID:\n- ❌ Don't use Vue 3 Composition API (setup(), ref(), reactive())\n- ❌ Don't use React/JSX patterns or MUI components\n- ❌ Don't use raw HTML buttons when b-button exists\n- ❌ Don't mutate Vuex state directly (use actions/mutations)\n- ❌ Don't forget 'scoped' in <style scoped> for component styles\n\n✅ CORRECT PATTERNS:\n- Use Vue.extend() for component definitions\n- Use this.$buefy.toast.open() for notifications\n- Use this.$api for HTTP requests\n- Use this.$t() for i18n translations\n- Use mapState/mapActions from Vuex\n- Use Buefy's programmatic APIs (this.$buefy.dialog.confirm())\n\nFile: {file_path}\n\n💡 TIP: Reference existing components for patterns:\n- frontend/src/views/Logs.vue (simple page with Buefy)\n- frontend/src/components/LogView.vue (presentational component)\n- frontend/src/views/Campaign.vue (complex form with validation)",
+          "skipConditions": {
+              "sessionSkillUsed": true,
+              "fileMarkers": [
+                  "@skip-validation",
+                  "// vue2-legacy-code"
+              ],
+              "envOverride": "SKIP_FRONTEND_GUIDELINES"
+          },
+          "additionalGuidance": {
+              "vuePatterns": {
+                  "component": "Use Vue.extend() for TypeScript compatibility",
+                  "data": "Always return object from data() function",
+                  "computed": "Use computed for derived state, not methods",
+                  "lifecycle": "mounted/created/destroyed (not onMounted/onUnmounted)",
+                  "events": "Use this.$emit() for child-to-parent communication",
+                  "refs": "Access via this.$refs, not ref()"
+              },
+              "buefyComponents": {
+                  "button": "b-button (not <button>)",
+                  "input": "b-input, b-field wrapper",
+                  "select": "b-select with b-field",
+                  "checkbox": "b-checkbox",
+                  "modal": "this.$buefy.dialog.confirm() or this.$buefy.modal.open()",
+                  "toast": "this.$buefy.toast.open()",
+                  "loading": "b-loading component"
+              },
+              "bulmaClasses": {
+                  "layout": "columns, column, section, container",
+                  "modifiers": "is-primary, is-danger, has-text-centered",
+                  "responsive": "is-hidden-mobile, is-desktop"
+              },
+              "stateManagement": {
+                  "read": "Use mapState in computed or this.$store.state",
+                  "write": "Use mapActions in methods or this.$store.dispatch",
+                  "never": "Never mutate state directly (this.$store.state.x = y)"
+              },
+              "routing": {
+                  "navigate": "this.$router.push({ name: 'routeName' })",
+                  "params": "Access via this.$route.params",
+                  "guards": "beforeRouteEnter, beforeRouteUpdate"
+              },
+              "exampleFiles": [
+                  "frontend/src/views/Logs.vue - Simple view with Buefy",
+                  "frontend/src/views/Campaign.vue - Complex form",
+                  "frontend/src/components/LogView.vue - Presentational component",
+                  "frontend/src/views/Settings.vue - State management example"
+              ]
+          }
+      },
+        "migration-deployment-guidelines": {
+            "type": "domain",
+            "enforcement": "block",
+            "priority": "critical",
+            "description": "Migration and deployment best practices for listmonk (database migrations, Docker builds, Azure deployment)",
+            "promptTriggers": {
+                "keywords": [
+                    "migration",
+                    "migrate",
+                    "deployment",
+                    "deploy",
+                    "Docker",
+                    "Dockerfile",
+                    "container",
+                    "Azure",
+                    "build",
+                    "schema",
+                    "upgrade",
+                    "rollback",
+                    "production",
+                    "release"
+                ],
+                "intentPatterns": [
+                    "(create|add|write|implement).*?(migration|schema.*?change)",
+                    "(deploy|push|release).*?(production|Azure|container)",
+                    "(build|compile).*?(Docker|image|binary)",
+                    "(update|modify).*?(schema|database|table|column)",
+                    "(rollback|revert).*?(migration|deployment)",
+                    "(fix|debug).*?(deployment|migration.*?fail)"
+                ]
+            },
+            "fileTriggers": {
+                "pathPatterns": [
+                    "internal/migrations/**/*.go",
+                    "Dockerfile*",
+                    "deploy.sh",
+                    "schema.sql",
+                    "cmd/upgrade.go",
+                    "cmd/install.go",
+                    ".github/workflows/**/*.yml"
+                ],
+                "contentPatterns": [
+                    "CREATE TABLE",
+                    "ALTER TABLE",
+                    "DROP TABLE",
+                    "ADD COLUMN",
+                    "docker build",
+                    "docker push",
+                    "az containerapp",
+                    "migList",
+                    "func up.*\\(",
+                    "\\-\\-upgrade",
+                    "\\-\\-install"
+                ]
+            },
+            "blockMessage": "🚨 CRITICAL - Migration & Deployment Guidelines Required\n\n⚠️ STOP: Migrations and deployments can cause data loss or downtime if done incorrectly.\n\n📋 REQUIRED CHECKLIST BEFORE PROCEEDING:\n\n1️⃣ DATABASE MIGRATIONS:\n   ✓ Migration is idempotent (uses IF NOT EXISTS, IF EXISTS, etc.)\n   ✓ Migration file named v{major}.{minor}.{patch}.go\n   ✓ Registered in cmd/upgrade.go migList array\n   ✓ schema.sql updated with final state\n   ✓ Tested with --upgrade on dev database\n   ✓ No data loss - consider backfilling existing data\n\n2️⃣ DOCKER BUILDS:\n   ✓ Multi-stage build optimized (email-builder → frontend → backend → final)\n   ✓ Frontend built before backend\n   ✓ Static assets copied to correct locations\n   ✓ Image size reasonable (<500MB compressed)\n   ✓ Health checks functional\n\n3️⃣ AZURE DEPLOYMENT:\n   ✓ Migrations run BEFORE container deployment\n   ✓ Environment variables set correctly\n   ✓ New revision created with timestamp suffix\n   ✓ Previous revision kept for quick rollback\n   ✓ Database backup taken before schema changes\n\n4️⃣ TESTING:\n   ✓ Built and tested locally first\n   ✓ Migrations tested on copy of production data\n   ✓ Rollback plan documented\n   ✓ No breaking API changes without version bump\n\nFile: {file_path}\n\n💡 USE: Deploy checklist in deploy.sh comments",
+            "guidelines": {
+                "databaseMigrations": {
+                    "location": "internal/migrations/v{version}.go",
+                    "naming": "v6.0.0.go, v6.1.0.go, v6.2.0.go (semantic versioning)",
+                    "structure": {
+                        "function": "func up{Version}(db *sqlx.DB, fs stuffbin.FileSystem, prompt bool) error",
+                        "idempotency": "MUST use IF NOT EXISTS, IF EXISTS to make repeatable",
+                        "transactions": "Use db.Begin() for multi-statement migrations",
+                        "errorHandling": "Return descriptive errors, don't panic"
+                    },
+                    "registration": {
+                        "file": "cmd/upgrade.go",
+                        "array": "migList []migration",
+                        "order": "Add to END of migList (chronological order)"
+                    },
+                    "schemaSync": {
+                        "file": "schema.sql",
+                        "requirement": "MUST update schema.sql to reflect final state after migration",
+                        "testing": "--install should create same schema as running all migrations"
+                    },
+                    "commonPatterns": {
+                        "addTable": "CREATE TABLE IF NOT EXISTS table_name (...)",
+                        "addColumn": "ALTER TABLE table_name ADD COLUMN IF NOT EXISTS column_name type",
+                        "addIndex": "CREATE INDEX IF NOT EXISTS idx_name ON table_name(column)",
+                        "backfillData": "UPDATE table SET new_col = old_col WHERE new_col IS NULL",
+                        "renameColumn": "ALTER TABLE table RENAME COLUMN old TO new (if supported), otherwise add new + copy + drop old"
+                    },
+                    "dangerZone": [
+                        "❌ NEVER DROP TABLE without confirmation prompt",
+                        "❌ NEVER ALTER COLUMN TYPE without data migration plan",
+                        "❌ NEVER DROP COLUMN without verifying no code references it",
+                        "❌ NEVER run migration without testing on production-like data",
+                        "✓ ALWAYS take database backup before schema changes",
+                        "✓ ALWAYS make migrations reversible when possible"
+                    ]
+                },
+                "dockerBuilds": {
+                    "file": "Dockerfile.build",
+                    "stages": {
+                        "emailBuilder": {
+                            "base": "node:20-alpine",
+                            "purpose": "Build email-builder TypeScript/Vue app",
+                            "output": "/app/email-builder/dist"
+                        },
+                        "frontendBuilder": {
+                            "base": "node:20-alpine",
+                            "purpose": "Build main Vue 2.7 frontend",
+                            "dependencies": "Requires email-builder output",
+                            "output": "/app/dist"
+                        },
+                        "backendBuilder": {
+                            "base": "golang:1.24-alpine",
+                            "purpose": "Compile Go binary",
+                            "dependencies": "Requires frontend dist",
+                            "output": "/app/listmonk binary"
+                        },
+                        "final": {
+                            "base": "alpine:latest",
+                            "purpose": "Minimal runtime image",
+                            "includes": "Binary + frontend dist + static assets"
+                        }
+                    },
+                    "optimization": {
+                        "layerCaching": "Copy dependency files first, then source code",
+                        "multiStage": "Only final stage artifacts in production image",
+                        "alpineBase": "Use alpine for small image size",
+                        "staticBinary": "CGO_ENABLED=0 for portable binary"
+                    },
+                    "buildOrder": "email-builder → frontend → backend → final (dependency chain)",
+                    "testing": "docker build -f Dockerfile.build -t listmonk:test . && docker run -it listmonk:test /listmonk --version"
+                },
+                "azureDeployment": {
+                    "script": "deploy.sh",
+                    "steps": [
+                        {
+                            "step": 1,
+                            "name": "Build Docker image",
+                            "command": "docker build -f Dockerfile.build",
+                            "important": "Multi-stage build handles all compilation"
+                        },
+                        {
+                            "step": 2,
+                            "name": "Push to ACR",
+                            "command": "az acr login && docker push",
+                            "important": "Requires ACR credentials"
+                        },
+                        {
+                            "step": 3,
+                            "name": "Run migrations",
+                            "command": "./listmonk --upgrade",
+                            "important": "MUST run BEFORE deploying new container"
+                        },
+                        {
+                            "step": 4,
+                            "name": "Update Container App",
+                            "command": "az containerapp update",
+                            "important": "Creates new revision with timestamp"
+                        }
+                    ],
+                    "environment": {
+                        "required": [
+                            "LISTMONK_DB_HOST",
+                            "LISTMONK_DB_PORT",
+                            "LISTMONK_DB_USER",
+                            "LISTMONK_DB_PASSWORD",
+                            "LISTMONK_DB_DATABASE"
+                        ],
+                        "deployment": "Set via az containerapp update --set-env-vars"
+                    },
+                    "rollback": {
+                        "revisions": "Azure keeps previous revisions",
+                        "command": "az containerapp revision list && az containerapp revision activate --revision <name>",
+                        "database": "If migration ran, may need database restore"
+                    },
+                    "verification": {
+                        "logs": "az containerapp logs show --follow",
+                        "health": "curl https://list.bobbyseamoss.com/api/health",
+                        "revision": "az containerapp show --query properties.latestRevisionName"
+                    }
+                },
+                "buildProcess": {
+                    "frontend": {
+                        "emailBuilder": "cd frontend/email-builder && yarn install && yarn build",
+                        "main": "cd frontend && yarn install && yarn build",
+                        "output": "frontend/dist/ (includes email-builder in public/static/)",
+                        "verify": "Check dist/ for index.html and static/ directory"
+                    },
+                    "backend": {
+                        "command": "CGO_ENABLED=0 go build -o listmonk cmd/*.go",
+                        "flags": "-ldflags for version string and build info",
+                        "testing": "./listmonk --version to verify build"
+                    },
+                    "assetEmbedding": {
+                        "tool": "stuffbin",
+                        "files": "Frontend dist, static/, i18n/, SQL files",
+                        "command": "make pack-bin (if using stuffbin)",
+                        "distribution": "Single binary with all assets embedded"
+                    }
+                },
+                "preDeploymentChecklist": [
+                    "☐ Code changes tested locally",
+                    "☐ Frontend built without errors",
+                    "☐ Backend compiles without warnings",
+                    "☐ Migrations tested on dev database",
+                    "☐ schema.sql updated",
+                    "☐ Migration registered in migList",
+                    "☐ Database backup taken (production)",
+                    "☐ Environment variables verified",
+                    "☐ Rollback plan documented",
+                    "☐ Team notified of deployment window"
+                ],
+                "commonErrors": {
+                    "migrationFailures": {
+                        "notIdempotent": "Migration fails on second run - use IF NOT EXISTS",
+                        "missingInMigList": "Migration file exists but not registered",
+                        "schemaOutOfSync": "schema.sql doesn't match post-migration state",
+                        "dataLoss": "Dropped column still referenced in code"
+                    },
+                    "dockerBuildFailures": {
+                        "wrongOrder": "Backend built before frontend - dependency issue",
+                        "missingArtifacts": "COPY fails because previous stage didn't produce output",
+                        "cacheInvalidation": "Changed dependency files invalidate all subsequent layers",
+                        "imageSize": "Image too large - forgot to use multi-stage build"
+                    },
+                    "deploymentFailures": {
+                        "migrationNotRun": "New code expects schema changes that don't exist",
+                        "envVarMissing": "Container crashes due to missing required env var",
+                        "healthCheckFails": "Container starts but health endpoint returns error",
+                        "revisionNotActive": "New revision created but old one still serving traffic"
+                    }
+                },
+                "exampleFiles": [
+                    "internal/migrations/v6.0.0.go - Queue system migration",
+                    "deploy.sh - Complete deployment script with all steps",
+                    "Dockerfile.build - Multi-stage build configuration",
+                    "cmd/upgrade.go - Migration registration and execution",
+                    "schema.sql - Source of truth for database schema"
+                ]
+            },
+            "skipConditions": {
+                "sessionSkillUsed": true,
+                "fileMarkers": [
+                    "@skip-migration-check",
+                    "// automated-migration"
+                ],
+                "envOverride": "SKIP_MIGRATION_GUIDELINES"
+            }
+        },
+    "notes": {
+        "enforcement_types": {
+            "suggest": "Skill suggestion appears but doesn't block execution",
+            "block": "Requires skill to be used before proceeding (guardrail)",
+            "warn": "Shows warning but allows proceeding"
+        },
+        "priority_levels": {
+            "critical": "Highest - Always trigger when matched",
+            "high": "Important - Trigger for most matches",
+            "medium": "Moderate - Trigger for clear matches",
+            "low": "Optional - Trigger only for explicit matches"
+        },
+        "customization": {
+            "pathPatterns": "Adjust to match your project structure (blog-api, auth-service, etc.)",
+            "keywords": "Add domain-specific terms relevant to your project",
+            "intentPatterns": "Use regex for flexible user intent matching"
+        }
+    }
+}
+}

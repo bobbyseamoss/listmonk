@@ -1113,7 +1113,7 @@ section.logs {
     max-width: 100%;
     max-height: 70vh;
     overflow-y: auto;
-    overflow-x: auto;
+    overflow-x: hidden;
     font-family: monospace;
     font-size: 0.85rem;
     line-height: 1.4;
@@ -1126,10 +1126,10 @@ section.logs {
     .line {
       display: block;
       margin-bottom: 3px;
-      white-space: nowrap;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
       max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
 
     .timestamp, .file {
@@ -1153,6 +1153,8 @@ section.logs {
     .log-message {
       color: #333;
       word-wrap: break-word;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
       max-width: 100%;
     }
 

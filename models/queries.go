@@ -105,6 +105,8 @@ type Queries struct {
 	GetSMTPServerCapacity   *sqlx.Stmt `query:"get-smtp-server-capacity"`
 	ClearAllQueuedEmails    *sqlx.Stmt `query:"clear-all-queued-emails"`
 	SendAllQueuedEmails     *sqlx.Stmt `query:"send-all-queued-emails"`
+	GetSentSubscribersToday *sqlx.Stmt `query:"get-sent-subscribers-today"`
+	RequeueCancelledEmails  *sqlx.Stmt `query:"requeue-cancelled-emails"`
 
 	InsertMedia *sqlx.Stmt `query:"insert-media"`
 	GetMedia    *sqlx.Stmt `query:"get-media"`
@@ -133,6 +135,7 @@ type Queries struct {
 	CreateWebhookLog       *sqlx.Stmt `query:"create-webhook-log"`
 	GetWebhookLogs         *sqlx.Stmt `query:"get-webhook-logs"`
 	GetWebhookLogsCount    *sqlx.Stmt `query:"get-webhook-logs-count"`
+	GetAllWebhookLogs      *sqlx.Stmt `query:"get-all-webhook-logs"`
 	DeleteWebhookLogs      *sqlx.Stmt `query:"delete-webhook-logs"`
 	DeleteAllWebhookLogs   *sqlx.Stmt `query:"delete-all-webhook-logs"`
 

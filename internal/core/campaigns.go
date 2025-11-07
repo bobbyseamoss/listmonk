@@ -308,20 +308,32 @@ func (c *Core) UpdateCampaignStatus(id int, status string) (models.Campaign, err
 	}
 
 	// CRITICAL: If campaign is being set to running and messenger is "automatic",
-	// queue emails ASYNCHRONOUSLY to prevent HTTP timeout on large campaigns (200K+ subscribers).
-	// This allows the HTTP response to return immediately while emails queue in the background.
+	// handle queue-based campaigns differently based on whether it's a new start or resume.
 	if status == models.CampaignStatusRunning && cm.Messenger == "automatic" {
-		go func(campaignID int, campaignName string) {
-			count, err := c.QueueCampaignEmails(campaignID)
+		// Check if this is a RESUME from paused state
+		if cm.Status == models.CampaignStatusPaused {
+			// Re-queue cancelled emails (excludes already sent)
+			count, err := c.RequeueCancelledEmails(cm.ID)
 			if err != nil {
-				c.log.Printf("error queuing emails for campaign %d (%s): %v", campaignID, campaignName, err)
-				return
+				c.log.Printf("error re-queuing emails for campaign %d (%s): %v", cm.ID, cm.Name, err)
+				return models.Campaign{}, err
 			}
-			c.log.Printf("queued %d emails for campaign %d (%s)", count, campaignID, campaignName)
-		}(cm.ID, cm.Name)
+			c.log.Printf("re-queued %d cancelled emails for campaign %d (%s)", count, cm.ID, cm.Name)
+		} else {
+			// New campaign start - queue emails ASYNCHRONOUSLY to prevent HTTP timeout
+			// on large campaigns (200K+ subscribers).
+			go func(campaignID int, campaignName string) {
+				count, err := c.QueueCampaignEmails(campaignID)
+				if err != nil {
+					c.log.Printf("error queuing emails for campaign %d (%s): %v", campaignID, campaignName, err)
+					return
+				}
+				c.log.Printf("queued %d emails for campaign %d (%s)", count, campaignID, campaignName)
+			}(cm.ID, cm.Name)
 
-		// Log that queueing has started in background
-		c.log.Printf("queueing emails for campaign %d (%s) in background", cm.ID, cm.Name)
+			// Log that queueing has started in background
+			c.log.Printf("queueing emails for campaign %d (%s) in background", cm.ID, cm.Name)
+		}
 	}
 
 	// Now update status - campaign manager will see use_queue=true
@@ -599,4 +611,18 @@ func (c *Core) CancelCampaignQueue(campID int) error {
 	}
 
 	return nil
+}
+
+// RequeueCancelledEmails re-queues cancelled emails when resuming a paused queue-based campaign.
+// This excludes subscribers who already received the email (status='sent') to avoid duplicates.
+func (c *Core) RequeueCancelledEmails(campID int) (int, error) {
+	res, err := c.q.RequeueCancelledEmails.Exec(campID)
+	if err != nil {
+		c.log.Printf("error re-queuing cancelled emails: %v", err)
+		return 0, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "email queue", "error", pqErrMsg(err)))
+	}
+
+	count, _ := res.RowsAffected()
+	return int(count), nil
 }

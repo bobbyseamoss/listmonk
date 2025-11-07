@@ -137,6 +137,7 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.DELETE("/api/bounces/:id", pm(hasID(a.DeleteBounce), "bounces:manage"))
 
 		g.GET("/api/webhook-logs", pm(a.GetWebhookLogs, "settings:get"))
+		g.GET("/api/webhook-logs/export", pm(a.ExportWebhookLogs, "settings:get"))
 		g.DELETE("/api/webhook-logs", pm(a.DeleteWebhookLogs, "settings:manage"))
 
 		// Subscriber operations based on arbitrary SQL queries.
@@ -175,6 +176,7 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PUT("/api/campaigns/:id/status", pm(hasID(a.UpdateCampaignStatus), "campaigns:manage_all", "campaigns:manage"))
 		g.PUT("/api/campaigns/:id/archive", pm(hasID(a.UpdateCampaignArchive), "campaigns:manage_all", "campaigns:manage"))
 		g.DELETE("/api/campaigns/:id", pm(hasID(a.DeleteCampaign), "campaigns:manage_all", "campaigns:manage"))
+		g.POST("/api/campaigns/:id/remove-sent-today", pm(hasID(a.RemoveSentSubscribersFromLists), "campaigns:manage_all", "campaigns:manage"))
 
 		// Azure Event Grid Analytics API endpoints
 		g.GET("/api/campaigns/:id/azure-analytics", pm(hasID(a.GetCampaignAzureAnalytics), "campaigns:get_analytics"))

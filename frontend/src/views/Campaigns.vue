@@ -206,7 +206,7 @@
               @click.prevent="$utils.confirm(null, () => changeCampaignStatus(props.row, 'running'))"
               data-cy="btn-start" :aria-label="$t('campaigns.start')">
               <b-tooltip :label="$t('campaigns.start')" type="is-dark">
-                <b-icon icon="rocket-launch-outline" size="is-small" />
+                <b-icon icon="play" size="is-small" />
               </b-tooltip>
             </a>
 
@@ -214,7 +214,7 @@
               @click.prevent="$utils.confirm(null, () => changeCampaignStatus(props.row, 'paused'))" data-cy="btn-pause"
               :aria-label="$t('campaigns.pause')">
               <b-tooltip :label="$t('campaigns.pause')" type="is-dark">
-                <b-icon icon="pause-circle-outline" size="is-small" />
+                <b-icon icon="pause" size="is-small" />
               </b-tooltip>
             </a>
 
@@ -222,7 +222,7 @@
               @click.prevent="$utils.confirm(null, () => changeCampaignStatus(props.row, 'running'))"
               data-cy="btn-resume" :aria-label="$t('campaigns.send')">
               <b-tooltip :label="$t('campaigns.send')" type="is-dark">
-                <b-icon icon="rocket-launch-outline" size="is-small" />
+                <b-icon icon="play" size="is-small" />
               </b-tooltip>
             </a>
 
@@ -237,7 +237,7 @@
             <!-- placeholder for finished campaigns -->
             <a v-if="!canCancel(props.row) && !canSchedule(props.row) && !canStart(props.row)" href="#" data-disabled
               aria-label=" ">
-              <b-icon icon="rocket-launch-outline" size="is-small" />
+              <b-icon icon="play" size="is-small" />
             </a>
 
             <a v-if="canCancel(props.row)" href="#"

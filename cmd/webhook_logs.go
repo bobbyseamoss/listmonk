@@ -45,6 +45,22 @@ func (a *App) GetWebhookLogs(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
+// ExportWebhookLogs exports all webhook logs as a JSON file.
+func (a *App) ExportWebhookLogs(c echo.Context) error {
+	// Get all logs without pagination
+	var logs []models.WebhookLog
+	if err := a.queries.GetAllWebhookLogs.Select(&logs); err != nil {
+		a.log.Printf("error getting all webhook logs: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, a.i18n.T("globals.messages.internalError"))
+	}
+
+	// Set headers for file download
+	c.Response().Header().Set("Content-Type", "application/json")
+	c.Response().Header().Set("Content-Disposition", "attachment; filename=webhook-logs.json")
+
+	return c.JSON(http.StatusOK, logs)
+}
+
 // DeleteWebhookLogs handles deletion of webhook logs.
 func (a *App) DeleteWebhookLogs(c echo.Context) error {
 	all, _ := strconv.ParseBool(c.QueryParam("all"))

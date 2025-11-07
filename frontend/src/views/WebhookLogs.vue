@@ -7,6 +7,14 @@
           <span v-if="logs.total > 0">({{ logs.total }})</span>
         </h1>
       </div>
+      <div class="column has-text-right">
+        <b-button @click="exportLogs" type="is-primary" icon-left="download" :loading="loading.export">
+          Export All
+        </b-button>
+        <b-button @click="clearAllLogs" type="is-danger" icon-left="delete" :loading="loading.clearAll" class="ml-2">
+          Clear All
+        </b-button>
+      </div>
     </header>
 
     <b-table :data="logs.results" :hoverable="true" :loading="loading.logs" default-sort="createdAt" checkable
@@ -113,6 +121,8 @@ export default Vue.extend({
 
       loading: {
         logs: false,
+        export: false,
+        clearAll: false,
       },
 
       // Table bulk row selection states.
@@ -189,6 +199,44 @@ export default Vue.extend({
         this.bulk.all = false;
         this.getLogs();
       });
+    },
+
+    exportLogs() {
+      this.loading.export = true;
+      this.$api.exportWebhookLogs().then((blob) => {
+        // The blob is already returned from the API
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `webhook-logs-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        this.$utils.toast('Webhook logs exported');
+        this.loading.export = false;
+      }).catch(() => {
+        this.loading.export = false;
+      });
+    },
+
+    clearAllLogs() {
+      this.$utils.confirm(
+        'Are you sure you want to delete all webhook logs? This action cannot be undone.',
+        () => {
+          this.loading.clearAll = true;
+          this.$api.deleteWebhookLogs('all').then(() => {
+            this.$utils.toast('All webhook logs deleted');
+            this.bulk.checked = [];
+            this.bulk.all = false;
+            this.loading.clearAll = false;
+            this.getLogs();
+          }).catch(() => {
+            this.loading.clearAll = false;
+          });
+        },
+      );
     },
   },
 

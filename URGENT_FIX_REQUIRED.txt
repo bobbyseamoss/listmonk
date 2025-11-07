@@ -1,0 +1,49 @@
+================================================================================
+🚨 URGENT: SOFT BOUNCE CONFIGURATION ISSUE FOUND
+================================================================================
+
+Your listmonk is configured to BLOCKLIST subscribers after just 1 soft bounce.
+
+WHAT THIS MEANS:
+  Legitimate subscribers are being PERMANENTLY BLOCKED for temporary issues
+  like "mailbox full" or "server temporarily down".
+
+EXAMPLES OF WHO YOU'RE LOSING:
+  ✉️  User's mailbox is full → BLOCKLISTED FOREVER
+  🔧 Mail server down for 5 minutes → BLOCKLISTED FOREVER
+  ⏱️  Greylisting delay (normal anti-spam) → BLOCKLISTED FOREVER
+
+================================================================================
+IMMEDIATE FIX (2 minutes):
+================================================================================
+
+1. Fix the configuration:
+   $ ./run_diagnostics.sh fix-soft-bounce
+
+2. Restart listmonk:
+   $ az containerapp restart --name listmonk420 --resource-group <your-rg>
+
+3. (Optional) Un-blocklist wrongly blocked subscribers:
+   $ ./run_diagnostics.sh unblocklist-soft
+
+================================================================================
+WHAT'S ACTUALLY WORKING:
+================================================================================
+
+✓ Azure webhooks working perfectly (2,097 messages tracked)
+✓ Click events being recorded correctly
+✓ View events being recorded correctly
+✓ Campaign analytics showing correct data
+✓ Hard bounces being blocklisted (correct!)
+
+The ONLY issue is soft bounce configuration causing false positives.
+
+================================================================================
+READ MORE:
+================================================================================
+
+ACTION_PLAN.md - Complete action plan with explanations
+WEBHOOK_ANALYSIS.md - Technical analysis of webhook processing
+BOUNCE_FIX_README.md - Full documentation
+
+================================================================================

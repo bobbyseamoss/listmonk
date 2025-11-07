@@ -32,6 +32,11 @@ http.interceptors.response.use((resp) => {
     store.commit('setLoading', { model: resp.config.loading, status: false });
   }
 
+  // For blob responses, return the raw data
+  if (resp.config.responseType === 'blob') {
+    return resp.data;
+  }
+
   let data = {};
   if (typeof resp.data.data === 'object') {
     if (resp.data.data.constructor === Object) {
@@ -282,6 +287,11 @@ export const deleteWebhookLogs = async (ids) => {
   return http.delete('/api/webhook-logs', { params });
 };
 
+export const exportWebhookLogs = async () => http.get(
+  '/api/webhook-logs/export',
+  { responseType: 'blob' },
+);
+
 // Campaigns.
 export const getCampaigns = async (params) => http.get('/api/campaigns', {
   params,
@@ -392,6 +402,12 @@ export const updateCampaignArchive = async (id, data) => http.put(
 
 export const deleteCampaign = async (id) => http.delete(
   `/api/campaigns/${id}`,
+  { loading: models.campaigns },
+);
+
+export const removeSentSubscribersFromLists = async (id) => http.post(
+  `/api/campaigns/${id}/remove-sent-today`,
+  {},
   { loading: models.campaigns },
 );
 

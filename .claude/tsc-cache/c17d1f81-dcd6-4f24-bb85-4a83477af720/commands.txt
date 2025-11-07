@@ -1,0 +1,1 @@
+frontend:build:cd /home/adam/listmonk/frontend && npm run build

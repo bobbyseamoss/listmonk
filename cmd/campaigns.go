@@ -840,3 +840,72 @@ func (a *App) GetServerCapacities(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, okResp{capacities})
 }
+
+// RemoveSentSubscribersFromLists removes subscribers who received this campaign
+// from all lists associated with the campaign (hard delete from subscriber_lists table).
+func (a *App) RemoveSentSubscribersFromLists(c echo.Context) error {
+	// Get campaign ID from URL params.
+	campID := getID(c)
+
+	// Check if the user has manage access to the campaign.
+	if err := a.checkCampaignPerm(auth.PermTypeManage, campID, c); err != nil {
+		return err
+	}
+
+	// Get campaign details to find associated lists.
+	campaign, err := a.core.GetCampaign(campID, "", "")
+	if err != nil {
+		return err
+	}
+
+	// Extract list IDs from campaign. Lists is a JSONText field containing
+	// an array of {id, name} objects.
+	var lists []struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := campaign.Lists.Unmarshal(&lists); err != nil {
+		a.log.Printf("error unmarshaling campaign lists: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			a.i18n.Ts("globals.messages.errorFetching", "name", "lists", "error", err.Error()))
+	}
+
+	var listIDs []int
+	for _, list := range lists {
+		if list.ID > 0 {
+			listIDs = append(listIDs, list.ID)
+		}
+	}
+
+	if len(listIDs) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("campaigns.noListsAssociated"))
+	}
+
+	// Get subscribers who received the email today.
+	var subIDs []int
+	if err := a.queries.GetSentSubscribersToday.Select(&subIDs, campID); err != nil {
+		a.log.Printf("error fetching sent subscribers: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			a.i18n.Ts("globals.messages.errorFetching", "name", "subscribers", "error", err.Error()))
+	}
+
+	if len(subIDs) == 0 {
+		return c.JSON(http.StatusOK, okResp{map[string]interface{}{
+			"removed": 0,
+			"message": "No subscribers have received this campaign yet",
+		}})
+	}
+
+	// Delete from lists (hard delete - removes rows from subscriber_lists).
+	if err := a.core.DeleteSubscriptions(subIDs, listIDs); err != nil {
+		return err
+	}
+
+	a.log.Printf("removed %d subscribers from %d lists for campaign %d", len(subIDs), len(listIDs), campID)
+
+	return c.JSON(http.StatusOK, okResp{map[string]interface{}{
+		"removed": len(subIDs),
+		"lists":   listIDs,
+		"message": fmt.Sprintf("Removed %d subscribers from %d lists", len(subIDs), len(listIDs)),
+	}})
+}
