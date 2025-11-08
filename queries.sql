@@ -1621,3 +1621,97 @@ WHERE campaign_id = $1
       FROM email_queue
       WHERE campaign_id = $1 AND status = 'sent'
   );
+
+-- Shopify Purchase Attribution Queries
+
+-- name: insert-purchase-attribution
+-- Insert a new purchase attribution record
+INSERT INTO purchase_attributions (
+    campaign_id, subscriber_id, order_id, order_number, customer_email,
+    total_price, currency, attributed_via, confidence, shopify_data
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING *;
+
+-- name: find-recent-link-click
+-- Find the most recent link click for a subscriber within the attribution window
+SELECT lc.campaign_id, lc.link_id, lc.created_at
+FROM link_clicks lc
+WHERE lc.subscriber_id = $1
+  AND lc.created_at >= NOW() - INTERVAL '1 day' * $2
+ORDER BY lc.created_at DESC
+LIMIT 1;
+
+-- name: get-campaign-purchase-stats
+-- Get aggregate purchase statistics for a campaign
+SELECT
+    COUNT(*) as total_purchases,
+    COALESCE(SUM(total_price), 0) as total_revenue,
+    COALESCE(AVG(total_price), 0) as avg_order_value,
+    COALESCE(currency, 'USD') as currency
+FROM purchase_attributions
+WHERE campaign_id = $1
+GROUP BY currency;
+
+-- name: get-subscriber-by-email
+-- Get subscriber by email address (case-insensitive)
+SELECT * FROM subscribers WHERE LOWER(email) = LOWER($1) LIMIT 1;
+
+-- name: get-campaigns-performance-summary
+-- Get aggregate performance metrics for all campaigns in the last 30 days
+WITH recent_campaigns AS (
+    SELECT
+        c.id,
+        COALESCE(cv.views, 0) AS views,
+        COALESCE(lc.clicks, 0) AS clicks,
+        c.sent
+    FROM campaigns c
+    LEFT JOIN (
+        SELECT campaign_id, COUNT(*) AS views
+        FROM campaign_views
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY campaign_id
+    ) cv ON c.id = cv.campaign_id
+    LEFT JOIN (
+        SELECT campaign_id, COUNT(*) AS clicks
+        FROM link_clicks
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY campaign_id
+    ) lc ON c.id = lc.campaign_id
+    WHERE c.status = 'finished'
+        AND c.updated_at >= NOW() - INTERVAL '30 days'
+        AND c.sent > 0
+),
+purchase_data AS (
+    SELECT
+        COUNT(*) AS total_orders,
+        COALESCE(SUM(total_price), 0) AS total_revenue
+    FROM purchase_attributions
+    WHERE created_at >= NOW() - INTERVAL '30 days'
+)
+SELECT
+    COALESCE(AVG(CASE WHEN sent > 0 THEN (views::FLOAT / sent::FLOAT) * 100 ELSE 0 END), 0) AS avg_open_rate,
+    COALESCE(AVG(CASE WHEN sent > 0 THEN (clicks::FLOAT / sent::FLOAT) * 100 ELSE 0 END), 0) AS avg_click_rate,
+    COALESCE(SUM(sent), 0) AS total_sent,
+    COALESCE(MAX(pd.total_orders), 0) AS total_orders,
+    COALESCE(MAX(pd.total_revenue), 0) AS total_revenue,
+    CASE
+        WHEN COALESCE(SUM(sent), 0) > 0 THEN (COALESCE(MAX(pd.total_orders), 0)::FLOAT / SUM(sent)::FLOAT) * 100
+        ELSE 0
+    END AS order_rate,
+    CASE
+        WHEN COALESCE(SUM(sent), 0) > 0 THEN COALESCE(MAX(pd.total_revenue), 0) / SUM(sent)::FLOAT
+        ELSE 0
+    END AS revenue_per_recipient
+FROM recent_campaigns
+CROSS JOIN purchase_data pd;
+
+-- name: get-campaigns-purchase-stats
+-- Get purchase stats for multiple campaigns (for campaigns list)
+SELECT
+    campaign_id,
+    COUNT(*) AS total_orders,
+    COALESCE(SUM(total_price), 0) AS total_revenue,
+    COALESCE(currency, 'USD') AS currency
+FROM purchase_attributions
+WHERE campaign_id = ANY($1)
+GROUP BY campaign_id, currency;

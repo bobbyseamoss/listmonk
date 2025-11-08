@@ -158,6 +158,14 @@ type Queries struct {
 	DeleteRole            *sqlx.Stmt `query:"delete-role"`
 	UpsertListPermissions *sqlx.Stmt `query:"upsert-list-permissions"`
 	DeleteListPermission  *sqlx.Stmt `query:"delete-list-permission"`
+
+	// Shopify Purchase Attribution queries
+	InsertPurchaseAttribution     *sqlx.Stmt `query:"insert-purchase-attribution"`
+	FindRecentLinkClick           *sqlx.Stmt `query:"find-recent-link-click"`
+	GetCampaignPurchaseStats      *sqlx.Stmt `query:"get-campaign-purchase-stats"`
+	GetSubscriberByEmail          *sqlx.Stmt `query:"get-subscriber-by-email"`
+	GetCampaignsPerformanceSummary *sqlx.Stmt `query:"get-campaigns-performance-summary"`
+	GetCampaignsPurchaseStats     *sqlx.Stmt `query:"get-campaigns-purchase-stats"`
 }
 
 // compileSubscriberQueryTpl takes an arbitrary WHERE expressions

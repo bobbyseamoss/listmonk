@@ -97,6 +97,34 @@ func (a *App) GetCampaigns(c echo.Context) error {
 		return c.JSON(http.StatusOK, okResp{models.PageResults{Results: []models.Campaign{}}})
 	}
 
+	// Fetch purchase stats for all campaigns in the result set
+	campaignIDs := make([]int, len(res))
+	for i, campaign := range res {
+		campaignIDs[i] = campaign.ID
+	}
+
+	// Get purchase stats for all campaigns
+	var purchaseStats []models.CampaignPurchaseStatsListItem
+	if err := a.queries.GetCampaignsPurchaseStats.Select(&purchaseStats, pq.Array(campaignIDs)); err != nil {
+		a.log.Printf("error fetching purchase stats for campaigns: %v", err)
+		// Don't fail the request, just log the error and continue without purchase stats
+	}
+
+	// Map purchase stats to campaigns
+	purchaseStatsMap := make(map[int]models.CampaignPurchaseStatsListItem)
+	for _, stats := range purchaseStats {
+		purchaseStatsMap[stats.CampaignID] = stats
+	}
+
+	// Populate purchase stats fields in campaign results
+	for i := range res {
+		if stats, ok := purchaseStatsMap[res[i].ID]; ok {
+			res[i].PurchaseOrders = stats.TotalOrders
+			res[i].PurchaseRevenue = stats.TotalRevenue
+			res[i].PurchaseCurrency = stats.Currency
+		}
+	}
+
 	out := models.PageResults{
 		Query:   query,
 		Results: res,

@@ -278,6 +278,11 @@ type CampaignMeta struct {
 	StartedAt null.Time `db:"started_at" json:"started_at"`
 	ToSend    int       `db:"to_send" json:"to_send"`
 	Sent      int       `db:"sent" json:"sent"`
+
+	// Purchase attribution stats (from Shopify integration)
+	PurchaseOrders  int     `db:"purchase_orders" json:"purchase_orders"`
+	PurchaseRevenue float64 `db:"purchase_revenue" json:"purchase_revenue"`
+	PurchaseCurrency string `db:"purchase_currency" json:"purchase_currency"`
 }
 
 type CampaignStats struct {
@@ -387,6 +392,52 @@ type WebhookLog struct {
 
 	// Pseudofield for getting the total count in queries.
 	Total int `db:"total" json:"-"`
+}
+
+// PurchaseAttribution represents a purchase attributed to a campaign.
+type PurchaseAttribution struct {
+	ID             int64           `db:"id" json:"id"`
+	CampaignID     null.Int        `db:"campaign_id" json:"campaign_id"`
+	SubscriberID   null.Int        `db:"subscriber_id" json:"subscriber_id"`
+	OrderID        string          `db:"order_id" json:"order_id"`
+	OrderNumber    null.String     `db:"order_number" json:"order_number"`
+	CustomerEmail  string          `db:"customer_email" json:"customer_email"`
+	TotalPrice     float64         `db:"total_price" json:"total_price"`
+	Currency       null.String     `db:"currency" json:"currency"`
+	AttributedVia  null.String     `db:"attributed_via" json:"attributed_via"`
+	Confidence     null.String     `db:"confidence" json:"confidence"`
+	ShopifyData    json.RawMessage `db:"shopify_data" json:"shopify_data"`
+	CreatedAt      time.Time       `db:"created_at" json:"created_at"`
+
+	// Pseudofield for getting the total count in queries.
+	Total int `db:"total" json:"-"`
+}
+
+// CampaignPurchaseStats represents aggregate purchase statistics for a campaign.
+type CampaignPurchaseStats struct {
+	TotalPurchases int     `db:"total_purchases" json:"total_purchases"`
+	TotalRevenue   float64 `db:"total_revenue" json:"total_revenue"`
+	AvgOrderValue  float64 `db:"avg_order_value" json:"avg_order_value"`
+	Currency       string  `db:"currency" json:"currency"`
+}
+
+// CampaignsPerformanceSummary represents aggregate performance metrics for all campaigns.
+type CampaignsPerformanceSummary struct {
+	AvgOpenRate         float64 `db:"avg_open_rate" json:"avg_open_rate"`
+	AvgClickRate        float64 `db:"avg_click_rate" json:"avg_click_rate"`
+	TotalSent           int     `db:"total_sent" json:"total_sent"`
+	TotalOrders         int     `db:"total_orders" json:"total_orders"`
+	TotalRevenue        float64 `db:"total_revenue" json:"total_revenue"`
+	OrderRate           float64 `db:"order_rate" json:"order_rate"`
+	RevenuePerRecipient float64 `db:"revenue_per_recipient" json:"revenue_per_recipient"`
+}
+
+// CampaignPurchaseStatsListItem represents purchase stats for a single campaign in a list.
+type CampaignPurchaseStatsListItem struct {
+	CampaignID   int     `db:"campaign_id" json:"campaign_id"`
+	TotalOrders  int     `db:"total_orders" json:"total_orders"`
+	TotalRevenue float64 `db:"total_revenue" json:"total_revenue"`
+	Currency     string  `db:"currency" json:"currency"`
 }
 
 // Message is the message pushed to a Messenger.

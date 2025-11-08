@@ -250,6 +250,40 @@ Listmonk supports unlimited named SMTP servers with individual bounce mailboxes:
 - Bounce mailbox scan intervals must be at least 1 minute
 - Each bounce mailbox runs in a separate goroutine, scanning at its configured interval
 
+## SQL Query Best Practices
+
+### PostgreSQL Aggregate Functions and GROUP BY
+
+When writing queries with aggregate functions (MAX, MIN, SUM, AVG, COUNT):
+
+**Rule**: Every column in SELECT must be either:
+1. In the GROUP BY clause, OR
+2. Wrapped in an aggregate function
+
+**Common Issue**: CROSS JOIN with aggregates
+```sql
+-- ❌ WRONG - Will fail
+WITH summary AS (SELECT COUNT(*) as cnt FROM table2)
+SELECT t1.col, s.cnt FROM table1 t1 CROSS JOIN summary s;
+
+-- ✅ CORRECT - Use MAX() or add to GROUP BY
+WITH summary AS (SELECT COUNT(*) as cnt FROM table2)
+SELECT t1.col, MAX(s.cnt) FROM table1 t1 CROSS JOIN summary s GROUP BY t1.col;
+```
+
+**NULL Handling**: Always use COALESCE with aggregates
+```sql
+-- ❌ WRONG - Returns NULL if no rows
+SELECT MAX(total_orders) FROM purchases;
+
+-- ✅ CORRECT - Returns 0 if no rows
+SELECT COALESCE(MAX(total_orders), 0) FROM purchases;
+```
+
+**Why COALESCE matters**: Go's sqlx.Get() cannot scan NULL into int fields. Always provide default values.
+
+See `/dev/active/campaigns-redesign/SQL-LESSONS.md` for detailed examples.
+
 ## Queue-Based Email Delivery System
 
 A sophisticated queue-based email delivery system has been implemented to support daily sending limits, time windows, and automatic server selection across multiple SMTP servers.

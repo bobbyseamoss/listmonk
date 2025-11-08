@@ -55,6 +55,27 @@ dev/active/[task-name]/
 
 ## Current Active Tasks
 
+### campaigns-redesign/
+**Status**: ✅ Complete and deployed
+**Revision**: `listmonk420--deploy-20251108-105926`
+**Features**:
+- Email performance summary section (30-day aggregates) ✅
+- Placed Order column in campaigns table ✅
+- Revenue and order count per campaign ✅
+- PostgreSQL aggregate query optimization ✅
+
+**Key Files**:
+- CONTEXT.md - Full implementation details
+- SQL-LESSONS.md - PostgreSQL patterns learned
+- FILES-MODIFIED.md - Complete file change reference
+
+### shopify-integration/
+**Status**: ✅ Complete and stable
+**Features**:
+- Shopify webhook integration for purchase tracking
+- Purchase attribution to campaigns
+- Critical bug fixes for webhook correlation
+
 ### queue-campaign-management/
 **Status**: Mostly complete, pending deployment
 **Features**:
@@ -142,6 +163,7 @@ When a task is fully complete and tested:
 
 ---
 
-**Last Updated**: 2025-11-07
-**Active Tasks**: 1 (queue-campaign-management)
-**Archived Tasks**: 0
+**Last Updated**: 2025-11-08
+**Active Tasks**: 3 (campaigns-redesign, shopify-integration, queue-campaign-management)
+**Completed Tasks**: 2 (campaigns-redesign, shopify-integration)
+**Pending Tasks**: 1 (queue-campaign-management)

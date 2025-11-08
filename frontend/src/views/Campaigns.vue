@@ -17,6 +17,41 @@
       </div>
     </header>
 
+    <!-- Email Performance Summary (Last 30 Days) -->
+    <section class="performance-summary" v-if="performanceSummary">
+      <div class="box">
+        <details open>
+          <summary class="title is-6">{{ $t('campaigns.performanceSummary', 'Email performance last 30 days') }}</summary>
+          <div class="columns stats-grid">
+            <div class="column is-3">
+              <div class="stat-item">
+                <p class="stat-value">{{ formatPercent(performanceSummary.avg_open_rate) }}</p>
+                <p class="stat-label">{{ $t('campaigns.avgOpenRate', 'Average open rate') }}</p>
+              </div>
+            </div>
+            <div class="column is-3">
+              <div class="stat-item">
+                <p class="stat-value">{{ formatPercent(performanceSummary.avg_click_rate) }}</p>
+                <p class="stat-label">{{ $t('campaigns.avgClickRate', 'Average click rate') }}</p>
+              </div>
+            </div>
+            <div class="column is-3">
+              <div class="stat-item">
+                <p class="stat-value">{{ formatPercent(performanceSummary.order_rate) }}</p>
+                <p class="stat-label">{{ $t('campaigns.placedOrder', 'Placed Order') }}</p>
+              </div>
+            </div>
+            <div class="column is-3">
+              <div class="stat-item">
+                <p class="stat-value">${{ formatCurrency(performanceSummary.revenue_per_recipient) }}</p>
+                <p class="stat-label">{{ $t('campaigns.revenuePerRecipient', 'Revenue per recipient') }}</p>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
     <b-table :data="campaigns.results" :loading="loading.campaigns" :row-class="highlightedRow" paginated
       backend-pagination pagination-position="both" @page-change="onPageChange" :current-page="queryParams.page"
       :per-page="campaigns.perPage" :total="campaigns.total" hoverable backend-sorting @sort="onSort">
@@ -198,6 +233,19 @@
         </div>
       </b-table-column>
 
+      <b-table-column v-slot="props" field="purchase_revenue" :label="$t('campaigns.placedOrder', 'Placed Order')" width="12%">
+        <div class="fields stats">
+          <p v-if="props.row.purchase_orders > 0">
+            <label for="#">{{ formatCurrency(props.row.purchase_revenue) }}</label>
+            <span>{{ props.row.purchase_orders }} {{ props.row.purchase_orders === 1 ? $t('campaigns.recipient', 'recipient') : $t('campaigns.recipients', 'recipients') }}</span>
+          </p>
+          <p v-else>
+            <label for="#">$0.00</label>
+            <span>0 {{ $t('campaigns.recipients', 'recipients') }}</span>
+          </p>
+        </div>
+      </b-table-column>
+
       <b-table-column v-slot="props" cell-class="actions" width="15%" align="right">
         <div>
           <!-- start / pause / resume / scheduled -->
@@ -310,6 +358,7 @@ export default Vue.extend({
   data() {
     return {
       previewItem: null,
+      performanceSummary: null,
       queryParams: {
         page: 1,
         query: '',
@@ -503,6 +552,25 @@ export default Vue.extend({
         this.$utils.toast(this.$t('globals.messages.deleted', { name: c.name }));
       });
     },
+
+    getPerformanceSummary() {
+      this.$api.getCampaignsPerformanceSummary().then((data) => {
+        this.performanceSummary = data;
+      }).catch(() => {
+        // Silently fail if there's no data
+        this.performanceSummary = null;
+      });
+    },
+
+    formatPercent(value) {
+      if (!value || isNaN(value)) return '0.00%';
+      return `${value.toFixed(2)}%`;
+    },
+
+    formatCurrency(value) {
+      if (!value || isNaN(value)) return '0.00';
+      return value.toFixed(2);
+    },
   },
 
   computed: {
@@ -512,6 +580,7 @@ export default Vue.extend({
   mounted() {
     this.getCampaigns();
     this.pollStats();
+    this.getPerformanceSummary();
   },
 
   destroyed() {
@@ -519,3 +588,38 @@ export default Vue.extend({
   },
 });
 </script>
+
+<style scoped>
+.performance-summary {
+  margin-bottom: 1.5rem;
+}
+
+.performance-summary .box {
+  padding: 1rem 1.5rem;
+}
+
+.performance-summary summary {
+  cursor: pointer;
+  margin-bottom: 1rem;
+}
+
+.performance-summary .stats-grid {
+  margin-top: 0.5rem;
+  margin-bottom: 0;
+}
+
+.performance-summary .stat-item {
+  text-align: center;
+}
+
+.performance-summary .stat-value {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+
+.performance-summary .stat-label {
+  font-size: 0.875rem;
+  color: #4a4a4a;
+}
+</style>

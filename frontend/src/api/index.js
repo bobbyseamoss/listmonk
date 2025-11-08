@@ -359,6 +359,18 @@ export const getCampaignAzureEngagementEvents = async (id, params) => http.get(
   { params, loading: models.campaigns },
 );
 
+// Get Shopify purchase attribution stats for a campaign
+export const getCampaignPurchaseStats = async (id) => http.get(
+  `/api/campaigns/${id}/purchases/stats`,
+  { loading: models.campaigns },
+);
+
+// Get aggregate campaign performance summary (last 30 days)
+export const getCampaignsPerformanceSummary = async () => http.get(
+  '/api/campaigns/performance/summary',
+  { loading: models.campaigns },
+);
+
 export const getSubscriberAzureDeliveryEvents = async (id, params) => http.get(
   `/api/subscribers/${id}/azure-delivery-events`,
   { params, loading: models.subscribers },

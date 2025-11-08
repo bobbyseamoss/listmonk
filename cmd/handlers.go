@@ -183,6 +183,10 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/campaigns/:id/azure-delivery-events", pm(hasID(a.GetCampaignAzureDeliveryEvents), "campaigns:get_analytics"))
 		g.GET("/api/campaigns/:id/azure-engagement-events", pm(hasID(a.GetCampaignAzureEngagementEvents), "campaigns:get_analytics"))
 
+		// Shopify Purchase Attribution API endpoints
+		g.GET("/api/campaigns/:id/purchases/stats", pm(hasID(a.GetCampaignPurchaseStats), "campaigns:get_analytics"))
+		g.GET("/api/campaigns/performance/summary", pm(a.GetCampaignsPerformanceSummary, "campaigns:get_all", "campaigns:get"))
+
 		// Queue system API endpoints
 		g.GET("/api/queue/items", pm(a.GetQueueItems, "campaigns:get_all", "campaigns:get"))
 		g.GET("/api/queue/stats", pm(a.GetEmailQueueStats, "campaigns:get_all", "campaigns:get"))
@@ -250,6 +254,12 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 			a.log.Printf("DEBUG: Registered webhook route: POST /webhooks/service/:service")
 		} else {
 			a.log.Printf("DEBUG: Webhook routes NOT registered - BounceWebhooksEnabled is false")
+		}
+
+		// Shopify webhook endpoint (always enabled if configured)
+		if a.cfg.ShopifyEnabled {
+			g.POST("/webhooks/shopify/orders", a.ShopifyWebhook)
+			a.log.Printf("Registered Shopify webhook route: POST /webhooks/shopify/orders")
 		}
 
 		// Landing page.
