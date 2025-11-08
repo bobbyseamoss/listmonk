@@ -142,19 +142,15 @@
       </b-table-column>
 
       <b-table-column v-slot="props" field="open_rate" :label="$t('campaigns.openRate', 'Open Rate')" width="10%">
-        <div :set="stats = getCampaignStats(props.row)">
-          <p>
-            {{ calculateOpenRate(stats) }}
-          </p>
-        </div>
+        <p>
+          {{ calculateOpenRate(getCampaignStats(props.row)) }}
+        </p>
       </b-table-column>
 
       <b-table-column v-slot="props" field="click_rate" :label="$t('campaigns.clickRate', 'Click Rate')" width="10%">
-        <div :set="stats = getCampaignStats(props.row)">
-          <p>
-            {{ calculateClickRate(stats) }}
-          </p>
-        </div>
+        <p>
+          {{ calculateClickRate(getCampaignStats(props.row)) }}
+        </p>
       </b-table-column>
 
       <b-table-column v-slot="props" field="purchase_revenue" :label="$t('campaigns.placedOrder', 'Placed Order')" width="12%">
