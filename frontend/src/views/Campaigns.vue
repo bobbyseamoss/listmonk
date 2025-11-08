@@ -493,14 +493,42 @@ export default Vue.extend({
     },
 
     calculateOpenRate(stats) {
-      if (!stats || !stats.sent || stats.sent === 0) return '—';
-      const rate = (stats.views / stats.sent) * 100;
+      if (!stats) return '—';
+
+      // Determine the sent count based on campaign type
+      let sentCount = 0;
+      if (stats.use_queue || stats.useQueue) {
+        // Queue-based campaign
+        sentCount = stats.queue_sent || stats.queueSent || 0;
+      } else {
+        // Regular campaign
+        sentCount = stats.sent || 0;
+      }
+
+      if (sentCount === 0) return '—';
+
+      const views = stats.views || 0;
+      const rate = (views / sentCount) * 100;
       return `${rate.toFixed(2)}%`;
     },
 
     calculateClickRate(stats) {
-      if (!stats || !stats.sent || stats.sent === 0) return '—';
-      const rate = (stats.clicks / stats.sent) * 100;
+      if (!stats) return '—';
+
+      // Determine the sent count based on campaign type
+      let sentCount = 0;
+      if (stats.use_queue || stats.useQueue) {
+        // Queue-based campaign
+        sentCount = stats.queue_sent || stats.queueSent || 0;
+      } else {
+        // Regular campaign
+        sentCount = stats.sent || 0;
+      }
+
+      if (sentCount === 0) return '—';
+
+      const clicks = stats.clicks || 0;
+      const rate = (clicks / sentCount) * 100;
       return `${rate.toFixed(2)}%`;
     },
   },
