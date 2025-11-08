@@ -129,106 +129,30 @@
           </li>
         </ul>
       </b-table-column>
-      <b-table-column v-slot="props" field="created_at" :label="$t('campaigns.timestamps')" width="19%" sortable
-        header-class="cy-timestamp">
-        <div class="fields timestamps" :set="stats = getCampaignStats(props.row)">
-          <p>
-            <label for="#">{{ $t('globals.fields.createdAt') }}</label>
-            <span>{{ $utils.niceDate(props.row.createdAt, true) }}</span>
-          </p>
+      <b-table-column v-slot="props" field="created_at" :label="$t('campaigns.startDate', 'Start Date')" width="12%" sortable
+        header-class="cy-start-date">
+        <div :set="stats = getCampaignStats(props.row)">
           <p v-if="stats.startedAt">
-            <label for="#">{{ $t('campaigns.startedAt') }}</label>
-            <span>{{ $utils.niceDate(stats.startedAt, true) }}</span>
+            {{ $utils.niceDate(stats.startedAt, true) }}
           </p>
-          <p v-if="isDone(props.row)">
-            <label for="#">{{ $t('campaigns.ended') }}</label>
-            <span>{{ $utils.niceDate(stats.updatedAt, true) }}</span>
-          </p>
-          <p v-if="stats.startedAt && stats.updatedAt" class="is-capitalized">
-            <label for="#"><b-icon icon="alarm" size="is-small" /></label>
-            <span>{{ $utils.duration(stats.startedAt, stats.updatedAt) }}</span>
+          <p v-else class="has-text-grey">
+            —
           </p>
         </div>
       </b-table-column>
 
-      <b-table-column v-slot="props" field="stats" :label="$t('campaigns.stats')" width="15%">
-        <div class="fields stats" :set="stats = getCampaignStats(props.row)">
+      <b-table-column v-slot="props" field="open_rate" :label="$t('campaigns.openRate', 'Open Rate')" width="10%">
+        <div :set="stats = getCampaignStats(props.row)">
           <p>
-            <label for="#">{{ $t('campaigns.views') }}</label>
-            <span>{{ $utils.formatNumber(stats.views) }}</span>
+            {{ calculateOpenRate(stats) }}
           </p>
+        </div>
+      </b-table-column>
+
+      <b-table-column v-slot="props" field="click_rate" :label="$t('campaigns.clickRate', 'Click Rate')" width="10%">
+        <div :set="stats = getCampaignStats(props.row)">
           <p>
-            <label for="#">{{ $t('campaigns.clicks') }}</label>
-            <span>{{ $utils.formatNumber(stats.clicks) }}</span>
-          </p>
-
-          <!-- For queue-based campaigns, show queue stats -->
-          <template v-if="stats.use_queue || stats.useQueue">
-            <p>
-              <label for="#">Queued</label>
-              <span>{{ $utils.formatNumber(stats.queue_queued || stats.queueQueued) }}</span>
-            </p>
-            <p>
-              <label for="#">Sending</label>
-              <span>{{ $utils.formatNumber(stats.queue_sending || stats.queueSending) }}</span>
-            </p>
-            <p>
-              <label for="#">{{ $t('campaigns.sent') }}</label>
-              <span>
-                {{ $utils.formatNumber(stats.queue_sent || stats.queueSent) }} /
-                {{ $utils.formatNumber(stats.queue_total || stats.queueTotal) }}
-              </span>
-            </p>
-            <p v-if="(stats.queue_failed || stats.queueFailed) > 0">
-              <label for="#" class="has-text-danger">Failed</label>
-              <span class="has-text-danger">
-                {{ $utils.formatNumber(stats.queue_failed || stats.queueFailed) }}
-              </span>
-            </p>
-          </template>
-
-          <!-- For regular campaigns, show regular stats -->
-          <template v-else>
-            <p>
-              <label for="#">{{ $t('campaigns.sent') }}</label>
-              <span>
-                {{ $utils.formatNumber(stats.sent) }} /
-                {{ $utils.formatNumber(stats.toSend) }}
-              </span>
-            </p>
-          </template>
-
-          <p>
-            <label for="#">{{ $t('globals.terms.bounces') }}</label>
-            <span>
-              <router-link :to="{ name: 'bounces', query: { campaign_id: props.row.id } }">
-                {{ $utils.formatNumber(props.row.bounces) }}
-              </router-link>
-            </span>
-          </p>
-          <p v-if="stats.rate && !(stats.use_queue || stats.useQueue)">
-            <label for="#"><b-icon icon="speedometer" size="is-small" /></label>
-            <span class="send-rate">
-              <b-tooltip
-                :label="`${stats.netRate} / ${$t('campaigns.rateMinuteShort')} @ ${$utils.duration(stats.startedAt, stats.updatedAt)}`"
-                type="is-dark">
-                {{ stats.rate.toFixed(0) }} / {{ $t('campaigns.rateMinuteShort') }}
-              </b-tooltip>
-            </span>
-          </p>
-          <p v-if="isRunning(props.row.id)">
-            <label for="#">
-              {{ $t('campaigns.progress') }}
-              <span class="spinner is-tiny">
-                <b-loading :is-full-page="false" active />
-              </span>
-            </label>
-            <span>
-              <b-progress
-                :value="getProgressPercent(stats)"
-                size="is-small"
-              />
-            </span>
+            {{ calculateClickRate(stats) }}
           </p>
         </div>
       </b-table-column>
@@ -236,7 +160,7 @@
       <b-table-column v-slot="props" field="purchase_revenue" :label="$t('campaigns.placedOrder', 'Placed Order')" width="12%">
         <div class="fields stats">
           <p v-if="props.row.purchase_orders > 0">
-            <label for="#">{{ formatCurrency(props.row.purchase_revenue) }}</label>
+            <label for="#">${{ formatCurrency(props.row.purchase_revenue) }}</label>
             <span>{{ props.row.purchase_orders }} {{ props.row.purchase_orders === 1 ? $t('campaigns.recipient', 'recipient') : $t('campaigns.recipients', 'recipients') }}</span>
           </p>
           <p v-else>
@@ -570,6 +494,18 @@ export default Vue.extend({
     formatCurrency(value) {
       if (!value || isNaN(value)) return '0.00';
       return value.toFixed(2);
+    },
+
+    calculateOpenRate(stats) {
+      if (!stats || !stats.sent || stats.sent === 0) return '—';
+      const rate = (stats.views / stats.sent) * 100;
+      return `${rate.toFixed(2)}%`;
+    },
+
+    calculateClickRate(stats) {
+      if (!stats || !stats.sent || stats.sent === 0) return '—';
+      const rate = (stats.clicks / stats.sent) * 100;
+      return `${rate.toFixed(2)}%`;
     },
   },
 
