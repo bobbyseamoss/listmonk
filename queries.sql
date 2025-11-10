@@ -1692,13 +1692,24 @@ SELECT * FROM subscribers WHERE LOWER(email) = LOWER($1) LIMIT 1;
 
 -- name: get-campaigns-performance-summary
 -- Get aggregate performance metrics for all campaigns in the last 30 days
-WITH recent_campaigns AS (
+WITH delivery_stats AS (
+    -- Get actual delivery counts from Azure delivery events
+    SELECT
+        campaign_id,
+        COUNT(*) AS delivered
+    FROM azure_delivery_events
+    WHERE created_at >= NOW() - INTERVAL '30 days'
+        AND status = 'Delivered'
+    GROUP BY campaign_id
+),
+recent_campaigns AS (
     SELECT
         c.id,
         COALESCE(cv.views, 0) AS views,
         COALESCE(lc.clicks, 0) AS clicks,
-        c.sent
+        COALESCE(ds.delivered, 0) AS sent
     FROM campaigns c
+    INNER JOIN delivery_stats ds ON c.id = ds.campaign_id
     LEFT JOIN (
         SELECT campaign_id, COUNT(*) AS views
         FROM campaign_views
@@ -1711,9 +1722,7 @@ WITH recent_campaigns AS (
         WHERE created_at >= NOW() - INTERVAL '30 days'
         GROUP BY campaign_id
     ) lc ON c.id = lc.campaign_id
-    WHERE c.status = 'finished'
-        AND c.updated_at >= NOW() - INTERVAL '30 days'
-        AND c.sent > 0
+    WHERE c.updated_at >= NOW() - INTERVAL '30 days'
 ),
 purchase_data AS (
     SELECT
@@ -1726,18 +1735,17 @@ SELECT
     COALESCE(AVG(CASE WHEN sent > 0 THEN (views::FLOAT / sent::FLOAT) * 100 ELSE 0 END), 0) AS avg_open_rate,
     COALESCE(AVG(CASE WHEN sent > 0 THEN (clicks::FLOAT / sent::FLOAT) * 100 ELSE 0 END), 0) AS avg_click_rate,
     COALESCE(SUM(sent), 0) AS total_sent,
-    COALESCE(MAX(pd.total_orders), 0) AS total_orders,
-    COALESCE(MAX(pd.total_revenue), 0) AS total_revenue,
+    (SELECT COALESCE(MAX(total_orders), 0) FROM purchase_data) AS total_orders,
+    (SELECT COALESCE(MAX(total_revenue), 0) FROM purchase_data) AS total_revenue,
     CASE
-        WHEN COALESCE(SUM(sent), 0) > 0 THEN (COALESCE(MAX(pd.total_orders), 0)::FLOAT / SUM(sent)::FLOAT) * 100
+        WHEN COALESCE(SUM(sent), 0) > 0 THEN ((SELECT COALESCE(MAX(total_orders), 0) FROM purchase_data)::FLOAT / SUM(sent)::FLOAT) * 100
         ELSE 0
     END AS order_rate,
     CASE
-        WHEN COALESCE(SUM(sent), 0) > 0 THEN COALESCE(MAX(pd.total_revenue), 0) / SUM(sent)::FLOAT
+        WHEN COALESCE(SUM(sent), 0) > 0 THEN (SELECT COALESCE(MAX(total_revenue), 0) FROM purchase_data) / SUM(sent)::FLOAT
         ELSE 0
     END AS revenue_per_recipient
-FROM recent_campaigns
-CROSS JOIN purchase_data pd;
+FROM recent_campaigns;
 
 -- name: get-campaigns-purchase-stats
 -- Get purchase stats for multiple campaigns (for campaigns list)
