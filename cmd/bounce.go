@@ -282,6 +282,7 @@ func (a *App) BounceWebhook(c echo.Context) error {
 
 				// Extract delivery event data for storage
 				messageID, _ := event.Data["messageId"].(string)
+				internetMessageID, _ := event.Data["internetMessageId"].(string)
 				status, _ := event.Data["status"].(string)
 				deliveryAttemptTimeStamp, _ := event.Data["deliveryAttemptTimeStamp"].(string)
 
@@ -343,7 +344,7 @@ func (a *App) BounceWebhook(c echo.Context) error {
 					_, err := a.db.Exec(`
 						INSERT INTO azure_delivery_events
 							(azure_message_id, campaign_id, subscriber_id, status, status_reason, delivery_status_details, event_timestamp)
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+						VALUES ($1, $2, $3, $4, $5, $6, $7)
 					`, messageID, campaignID, subscriberID, status, statusReason, deliveryDetailsJSON, eventTime)
 
 					if err != nil {
@@ -352,12 +353,12 @@ func (a *App) BounceWebhook(c echo.Context) error {
 
 					// Update azure_message_tracking with internet_message_id for proper engagement attribution
 					// The internetMessageId is consistent across delivery and engagement events
-					if deliveryData.InternetMessageID != "" {
+					if internetMessageID != "" {
 						_, err = a.db.Exec(`
 							UPDATE azure_message_tracking
 							SET internet_message_id = $1
 							WHERE azure_message_id = $2
-						`, deliveryData.InternetMessageID, messageID)
+						`, internetMessageID, messageID)
 
 						if err != nil {
 							a.log.Printf("error updating azure_message_tracking with internet_message_id: %v", err)
@@ -499,7 +500,6 @@ func (a *App) BounceWebhook(c echo.Context) error {
 						a.log.Printf("error looking up tracking info for Azure message %s: %v", engagement.MessageID, err)
 						continue
 					}
-					engagement.InternetMessageID,
 				}
 
 				// Parse timestamp
