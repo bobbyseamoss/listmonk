@@ -321,13 +321,17 @@ func (e *Emailer) trackAzureMessage(trackingID string, m models.Message, srv *Se
 		return
 	}
 
-	// Write tracking record to database
+	// Generate internet_message_id (Message-ID header value) for engagement attribution
+	// This is the same format used in the email header and will match Azure engagement events
+	internetMessageID := fmt.Sprintf("<%s@listmonk>", trackingID)
+
+	// Write tracking record to database with internet_message_id for immediate engagement attribution
 	_, err := e.db.Exec(`
 		INSERT INTO azure_message_tracking
-			(azure_message_id, campaign_id, subscriber_id, sent_at)
-		VALUES ($1, $2, $3, $4)
+			(azure_message_id, internet_message_id, campaign_id, subscriber_id, sent_at)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (azure_message_id) DO NOTHING
-	`, trackingID, m.Campaign.ID, m.Subscriber.ID, time.Now())
+	`, trackingID, internetMessageID, m.Campaign.ID, m.Subscriber.ID, time.Now())
 
 	if err != nil && e.logger != nil {
 		e.logger("warning: failed to track Azure message for correlation: campaign_id=%d subscriber_id=%d error=%v",
