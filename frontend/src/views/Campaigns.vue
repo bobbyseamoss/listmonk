@@ -25,25 +25,25 @@
           <div class="columns stats-grid">
             <div class="column is-3">
               <div class="stat-item">
-                <p class="stat-value">{{ formatPercent(performanceSummary.avg_open_rate) }}</p>
+                <p class="stat-value">{{ formatPercent(performanceSummary.avgOpenRate) }}</p>
                 <p class="stat-label">{{ $t('campaigns.avgOpenRate', 'Average open rate') }}</p>
               </div>
             </div>
             <div class="column is-3">
               <div class="stat-item">
-                <p class="stat-value">{{ formatPercent(performanceSummary.avg_click_rate) }}</p>
+                <p class="stat-value">{{ formatPercent(performanceSummary.avgClickRate) }}</p>
                 <p class="stat-label">{{ $t('campaigns.avgClickRate', 'Average click rate') }}</p>
               </div>
             </div>
             <div class="column is-3">
               <div class="stat-item">
-                <p class="stat-value">{{ formatPercent(performanceSummary.order_rate) }}</p>
+                <p class="stat-value">{{ formatPercent(performanceSummary.orderRate) }}</p>
                 <p class="stat-label">{{ $t('campaigns.placedOrder', 'Placed Order') }}</p>
               </div>
             </div>
             <div class="column is-3">
               <div class="stat-item">
-                <p class="stat-value">${{ formatCurrency(performanceSummary.revenue_per_recipient) }}</p>
+                <p class="stat-value">${{ formatCurrency(performanceSummary.revenuePerRecipient) }}</p>
                 <p class="stat-label">{{ $t('campaigns.revenuePerRecipient', 'Revenue per recipient') }}</p>
               </div>
             </div>
