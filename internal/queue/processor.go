@@ -85,6 +85,141 @@ func (p *Processor) Start() {
 	}
 }
 
+// StartAutoPauseScheduler starts the automatic pause/resume scheduler
+// This runs every minute and pauses/resumes campaigns based on the time window
+func (p *Processor) StartAutoPauseScheduler() {
+	p.log.Println("starting auto-pause scheduler for time window enforcement")
+
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	// Run immediately on start
+	if err := p.autoPauseResumeCampaigns(); err != nil {
+		p.log.Printf("error in auto-pause/resume: %v", err)
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := p.autoPauseResumeCampaigns(); err != nil {
+				p.log.Printf("error in auto-pause/resume: %v", err)
+			}
+		case <-p.stopChan:
+			p.log.Println("stopping auto-pause scheduler")
+			return
+		}
+	}
+}
+
+// autoPauseResumeCampaigns automatically pauses campaigns when outside time window
+// and resumes them when inside time window
+func (p *Processor) autoPauseResumeCampaigns() error {
+	// Check if time window is configured
+	if p.cfg.TimeWindowStart == "" || p.cfg.TimeWindowEnd == "" {
+		// No time window configured, nothing to do
+		return nil
+	}
+
+	// Check if we're currently within the time window
+	withinWindow := p.isWithinTimeWindow()
+
+	if withinWindow {
+		// We're inside the window - resume any auto-paused campaigns
+		return p.resumeAutoPausedCampaigns()
+	} else {
+		// We're outside the window - auto-pause running campaigns
+		return p.autoPauseRunningCampaigns()
+	}
+}
+
+// autoPauseRunningCampaigns pauses all running campaigns when outside time window
+func (p *Processor) autoPauseRunningCampaigns() error {
+	// Update all running queue-based campaigns to paused status
+	// Only pause campaigns that aren't already auto-paused
+	res, err := p.db.Exec(`
+		UPDATE campaigns
+		SET status = 'paused',
+		    auto_paused = true,
+		    auto_paused_at = NOW(),
+		    updated_at = NOW()
+		WHERE status = 'running'
+		  AND use_queue = true
+		  AND auto_paused = false
+	`)
+	if err != nil {
+		return fmt.Errorf("error auto-pausing campaigns: %w", err)
+	}
+
+	count, _ := res.RowsAffected()
+	if count > 0 {
+		p.log.Printf("⏸️  auto-paused %d running campaign(s) - outside time window", count)
+	}
+
+	return nil
+}
+
+// resumeAutoPausedCampaigns resumes ALL paused queue-based campaigns when inside time window
+func (p *Processor) resumeAutoPausedCampaigns() error {
+	// First, get all paused queue-based campaign IDs
+	var pausedCampaignIDs []int
+	err := p.db.Select(&pausedCampaignIDs, `
+		SELECT id FROM campaigns
+		WHERE status = 'paused' AND use_queue = true
+	`)
+	if err != nil {
+		return fmt.Errorf("error fetching paused campaigns: %w", err)
+	}
+
+	if len(pausedCampaignIDs) == 0 {
+		return nil // No paused campaigns to resume
+	}
+
+	// For each paused campaign, requeue cancelled emails
+	for _, campID := range pausedCampaignIDs {
+		res, err := p.db.Exec(`
+			UPDATE email_queue
+			SET status = 'queued', updated_at = NOW()
+			WHERE campaign_id = $1
+			  AND status = 'cancelled'
+			  AND id NOT IN (
+				SELECT id FROM email_queue
+				WHERE campaign_id = $1 AND status = 'sent'
+			)
+		`, campID)
+		if err != nil {
+			p.log.Printf("error requeuing cancelled emails for campaign %d: %v", campID, err)
+			continue
+		}
+
+		requeuedCount, _ := res.RowsAffected()
+		if requeuedCount > 0 {
+			p.log.Printf("📬 requeued %d cancelled emails for campaign %d", requeuedCount, campID)
+		}
+	}
+
+	// Update ALL paused queue-based campaigns back to running status
+	// This includes both auto-paused and manually paused campaigns
+	res, err := p.db.Exec(`
+		UPDATE campaigns
+		SET status = 'running',
+		    auto_paused = false,
+		    auto_paused_at = NULL,
+		    updated_at = NOW()
+		WHERE status = 'paused'
+		  AND use_queue = true
+	`)
+	if err != nil {
+		return fmt.Errorf("error resuming campaigns: %w", err)
+	}
+
+	count, _ := res.RowsAffected()
+	if count > 0 {
+		p.log.Printf("▶️  auto-resumed %d paused campaign(s) - entered time window", count)
+	}
+
+	return nil
+}
+
 // Stop gracefully stops the queue processor
 func (p *Processor) Stop() {
 	close(p.stopChan)
@@ -413,7 +548,28 @@ func (p *Processor) isWithinTimeWindow() bool {
 		return true
 	}
 
-	now := time.Now()
+	// Get configured timezone from settings
+	settings, err := p.getSettings()
+	if err != nil {
+		p.log.Printf("error getting settings for timezone: %v, using system time", err)
+		// Fall back to system time on error
+		now := time.Now()
+		currentTime := now.Format("15:04")
+		return currentTime >= p.cfg.TimeWindowStart && currentTime <= p.cfg.TimeWindowEnd
+	}
+
+	// Load the configured timezone
+	loc, err := time.LoadLocation(settings.AppTimezone)
+	if err != nil {
+		p.log.Printf("error loading timezone '%s': %v, using system time", settings.AppTimezone, err)
+		// Fall back to system time if timezone is invalid
+		now := time.Now()
+		currentTime := now.Format("15:04")
+		return currentTime >= p.cfg.TimeWindowStart && currentTime <= p.cfg.TimeWindowEnd
+	}
+
+	// Get current time in the configured timezone
+	now := time.Now().In(loc)
 	currentTime := now.Format("15:04")
 
 	// Simple string comparison works for HH:MM format

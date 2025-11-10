@@ -65,6 +65,7 @@ type AzureDeliveryData struct {
 	Sender                   string                 `json:"sender"`
 	Recipient                string                 `json:"recipient"`
 	MessageID                string                 `json:"messageId"`
+	InternetMessageID        string                 `json:"internetMessageId"`
 	Status                   string                 `json:"status"`
 	DeliveryStatusDetails    map[string]interface{} `json:"deliveryStatusDetails"`
 	DeliveryAttemptTimeStamp string                 `json:"deliveryAttemptTimeStamp"`
@@ -75,6 +76,7 @@ type AzureEngagementData struct {
 	Sender              string `json:"sender"`
 	Recipient           string `json:"recipient"` // May be empty for multi-recipient
 	MessageID           string `json:"messageId"`
+	InternetMessageID   string `json:"internetMessageId"`
 	UserActionTimeStamp string `json:"userActionTimeStamp"`
 	EngagementContext   string `json:"engagementContext"` // URL for clicks
 	UserAgent           string `json:"userAgent"`

@@ -140,6 +140,13 @@ export default Vue.extend({
   },
 
   methods: {
+    updateFavicon() {
+      const faviconLink = document.getElementById('favicon') || document.querySelector('link[rel="icon"]');
+      if (faviconLink && this.logoUrl) {
+        faviconLink.href = this.logoUrl;
+      }
+    },
+
     toggleGroup(group, state) {
       this.activeGroup = state ? { [group]: true } : {};
     },
@@ -217,6 +224,9 @@ export default Vue.extend({
     window.addEventListener('resize', () => {
       this.windowWidth = window.innerWidth;
     });
+
+    // Set favicon to match the logo
+    this.updateFavicon();
 
     this.listenEvents();
   },

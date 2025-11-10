@@ -308,6 +308,10 @@ type CampaignStats struct {
 	QueueFailed    int    `db:"queue_failed" json:"queue_failed"`
 	QueueCancelled int    `db:"queue_cancelled" json:"queue_cancelled"`
 	QueueTotal     int    `db:"queue_total" json:"queue_total"`
+
+	// Auto-pause tracking for time window functionality
+	AutoPaused   bool      `db:"auto_paused" json:"auto_paused"`
+	AutoPausedAt null.Time `db:"auto_paused_at" json:"auto_paused_at"`
 }
 
 type CampaignAnalyticsCount struct {

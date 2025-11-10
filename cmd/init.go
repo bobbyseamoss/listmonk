@@ -767,7 +767,10 @@ func initQueueProcessor(db *sqlx.DB, settings models.Settings) *queue.Processor 
 	// Start the processor in a goroutine
 	go proc.Start()
 
-	lo.Println("started queue processor for automatic campaigns")
+	// Start the auto-pause/resume scheduler in a separate goroutine
+	go proc.StartAutoPauseScheduler()
+
+	lo.Println("started queue processor and auto-pause scheduler for automatic campaigns")
 	return proc
 }
 

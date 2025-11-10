@@ -499,9 +499,15 @@ func (a *App) GetRunningCampaignStats(c echo.Context) error {
 		if c.Started.Valid && c.UpdatedAt.Valid {
 			diff := max(int(c.UpdatedAt.Time.Sub(c.Started.Time).Minutes()), 1)
 
-			rate := c.Sent / diff
-			if rate > c.Sent || rate > c.ToSend {
-				rate = c.Sent
+			// For queue-based campaigns, use QueueSent instead of Sent
+			sent := c.Sent
+			if c.UseQueue {
+				sent = c.QueueSent
+			}
+
+			rate := sent / diff
+			if rate > sent || rate > c.ToSend {
+				rate = sent
 			}
 
 			// Rate since the starting of the campaign.

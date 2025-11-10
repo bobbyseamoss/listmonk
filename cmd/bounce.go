@@ -343,11 +343,25 @@ func (a *App) BounceWebhook(c echo.Context) error {
 					_, err := a.db.Exec(`
 						INSERT INTO azure_delivery_events
 							(azure_message_id, campaign_id, subscriber_id, status, status_reason, delivery_status_details, event_timestamp)
-						VALUES ($1, $2, $3, $4, $5, $6, $7)
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 					`, messageID, campaignID, subscriberID, status, statusReason, deliveryDetailsJSON, eventTime)
 
 					if err != nil {
 						a.log.Printf("error storing Azure delivery event: %v", err)
+					}
+
+					// Update azure_message_tracking with internet_message_id for proper engagement attribution
+					// The internetMessageId is consistent across delivery and engagement events
+					if deliveryData.InternetMessageID != "" {
+						_, err = a.db.Exec(`
+							UPDATE azure_message_tracking
+							SET internet_message_id = $1
+							WHERE azure_message_id = $2
+						`, deliveryData.InternetMessageID, messageID)
+
+						if err != nil {
+							a.log.Printf("error updating azure_message_tracking with internet_message_id: %v", err)
+						}
 					}
 				} else if err != nil {
 					a.log.Printf("error looking up tracking info for Azure message %s: %v", messageID, err)
@@ -454,12 +468,14 @@ func (a *App) BounceWebhook(c echo.Context) error {
 						continue
 					}
 				} else {
-					// Fallback: Look up from azure_message_tracking table
+					// Fallback: Look up from azure_message_tracking table using internet_message_id
+					// This is the KEY FIX: Azure uses different message IDs for delivery vs engagement events
+					// but internet_message_id (email Message-ID header) is consistent across all event types
 					err = a.db.QueryRow(`
 						SELECT campaign_id, subscriber_id
 						FROM azure_message_tracking
-						WHERE azure_message_id = $1
-					`, engagement.MessageID).Scan(&campaignID, &subscriberID)
+						WHERE internet_message_id = $1
+					`, engagement.InternetMessageID).Scan(&campaignID, &subscriberID)
 
 					// If Message-ID lookup fails, try recipient email
 					if err != nil && recipient != "" {
@@ -483,6 +499,7 @@ func (a *App) BounceWebhook(c echo.Context) error {
 						a.log.Printf("error looking up tracking info for Azure message %s: %v", engagement.MessageID, err)
 						continue
 					}
+					engagement.InternetMessageID,
 				}
 
 				// Parse timestamp
@@ -494,9 +511,9 @@ func (a *App) BounceWebhook(c echo.Context) error {
 				// Store engagement event in azure_engagement_events table
 				_, err = a.db.Exec(`
 					INSERT INTO azure_engagement_events
-						(azure_message_id, campaign_id, subscriber_id, engagement_type, engagement_context, user_agent, event_timestamp)
-					VALUES ($1, $2, $3, $4, $5, $6, $7)
-				`, engagement.MessageID, campaignID, subscriberID, engagement.EngagementType, engagement.EngagementContext, engagement.UserAgent, actionTime)
+						(azure_message_id, internet_message_id, campaign_id, subscriber_id, engagement_type, engagement_context, user_agent, event_timestamp)
+					VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				`, engagement.MessageID, engagement.InternetMessageID, campaignID, subscriberID, engagement.EngagementType, engagement.EngagementContext, engagement.UserAgent, actionTime)
 
 				if err != nil {
 					a.log.Printf("error storing Azure engagement event: %v", err)

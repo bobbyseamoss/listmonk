@@ -54,21 +54,64 @@
 
     <div>
       <hr />
+      <h5 class="title is-5">Application Timezone</h5>
+      <p class="help mb-3">Select the timezone for all time-based operations (sending windows, scheduling, etc.)</p>
+      <b-field label="Timezone" label-position="on-border"
+        message="All time-based operations will use this timezone. Campaign schedules and sending windows will be interpreted in this timezone.">
+        <b-select v-model="data['app.timezone']" name="app.timezone" expanded>
+          <optgroup label="US Timezones">
+            <option value="America/New_York">Eastern Time (ET)</option>
+            <option value="America/Chicago">Central Time (CT)</option>
+            <option value="America/Denver">Mountain Time (MT)</option>
+            <option value="America/Phoenix">Arizona (no DST)</option>
+            <option value="America/Los_Angeles">Pacific Time (PT)</option>
+            <option value="America/Anchorage">Alaska Time (AKT)</option>
+            <option value="Pacific/Honolulu">Hawaii Time (HST)</option>
+          </optgroup>
+          <optgroup label="Common Timezones">
+            <option value="UTC">UTC (Coordinated Universal Time)</option>
+            <option value="Europe/London">London (GMT/BST)</option>
+            <option value="Europe/Paris">Paris (CET/CEST)</option>
+            <option value="Asia/Tokyo">Tokyo (JST)</option>
+            <option value="Australia/Sydney">Sydney (AEDT/AEST)</option>
+          </optgroup>
+        </b-select>
+      </b-field>
+    </div><!-- timezone -->
+
+    <div>
+      <hr />
       <h5 class="title is-5">Sending Time Window</h5>
-      <p class="help mb-3">Restrict email sending to specific hours of the day (useful for avoiding night-time sends)</p>
+      <p class="help mb-3">Restrict email sending to specific hours of the day (useful for avoiding night-time sends). Campaigns will automatically pause/resume based on these times.</p>
       <div class="columns">
         <div class="column is-6">
-          <b-field label="Send Start Time (24h format)" label-position="on-border"
-            message="Time to start sending emails each day (e.g., 08:00). Leave empty for 24/7 sending.">
-            <b-input v-model="data['app.send_time_start']" name="app.send_time_start"
-              placeholder="08:00" pattern="[0-2][0-9]:[0-5][0-9]" :maxlength="5" />
+          <b-field grouped>
+            <b-field label="Send Start Time" label-position="on-border" expanded
+              message="Time to start sending emails each day. Leave empty for 24/7 sending.">
+              <b-input v-model="startTime12h" name="start_time_12h"
+                placeholder="10:00" pattern="[0-1]?[0-9]:[0-5][0-9]" :maxlength="5" @input="updateStartTime" />
+            </b-field>
+            <b-field label="&nbsp;" label-position="on-border">
+              <b-select v-model="startTimePeriod" @input="updateStartTime">
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
+              </b-select>
+            </b-field>
           </b-field>
         </div>
         <div class="column is-6">
-          <b-field label="Send End Time (24h format)" label-position="on-border"
-            message="Time to stop sending emails each day (e.g., 20:00). Leave empty for 24/7 sending.">
-            <b-input v-model="data['app.send_time_end']" name="app.send_time_end"
-              placeholder="20:00" pattern="[0-2][0-9]:[0-5][0-9]" :maxlength="5" />
+          <b-field grouped>
+            <b-field label="Send End Time" label-position="on-border" expanded
+              message="Time to stop sending emails each day. Leave empty for 24/7 sending.">
+              <b-input v-model="endTime12h" name="end_time_12h"
+                placeholder="10:00" pattern="[0-1]?[0-9]:[0-5][0-9]" :maxlength="5" @input="updateEndTime" />
+            </b-field>
+            <b-field label="&nbsp;" label-position="on-border">
+              <b-select v-model="endTimePeriod" @input="updateEndTime">
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
+              </b-select>
+            </b-field>
           </b-field>
         </div>
       </div>
@@ -157,7 +200,85 @@ export default Vue.extend({
     return {
       data: this.form,
       regDuration,
+      startTime12h: '',
+      startTimePeriod: 'AM',
+      endTime12h: '',
+      endTimePeriod: 'PM',
     };
+  },
+
+  mounted() {
+    // Initialize 12-hour format from 24-hour values
+    this.init12HourTimes();
+  },
+
+  methods: {
+    // Initialize 12-hour time inputs from 24-hour values
+    init12HourTimes() {
+      if (this.data['app.send_time_start']) {
+        const { time12h, period } = this.convert24To12(this.data['app.send_time_start']);
+        this.startTime12h = time12h;
+        this.startTimePeriod = period;
+      }
+      if (this.data['app.send_time_end']) {
+        const { time12h, period } = this.convert24To12(this.data['app.send_time_end']);
+        this.endTime12h = time12h;
+        this.endTimePeriod = period;
+      }
+    },
+
+    // Convert 24-hour time (HH:MM) to 12-hour format
+    convert24To12(time24) {
+      if (!time24 || time24 === '""') {
+        return { time12h: '', period: 'AM' };
+      }
+
+      const [hours24, minutes] = time24.split(':').map(Number);
+      let hours12 = hours24 % 12;
+      if (hours12 === 0) hours12 = 12; // 0 or 12 becomes 12
+
+      const period = hours24 >= 12 ? 'PM' : 'AM';
+      const time12h = `${hours12}:${String(minutes).padStart(2, '0')}`;
+
+      return { time12h, period };
+    },
+
+    // Convert 12-hour time to 24-hour format (HH:MM)
+    convert12To24(time12h, period) {
+      if (!time12h) {
+        return '';
+      }
+
+      const [hours12Str, minutesStr] = time12h.split(':');
+      const hours12 = parseInt(hours12Str, 10);
+      const minutes = parseInt(minutesStr, 10);
+
+      if (Number.isNaN(hours12) || Number.isNaN(minutes)) {
+        return '';
+      }
+
+      // Convert to 24-hour
+      let hours24 = hours12;
+      if (period === 'AM' && hours12 === 12) {
+        hours24 = 0; // 12 AM is 00:00
+      } else if (period === 'PM' && hours12 !== 12) {
+        hours24 += 12; // PM adds 12 except for 12 PM
+      }
+
+      return `${String(hours24).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    },
+
+    // Update start time in 24-hour format when 12-hour input changes
+    updateStartTime() {
+      const time24 = this.convert12To24(this.startTime12h, this.startTimePeriod);
+      this.data['app.send_time_start'] = time24;
+    },
+
+    // Update end time in 24-hour format when 12-hour input changes
+    updateEndTime() {
+      const time24 = this.convert12To24(this.endTime12h, this.endTimePeriod);
+      this.data['app.send_time_end'] = time24;
+    },
   },
 });
 </script>
