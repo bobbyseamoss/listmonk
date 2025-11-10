@@ -187,7 +187,53 @@ export const getCampaignsPerformanceSummary = async () => http.get(
    </b-table-column>
    ```
 
-3. **Data Property** (line 361):
+3. **Removed Columns** (post-deployment enhancement):
+   - Stats column (views/clicks/sent/bounces/rate combined format)
+   - Timestamps column (created/started/ended/duration)
+
+4. **Added Start Date Column** (lines 132-142):
+   ```vue
+   <b-table-column v-slot="props" field="created_at"
+                   :label="$t('campaigns.startDate', 'Start Date')"
+                   width="12%" sortable header-class="cy-start-date">
+     <div :set="stats = getCampaignStats(props.row)">
+       <p v-if="stats.startedAt">
+         {{ $utils.niceDate(stats.startedAt, true) }}
+       </p>
+       <p v-else class="has-text-grey">—</p>
+     </div>
+   </b-table-column>
+   ```
+
+5. **Added Open Rate Column** (lines 144-151):
+   ```vue
+   <b-table-column v-slot="props" field="open_rate"
+                   :label="$t('campaigns.openRate', 'Open Rate')"
+                   width="10%">
+     <div class="fields stats" :set="stats = getCampaignStats(props.row)">
+       <p>
+         <label for="#">{{ calculateOpenRate(stats) }}</label>
+         <span>{{ stats.views || 0 }} {{ $t('campaigns.views', 'views') }}</span>
+       </p>
+     </div>
+   </b-table-column>
+   ```
+
+6. **Added Click Rate Column** (lines 153-160):
+   ```vue
+   <b-table-column v-slot="props" field="click_rate"
+                   :label="$t('campaigns.clickRate', 'Click Rate')"
+                   width="10%">
+     <div class="fields stats" :set="stats = getCampaignStats(props.row)">
+       <p>
+         <label for="#">{{ calculateClickRate(stats) }}</label>
+         <span>{{ stats.clicks || 0 }} {{ $t('campaigns.clicks', 'clicks') }}</span>
+       </p>
+     </div>
+   </b-table-column>
+   ```
+
+7. **Data Property** (line 361):
    ```javascript
    data() {
      return {
@@ -197,7 +243,50 @@ export const getCampaignsPerformanceSummary = async () => http.get(
    }
    ```
 
-4. **Methods** (lines 556-573):
+8. **Enhanced Rate Calculation Methods** (lines 495-533):
+   ```javascript
+   calculateOpenRate(stats) {
+     if (!stats) return '—';
+
+     // Determine sent count based on campaign type
+     let sentCount = 0;
+     if (stats.use_queue || stats.useQueue) {
+       // Queue-based campaign
+       sentCount = stats.queue_sent || stats.queueSent || 0;
+     } else {
+       // Regular campaign
+       sentCount = stats.sent || 0;
+     }
+
+     if (sentCount === 0) return '—';
+
+     const views = stats.views || 0;
+     const rate = (views / sentCount) * 100;
+     return `${rate.toFixed(2)}%`;
+   },
+
+   calculateClickRate(stats) {
+     if (!stats) return '—';
+
+     // Determine sent count based on campaign type
+     let sentCount = 0;
+     if (stats.use_queue || stats.useQueue) {
+       // Queue-based campaign
+       sentCount = stats.queue_sent || stats.queueSent || 0;
+     } else {
+       // Regular campaign
+       sentCount = stats.sent || 0;
+     }
+
+     if (sentCount === 0) return '—';
+
+     const clicks = stats.clicks || 0;
+     const rate = (clicks / sentCount) * 100;
+     return `${rate.toFixed(2)}%`;
+   }
+   ```
+
+9. **Helper Methods** (lines 556-573):
    ```javascript
    getPerformanceSummary() {
      this.$api.getCampaignsPerformanceSummary().then((data) => {
@@ -241,7 +330,7 @@ export const getCampaignsPerformanceSummary = async () => http.get(
    ```
 
 ### i18n/en.json
-**Lines**: 107-113
+**Lines**: 107-117
 **Purpose**: Added translation keys
 
 **Changes**:
@@ -252,8 +341,15 @@ export const getCampaignsPerformanceSummary = async () => http.get(
 "campaigns.placedOrder": "Placed Order",
 "campaigns.revenuePerRecipient": "Revenue per recipient",
 "campaigns.recipient": "recipient",
-"campaigns.recipients": "recipients"
+"campaigns.recipients": "recipients",
+"campaigns.startDate": "Start Date",
+"campaigns.openRate": "Open Rate",
+"campaigns.clickRate": "Click Rate",
+"campaigns.views": "views",
+"campaigns.clicks": "clicks"
 ```
+
+**Total**: 12 new translation keys (7 initial + 5 from post-deployment enhancements)
 
 ## Summary Statistics
 
@@ -272,11 +368,28 @@ export const getCampaignsPerformanceSummary = async () => http.get(
 
 **Total Files Modified**: 9
 
-**Lines Added**: ~200
-- Backend: ~100 lines
-- Frontend: ~100 lines
+**Lines Added**: ~285 (cumulative across all iterations)
+- Backend: ~100 lines (initial deployment)
+- Frontend: ~185 lines (initial + post-deployment enhancements)
+  - Initial: ~100 lines (performance summary, placed order column)
+  - Post-deployment: ~85 lines (column reorganization, rate calculations)
 
-**Deployment Revisions**: 3
-- Rev 1: GROUP BY error
-- Rev 2: NULL handling error
-- Rev 3: ✅ Success
+**Deployment Revisions**: 7
+- Rev 1: GROUP BY error (failed)
+- Rev 2: NULL handling error (failed)
+- Rev 3: ✅ Initial success - Performance summary + Placed Order
+- Rev 4: Column reorganization (Start Date, Open Rate, Click Rate)
+- Rev 5: Reactivity fix for live campaigns
+- Rev 6: Queue-based campaign support
+- Rev 7: ✅ Final - View/click counts display
+
+**Code Changes Summary**:
+- 2 new SQL queries
+- 3 new Go structs
+- 1 new API endpoint
+- 4 removed Vue table columns (Stats, Timestamps)
+- 5 added Vue table columns (Start Date, Open Rate, Click Rate + existing Placed Order)
+- 2 enhanced calculation methods (~40 lines each)
+- 3 helper methods (formatting)
+- 12 i18n translation keys
+- Custom CSS styling

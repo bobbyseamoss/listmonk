@@ -24,3 +24,10 @@ restore_config.sh
 *.sql
 # Deployment credentials (contains plaintext passwords)
 deployment/configs/credential_map.json
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

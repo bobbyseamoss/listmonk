@@ -125,6 +125,34 @@ func (a *App) GetCampaigns(c echo.Context) error {
 		}
 	}
 
+	// Get Azure sent counts for all campaigns
+	type azureSentCount struct {
+		CampaignID int `db:"campaign_id"`
+		Count      int `db:"count"`
+	}
+	var azureSentCounts []azureSentCount
+	if err := a.db.Select(&azureSentCounts, `
+		SELECT campaign_id, COUNT(*) as count
+		FROM azure_delivery_events
+		WHERE campaign_id = ANY($1) AND status = 'Delivered'
+		GROUP BY campaign_id
+	`, pq.Array(campaignIDs)); err != nil {
+		a.log.Printf("error fetching azure sent counts for campaigns: %v", err)
+	}
+
+	// Map azure sent counts to campaigns
+	azureSentMap := make(map[int]int)
+	for _, count := range azureSentCounts {
+		azureSentMap[count.CampaignID] = count.Count
+	}
+
+	// Populate azure sent fields in campaign results
+	for i := range res {
+		if count, ok := azureSentMap[res[i].ID]; ok {
+			res[i].AzureSent = count
+		}
+	}
+
 	out := models.PageResults{
 		Query:   query,
 		Results: res,

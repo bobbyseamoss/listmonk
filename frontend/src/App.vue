@@ -4,7 +4,7 @@
       <template #brand>
         <div class="logo">
           <router-link :to="{ name: 'dashboard' }">
-            <img class="full" src="@/assets/logo.svg" alt="" />
+            <img class="full" :src="logoUrl" alt="" />
             <img class="favicon" src="@/assets/favicon.png" alt="" />
           </router-link>
         </div>
@@ -201,6 +201,11 @@ export default Vue.extend({
 
     isMobile() {
       return this.windowWidth <= 768;
+    },
+
+    logoUrl() {
+      // Use environment variable if set, otherwise use default Bobby Sea Moss logo
+      return import.meta.env.VITE_LOGO_URL || 'https://d3k81ch9hvuctc.cloudfront.net/company/XFsBBP/images/6066d5d2-0701-4193-a8e7-13b624efc474.png';
     },
   },
 

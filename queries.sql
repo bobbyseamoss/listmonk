@@ -652,12 +652,19 @@ bounces AS (
 sent_counts AS (
     SELECT id as campaign_id, sent FROM campaigns
     WHERE id = ANY($1)
+),
+azure_sent AS (
+    SELECT campaign_id, COUNT(*) as num FROM azure_delivery_events
+    WHERE campaign_id = ANY($1)
+    AND status = 'Delivered'
+    GROUP BY campaign_id
 )
 SELECT id as campaign_id,
     COALESCE(v.num, 0) AS views,
     COALESCE(c.num, 0) AS clicks,
     COALESCE(b.num, 0) AS bounces,
     COALESCE(s.sent, 0) AS sent,
+    COALESCE(a.num, 0) AS azure_sent,
     COALESCE(l.lists, '[]') AS lists,
     COALESCE(m.media, '[]') AS media
 FROM (SELECT id FROM UNNEST($1) AS id) x
@@ -667,6 +674,7 @@ LEFT JOIN views AS v ON (v.campaign_id = id)
 LEFT JOIN clicks AS c ON (c.campaign_id = id)
 LEFT JOIN bounces AS b ON (b.campaign_id = id)
 LEFT JOIN sent_counts AS s ON (s.campaign_id = id)
+LEFT JOIN azure_sent AS a ON (a.campaign_id = id)
 ORDER BY ARRAY_POSITION($1, id);
 
 -- name: get-campaign-for-preview
@@ -692,6 +700,12 @@ clicks AS (
     SELECT campaign_id, COUNT(*) as count FROM link_clicks
     WHERE campaign_id IN (SELECT id FROM campaigns WHERE status=$1)
     GROUP BY campaign_id
+),
+azure_sent AS (
+    SELECT campaign_id, COUNT(*) as count FROM azure_delivery_events
+    WHERE campaign_id IN (SELECT id FROM campaigns WHERE status=$1)
+    AND status = 'Delivered'
+    GROUP BY campaign_id
 )
 SELECT
     c.id,
@@ -700,11 +714,13 @@ SELECT
     c.sent,
     COALESCE(v.count, 0)::INT AS views,
     COALESCE(cl.count, 0)::INT AS clicks,
+    COALESCE(a.count, 0)::INT AS azure_sent,
     c.started_at,
     c.updated_at
 FROM campaigns c
 LEFT JOIN views v ON v.campaign_id = c.id
 LEFT JOIN clicks cl ON cl.campaign_id = c.id
+LEFT JOIN azure_sent a ON a.campaign_id = c.id
 WHERE c.status=$1;
 
 -- name: get-campaign-queue-stats
@@ -717,6 +733,12 @@ WITH views AS (
 clicks AS (
     SELECT campaign_id, COUNT(*) as count FROM link_clicks
     WHERE campaign_id IN (SELECT id FROM campaigns WHERE status = 'running' AND use_queue = true)
+    GROUP BY campaign_id
+),
+azure_sent AS (
+    SELECT campaign_id, COUNT(*) as count FROM azure_delivery_events
+    WHERE campaign_id IN (SELECT id FROM campaigns WHERE status = 'running' AND use_queue = true)
+    AND status = 'Delivered'
     GROUP BY campaign_id
 )
 SELECT
@@ -732,14 +754,16 @@ SELECT
     COUNT(eq.id)::INT AS queue_total,
     COALESCE(v.count, 0)::INT AS views,
     COALESCE(cl.count, 0)::INT AS clicks,
+    COALESCE(a.count, 0)::INT AS azure_sent,
     c.started_at,
     c.updated_at
 FROM campaigns c
 LEFT JOIN email_queue eq ON eq.campaign_id = c.id
 LEFT JOIN views v ON v.campaign_id = c.id
 LEFT JOIN clicks cl ON cl.campaign_id = c.id
+LEFT JOIN azure_sent a ON a.campaign_id = c.id
 WHERE c.status = 'running' AND c.use_queue = true
-GROUP BY c.id, c.status, c.use_queue, c.messenger, c.started_at, c.updated_at, v.count, cl.count;
+GROUP BY c.id, c.status, c.use_queue, c.messenger, c.started_at, c.updated_at, v.count, cl.count, a.count;
 
 -- name: campaign-has-lists
 -- Returns TRUE if the campaign $1 has any of the lists given in $2.
@@ -1639,6 +1663,16 @@ FROM link_clicks lc
 WHERE lc.subscriber_id = $1
   AND lc.created_at >= NOW() - INTERVAL '1 day' * $2
 ORDER BY lc.created_at DESC
+LIMIT 1;
+
+-- name: find-recent-email-open
+-- Find the most recent email open for a subscriber within the attribution window
+SELECT aee.campaign_id, aee.event_timestamp as created_at
+FROM azure_engagement_events aee
+WHERE aee.subscriber_id = $1
+  AND aee.engagement_type = 'open'
+  AND aee.event_timestamp >= NOW() - INTERVAL '1 day' * $2
+ORDER BY aee.event_timestamp DESC
 LIMIT 1;
 
 -- name: get-campaign-purchase-stats

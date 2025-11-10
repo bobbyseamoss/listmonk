@@ -113,6 +113,19 @@
           <p class="is-size-7 has-text-grey">
             <copy-text :text="props.row.subject" />
           </p>
+
+          <!-- Campaign Progress -->
+          <div class="campaign-progress" v-if="showProgress(props.row)">
+            <b-progress
+              :value="getProgressPercent(getCampaignStats(props.row))"
+              :type="props.row.status === 'running' ? 'is-primary' : props.row.status === 'paused' ? 'is-warning' : props.row.status === 'cancelled' ? 'is-danger' : 'is-success'"
+              size="is-small"
+              show-value
+            >
+              {{ getProgressText(props.row) }}
+            </b-progress>
+          </div>
+
           <b-taglist>
             <b-tag class="is-small" v-for="t in props.row.tags" :key="t">
               {{ t }}
@@ -131,9 +144,9 @@
       </b-table-column>
       <b-table-column v-slot="props" field="created_at" :label="$t('campaigns.startDate', 'Start Date')" width="12%" sortable
         header-class="cy-start-date">
-        <div :set="stats = getCampaignStats(props.row)">
-          <p v-if="stats.startedAt">
-            {{ $utils.niceDate(stats.startedAt, true) }}
+        <div>
+          <p v-if="getCampaignStats(props.row).startedAt">
+            {{ $utils.niceDate(getCampaignStats(props.row).startedAt, true) }}
           </p>
           <p v-else class="has-text-grey">
             —
@@ -142,22 +155,28 @@
       </b-table-column>
 
       <b-table-column v-slot="props" field="open_rate" :label="$t('campaigns.openRate', 'Open Rate')" width="10%">
-        <p>
-          {{ calculateOpenRate(getCampaignStats(props.row)) }}
-        </p>
+        <div class="fields stats">
+          <p>
+            <label for="#">{{ calculateOpenRate(getCampaignStats(props.row)) }}</label>
+            <span>{{ getCampaignStats(props.row).views || 0 }} {{ $t('campaigns.views', 'views') }}</span>
+          </p>
+        </div>
       </b-table-column>
 
       <b-table-column v-slot="props" field="click_rate" :label="$t('campaigns.clickRate', 'Click Rate')" width="10%">
-        <p>
-          {{ calculateClickRate(getCampaignStats(props.row)) }}
-        </p>
+        <div class="fields stats">
+          <p>
+            <label for="#">{{ calculateClickRate(getCampaignStats(props.row)) }}</label>
+            <span>{{ getCampaignStats(props.row).clicks || 0 }} {{ $t('campaigns.clicks', 'clicks') }}</span>
+          </p>
+        </div>
       </b-table-column>
 
       <b-table-column v-slot="props" field="purchase_revenue" :label="$t('campaigns.placedOrder', 'Placed Order')" width="12%">
         <div class="fields stats">
-          <p v-if="props.row.purchase_orders > 0">
-            <label for="#">${{ formatCurrency(props.row.purchase_revenue) }}</label>
-            <span>{{ props.row.purchase_orders }} {{ props.row.purchase_orders === 1 ? $t('campaigns.recipient', 'recipient') : $t('campaigns.recipients', 'recipients') }}</span>
+          <p v-if="props.row.purchaseOrders > 0">
+            <label for="#">${{ formatCurrency(props.row.purchaseRevenue) }}</label>
+            <span>{{ props.row.purchaseOrders }} {{ props.row.purchaseOrders === 1 ? $t('campaigns.recipient', 'recipient') : $t('campaigns.recipients', 'recipients') }}</span>
           </p>
           <p v-else>
             <label for="#">$0.00</label>
@@ -314,6 +333,47 @@ export default Vue.extend({
       return c.status === 'finished' || c.status === 'cancelled';
     },
 
+    showProgress(campaign) {
+      if (!campaign) {
+        return false;
+      }
+      const stats = this.getCampaignStats(campaign);
+      if (!stats) {
+        return false;
+      }
+
+      // Show progress bar for campaigns that have started running
+      // (paused, cancelled, finished, or currently running)
+      // Don't show for draft or scheduled campaigns
+      if (stats.status === 'running' || stats.status === 'paused'
+          || stats.status === 'cancelled' || stats.status === 'finished') {
+        return true;
+      }
+
+      return false;
+    },
+
+    getProgressText(campaign) {
+      const stats = this.getCampaignStats(campaign);
+      if (!stats) {
+        return '0 / 0';
+      }
+
+      if (stats.use_queue || stats.useQueue) {
+        // Queue-based campaign
+        const queueTotal = stats.queue_total || stats.queueTotal || 0;
+        const queueSent = stats.queue_sent || stats.queueSent || 0;
+        return `${queueSent} / ${queueTotal}`;
+      }
+
+      // Regular campaign: Use Azure delivery count if available, otherwise fall back to sent
+      const toSend = stats.toSend || 0;
+      const azureSent = stats.azure_sent || stats.azureSent || 0;
+      const sent = stats.sent || 0;
+      const effectiveSent = azureSent > 0 ? azureSent : sent;
+      return `${effectiveSent} / ${toSend}`;
+    },
+
     isRunning(id) {
       if (id in this.campaignStatsData) {
         return true;
@@ -360,16 +420,25 @@ export default Vue.extend({
 
     // Calculate progress percentage for both queue-based and regular campaigns
     getProgressPercent(stats) {
-      if (stats.use_queue || stats.useQueue) {
-        // Queue-based campaign: calculate based on queue_sent / queue_total
-        const total = stats.queue_total || stats.queueTotal || 0;
-        const sent = stats.queue_sent || stats.queueSent || 0;
-        if (total === 0) return 0;
-        return (sent / total) * 100;
+      if (!stats) {
+        return 0;
       }
-      // Regular campaign: calculate based on sent / toSend
-      if (stats.toSend === 0) return 0;
-      return (stats.sent / stats.toSend) * 100;
+
+      if (stats.use_queue || stats.useQueue) {
+        // Queue-based campaign
+        const queueTotal = stats.queue_total || stats.queueTotal || 0;
+        if (queueTotal === 0) return 0;
+        const queueSent = stats.queue_sent || stats.queueSent || 0;
+        return (queueSent / queueTotal) * 100;
+      }
+
+      // Regular campaign: Use Azure delivery count if available, otherwise fall back to sent
+      const toSend = stats.toSend || 0;
+      if (toSend === 0) return 0;
+      const azureSent = stats.azure_sent || stats.azureSent || 0;
+      const sent = stats.sent || 0;
+      const effectiveSent = azureSent > 0 ? azureSent : sent;
+      return (effectiveSent / toSend) * 100;
     },
 
     // Stats returns the campaign object with stats (sent, toSend etc.)
@@ -483,52 +552,94 @@ export default Vue.extend({
     },
 
     formatPercent(value) {
-      if (!value || isNaN(value)) return '0.00%';
+      if (!value || Number.isNaN(value)) return '0.00%';
       return `${value.toFixed(2)}%`;
     },
 
     formatCurrency(value) {
-      if (!value || isNaN(value)) return '0.00';
+      if (!value || Number.isNaN(value)) return '0.00';
       return value.toFixed(2);
     },
 
     calculateOpenRate(stats) {
       if (!stats) return '—';
 
-      // Determine the sent count based on campaign type
-      let sentCount = 0;
+      const views = stats.views || 0;
+
+      // Determine denominator based on campaign status and type
+      let denominator = 0;
+
       if (stats.use_queue || stats.useQueue) {
         // Queue-based campaign
-        sentCount = stats.queue_sent || stats.queueSent || 0;
+        const queueSent = stats.queue_sent || stats.queueSent || 0;
+        const queueTotal = stats.queue_total || stats.queueTotal || 0;
+
+        // For running queue campaigns, use queue_sent. Otherwise use queue_total.
+        if (stats.status === 'running' && queueSent > 0) {
+          denominator = queueSent;
+        } else {
+          denominator = queueTotal;
+        }
       } else {
-        // Regular campaign
-        sentCount = stats.sent || 0;
+        // Regular campaign: Use Azure delivery count if available
+        const azureSent = stats.azure_sent || stats.azureSent || 0;
+        const sent = stats.sent || 0;
+        const toSend = stats.toSend || 0;
+
+        // Use Azure sent count if available, otherwise use sent/toSend logic
+        if (azureSent > 0) {
+          denominator = azureSent;
+        } else if (stats.status === 'running' && sent > 0) {
+          denominator = sent;
+        } else {
+          denominator = toSend;
+        }
       }
 
-      if (sentCount === 0) return '—';
+      if (denominator === 0) return '—';
 
-      const views = stats.views || 0;
-      const rate = (views / sentCount) * 100;
+      const rate = (views / denominator) * 100;
       return `${rate.toFixed(2)}%`;
     },
 
     calculateClickRate(stats) {
       if (!stats) return '—';
 
-      // Determine the sent count based on campaign type
-      let sentCount = 0;
+      const clicks = stats.clicks || 0;
+
+      // Determine denominator based on campaign status and type
+      let denominator = 0;
+
       if (stats.use_queue || stats.useQueue) {
         // Queue-based campaign
-        sentCount = stats.queue_sent || stats.queueSent || 0;
+        const queueSent = stats.queue_sent || stats.queueSent || 0;
+        const queueTotal = stats.queue_total || stats.queueTotal || 0;
+
+        // For running queue campaigns, use queue_sent. Otherwise use queue_total.
+        if (stats.status === 'running' && queueSent > 0) {
+          denominator = queueSent;
+        } else {
+          denominator = queueTotal;
+        }
       } else {
-        // Regular campaign
-        sentCount = stats.sent || 0;
+        // Regular campaign: Use Azure delivery count if available
+        const azureSent = stats.azure_sent || stats.azureSent || 0;
+        const sent = stats.sent || 0;
+        const toSend = stats.toSend || 0;
+
+        // Use Azure sent count if available, otherwise use sent/toSend logic
+        if (azureSent > 0) {
+          denominator = azureSent;
+        } else if (stats.status === 'running' && sent > 0) {
+          denominator = sent;
+        } else {
+          denominator = toSend;
+        }
       }
 
-      if (sentCount === 0) return '—';
+      if (denominator === 0) return '—';
 
-      const clicks = stats.clicks || 0;
-      const rate = (clicks / sentCount) * 100;
+      const rate = (clicks / denominator) * 100;
       return `${rate.toFixed(2)}%`;
     },
   },
@@ -581,5 +692,27 @@ export default Vue.extend({
 .performance-summary .stat-label {
   font-size: 0.875rem;
   color: #4a4a4a;
+}
+
+.campaign-progress {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.campaign-progress .progress {
+  margin-bottom: 0;
+}
+
+section.campaigns table tbody td .progress-wrapper .progress.is-small {
+  height: 15px;
+}
+
+::v-deep .progress-wrapper .progress.is-small + .progress-value {
+  font-size: .7rem;
+  top: 16%;
+}
+
+::v-deep .progress-wrapper .progress.is-small .progress-value {
+  font-size: .7rem;
 }
 </style>

@@ -227,7 +227,7 @@ section {
     display: none;
   }
   .full {
-    max-height: 17px;
+    max-height: 39px;
     margin-top: 15px;
   }
   .favicon {
@@ -901,7 +901,8 @@ section.campaigns {
 
       .progress-wrapper {
         .progress.is-small {
-          height: 0.4em;
+          height: 15px;
+          font-size: .7rem;
         }
         display: inline-block;
       }

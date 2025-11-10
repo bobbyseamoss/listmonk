@@ -278,6 +278,7 @@ type CampaignMeta struct {
 	StartedAt null.Time `db:"started_at" json:"started_at"`
 	ToSend    int       `db:"to_send" json:"to_send"`
 	Sent      int       `db:"sent" json:"sent"`
+	AzureSent int       `db:"azure_sent" json:"azure_sent"`
 
 	// Purchase attribution stats (from Shopify integration)
 	PurchaseOrders  int     `db:"purchase_orders" json:"purchase_orders"`
@@ -292,6 +293,7 @@ type CampaignStats struct {
 	Sent      int       `db:"sent" json:"sent"`
 	Views     int       `db:"views" json:"views"`
 	Clicks    int       `db:"clicks" json:"clicks"`
+	AzureSent int       `db:"azure_sent" json:"azure_sent"`
 	Started   null.Time `db:"started_at" json:"started_at"`
 	UpdatedAt null.Time `db:"updated_at" json:"updated_at"`
 	Rate      int       `json:"rate"`

@@ -25,9 +25,19 @@ echo ""
 # Step 1: Build Docker Image (multi-stage build handles all compilation)
 echo -e "${YELLOW}[1/6] Building Docker image with multi-stage build...${NC}"
 echo -e "  - Building email-builder..."
+cd frontend/email-builder
+npm run build
+mkdir -p ../public/static/email-builder
+cp -r dist/* ../public/static/email-builder/
+cd ../..
 echo -e "  - Building frontend..."
+cd frontend
+npm run build
+cd ..
 echo -e "  - Building Go binary with message tracking..."
-docker build -f Dockerfile.build -t ${FULL_IMAGE_NAME} .
+go build -o listmonk -ldflags="-s -w -X 'main.buildString=$(date -u +%Y-%m-%dT%H:%M:%S%z)' -X 'main.versionString=$(git describe --tags --always)'" ./cmd
+echo -e "  - Using Bobby Sea Moss logo..."
+docker build -f Dockerfile.build --build-arg LOGO_URL="https://d3k81ch9hvuctc.cloudfront.net/company/XFsBBP/images/6066d5d2-0701-4193-a8e7-13b624efc474.png" -t ${FULL_IMAGE_NAME} .
 echo -e "${GREEN}✓ Docker image built with all components${NC}"
 echo ""
 

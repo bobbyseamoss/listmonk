@@ -314,7 +314,7 @@ func (a *App) BounceWebhook(c echo.Context) error {
 						FROM campaigns c
 						CROSS JOIN subscribers s
 						WHERE s.email = $1
-						AND c.status IN ('running', 'finished')
+						AND c.status IN ('running', 'finished', 'paused', 'cancelled')
 						ORDER BY c.updated_at DESC
 						LIMIT 1
 					`, recipient).Scan(&campaignID, &subscriberID)
@@ -469,7 +469,7 @@ func (a *App) BounceWebhook(c echo.Context) error {
 							FROM campaigns c
 							CROSS JOIN subscribers s
 							WHERE s.email = $1
-							AND c.status IN ('running', 'finished')
+							AND c.status IN ('running', 'finished', 'paused', 'cancelled')
 							ORDER BY c.updated_at DESC
 							LIMIT 1
 						`, recipient).Scan(&campaignID, &subscriberID)

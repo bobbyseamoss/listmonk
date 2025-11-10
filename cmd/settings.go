@@ -77,6 +77,7 @@ func (a *App) GetSettings(c echo.Context) error {
 	s.BounceForwardEmail.Key = strings.Repeat(pwdMask, utf8.RuneCountInString(s.BounceForwardEmail.Key))
 	s.SecurityCaptcha.HCaptcha.Secret = strings.Repeat(pwdMask, utf8.RuneCountInString(s.SecurityCaptcha.HCaptcha.Secret))
 	s.OIDC.ClientSecret = strings.Repeat(pwdMask, utf8.RuneCountInString(s.OIDC.ClientSecret))
+	s.Shopify.WebhookSecret = strings.Repeat(pwdMask, utf8.RuneCountInString(s.Shopify.WebhookSecret))
 
 	return c.JSON(http.StatusOK, okResp{s})
 }
@@ -226,6 +227,9 @@ func (a *App) UpdateSettings(c echo.Context) error {
 	}
 	if set.OIDC.ClientSecret == "" {
 		set.OIDC.ClientSecret = cur.OIDC.ClientSecret
+	}
+	if set.Shopify.WebhookSecret == "" {
+		set.Shopify.WebhookSecret = cur.Shopify.WebhookSecret
 	}
 
 	// OIDC user auto-creation is enabled. Validate.

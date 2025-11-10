@@ -50,6 +50,10 @@
             <bounce-settings :form="form" :key="key" />
           </b-tab-item><!-- bounces -->
 
+          <b-tab-item :label="$t('settings.shopify.name', 'Shopify')">
+            <shopify-settings :form="form" :key="key" />
+          </b-tab-item><!-- shopify -->
+
           <b-tab-item label="Campaigns">
             <campaign-settings :form="form" :key="key" />
           </b-tab-item><!-- campaigns -->
@@ -79,6 +83,7 @@ import MessengerSettings from './settings/messengers.vue';
 import PerformanceSettings from './settings/performance.vue';
 import PrivacySettings from './settings/privacy.vue';
 import SecuritySettings from './settings/security.vue';
+import ShopifySettings from './settings/shopify.vue';
 import SmtpSettings from './settings/smtp.vue';
 
 export default Vue.extend({
@@ -92,6 +97,7 @@ export default Vue.extend({
     BounceSettings,
     CampaignSettings,
     MessengerSettings,
+    ShopifySettings,
     AppearanceSettings,
   },
 
@@ -182,6 +188,13 @@ export default Vue.extend({
         form['bounce.forwardemail'].key = '';
       } else if (this.hasDummy(form['bounce.forwardemail'].key)) {
         hasDummy = 'forwardemail';
+      }
+
+      // Shopify webhook secret
+      if (this.isDummy(form.shopify.webhook_secret)) {
+        form.shopify.webhook_secret = '';
+      } else if (this.hasDummy(form.shopify.webhook_secret)) {
+        hasDummy = 'shopify';
       }
 
       for (let i = 0; i < form.messengers.length; i += 1) {

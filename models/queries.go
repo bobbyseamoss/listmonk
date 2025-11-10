@@ -162,6 +162,7 @@ type Queries struct {
 	// Shopify Purchase Attribution queries
 	InsertPurchaseAttribution     *sqlx.Stmt `query:"insert-purchase-attribution"`
 	FindRecentLinkClick           *sqlx.Stmt `query:"find-recent-link-click"`
+	FindRecentEmailOpen           *sqlx.Stmt `query:"find-recent-email-open"`
 	GetCampaignPurchaseStats      *sqlx.Stmt `query:"get-campaign-purchase-stats"`
 	GetSubscriberByEmail          *sqlx.Stmt `query:"get-subscriber-by-email"`
 	GetCampaignsPerformanceSummary *sqlx.Stmt `query:"get-campaigns-performance-summary"`

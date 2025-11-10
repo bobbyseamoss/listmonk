@@ -1,0 +1,199 @@
+;
+; DNS Zone File for enjoycomma.com
+; Azure Email Communication Services Verification Records
+; Generated: $(date)
+;
+; BIND Zone File Format
+; TTL: 3600 seconds (1 hour)
+;
+
+$TTL 3600
+$ORIGIN enjoycomma.com.
+
+; TXT Records for Domain Verification and SPF
+
+; Records for mail1.enjoycomma.com
+mail1    IN    TXT    "ms-domain-verification=bc428583-bb99-4a0b-817b-bbcede4093e6"
+mail1    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail2.enjoycomma.com
+mail2    IN    TXT    "ms-domain-verification=ff61d1bf-59f9-4bb5-b36c-8090a073e847"
+mail2    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail3.enjoycomma.com
+mail3    IN    TXT    "ms-domain-verification=7ca00249-531a-42ac-995f-bed6e4ae19f4"
+mail3    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail4.enjoycomma.com
+mail4    IN    TXT    "ms-domain-verification=4c61a007-9951-45b9-9a56-d107a6c9657d"
+mail4    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail5.enjoycomma.com
+mail5    IN    TXT    "ms-domain-verification=70220556-44e4-4da0-a968-d971c8d75d74"
+mail5    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail6.enjoycomma.com
+mail6    IN    TXT    "ms-domain-verification=2035bec1-9236-4972-b5fd-a3c65dba551e"
+mail6    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail7.enjoycomma.com
+mail7    IN    TXT    "ms-domain-verification=09a2920b-62e0-4ea8-95bd-f5c78871c49e"
+mail7    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail8.enjoycomma.com
+mail8    IN    TXT    "ms-domain-verification=5e5aa4cf-9822-4524-addd-7aa9db821918"
+mail8    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail9.enjoycomma.com
+mail9    IN    TXT    "ms-domain-verification=fc07ab5f-61bf-4b4c-a3a1-c6aed829dc4c"
+mail9    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail10.enjoycomma.com
+mail10    IN    TXT    "ms-domain-verification=8f3f33d2-d765-4518-8106-53e2fe81a5e2"
+mail10    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail11.enjoycomma.com
+mail11    IN    TXT    "ms-domain-verification=f5f93cae-e392-4d56-9f41-42732afabe4b"
+mail11    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail12.enjoycomma.com
+mail12    IN    TXT    "ms-domain-verification=64f45db8-0c66-4b78-a3a2-366959b507f7"
+mail12    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail13.enjoycomma.com
+mail13    IN    TXT    "ms-domain-verification=9e127e01-0fbd-4bda-b510-a297733ff836"
+mail13    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail14.enjoycomma.com
+mail14    IN    TXT    "ms-domain-verification=1c3934e3-c7fd-4dc1-89be-5ec88e733209"
+mail14    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail15.enjoycomma.com
+mail15    IN    TXT    "ms-domain-verification=4b4f87ad-ffd6-4283-a433-49e653e7b346"
+mail15    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail16.enjoycomma.com
+mail16    IN    TXT    "ms-domain-verification=60fab3b3-e7d8-4905-baf2-644780f44695"
+mail16    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail17.enjoycomma.com
+mail17    IN    TXT    "ms-domain-verification=f4e56513-5582-44aa-9c8e-3707e917ff45"
+mail17    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail18.enjoycomma.com
+mail18    IN    TXT    "ms-domain-verification=9c0c528b-491a-4330-af09-f78653785aef"
+mail18    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail19.enjoycomma.com
+mail19    IN    TXT    "ms-domain-verification=de961e27-5889-4a4a-b40d-92b884aedcf5"
+mail19    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail20.enjoycomma.com
+mail20    IN    TXT    "ms-domain-verification=2790905f-3820-4a34-97b5-4e8e10b23746"
+mail20    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail21.enjoycomma.com
+mail21    IN    TXT    "ms-domain-verification=7c4eda31-90cd-46f2-b3cd-939f72916422"
+mail21    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail22.enjoycomma.com
+mail22    IN    TXT    "ms-domain-verification=028ea5d3-ed69-43d8-9246-c27c82a7ee6b"
+mail22    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail23.enjoycomma.com
+mail23    IN    TXT    "ms-domain-verification=d002a632-b3c6-49a8-a994-e82ab3707672"
+mail23    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail24.enjoycomma.com
+mail24    IN    TXT    "ms-domain-verification=a001ba8f-7b35-4fe9-9178-0645453f02aa"
+mail24    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail25.enjoycomma.com
+mail25    IN    TXT    "ms-domain-verification=4fb82022-474a-4848-9132-0b8dfba1af19"
+mail25    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail26.enjoycomma.com
+mail26    IN    TXT    "ms-domain-verification=0db20448-98a6-462f-bb73-fd7e221a0504"
+mail26    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail27.enjoycomma.com
+mail27    IN    TXT    "ms-domain-verification=3dd23657-090c-4dfc-aee7-b37f2fe10cd9"
+mail27    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail28.enjoycomma.com
+mail28    IN    TXT    "ms-domain-verification=7c4298e4-c0bb-4e71-b123-e74f564cc058"
+mail28    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail29.enjoycomma.com
+mail29    IN    TXT    "ms-domain-verification=24b9cd82-691a-4613-a3a7-5498ee7cd9e6"
+mail29    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; Records for mail30.enjoycomma.com
+mail30    IN    TXT    "ms-domain-verification=5ca387b3-f95d-4c21-aeca-b692c7952d1d"
+mail30    IN    TXT    "v=spf1 include:spf.protection.outlook.com -all"
+
+; DKIM CNAME Records (same for all mail* subdomains)
+; Note: These need to be added under each mail subdomain
+
+selector1-azurecomm-prod-net._domainkey.mail1    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail1    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail2    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail2    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail3    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail3    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail4    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail4    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail5    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail5    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail6    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail6    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail7    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail7    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail8    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail8    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail9    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail9    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail10    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail10    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail11    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail11    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail12    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail12    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail13    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail13    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail14    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail14    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail15    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail15    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail16    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail16    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail17    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail17    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail18    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail18    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail19    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail19    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail20    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail20    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail21    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail21    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail22    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail22    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail23    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail23    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail24    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail24    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail25    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail25    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail26    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail26    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail27    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail27    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail28    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail28    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail29    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail29    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+selector1-azurecomm-prod-net._domainkey.mail30    IN    CNAME    selector1-azurecomm-prod-net._domainkey.azurecomm.net.
+selector2-azurecomm-prod-net._domainkey.mail30    IN    CNAME    selector2-azurecomm-prod-net._domainkey.azurecomm.net.
+
+; End of Zone File

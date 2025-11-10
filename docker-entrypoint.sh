@@ -66,6 +66,33 @@ fi
 
 echo "Launching listmonk with user=[${USER_NAME}] group=[${GROUP_NAME}] PUID=[${PUID}] PGID=[${PGID}]"
 
+# Override database configuration with environment variables if set
+echo "Applying database configuration from environment variables..."
+if [ -n "${LISTMONK_DB_HOST}" ]; then
+  sed -i "s|^host = .*|host = \"${LISTMONK_DB_HOST}\"|" /listmonk/config.toml
+  echo "  ✓ DB host: ${LISTMONK_DB_HOST}"
+fi
+if [ -n "${LISTMONK_DB_PORT}" ]; then
+  sed -i "s|^port = .*|port = ${LISTMONK_DB_PORT}|" /listmonk/config.toml
+  echo "  ✓ DB port: ${LISTMONK_DB_PORT}"
+fi
+if [ -n "${LISTMONK_DB_USER}" ]; then
+  sed -i "s|^user = .*|user = \"${LISTMONK_DB_USER}\"|" /listmonk/config.toml
+  echo "  ✓ DB user: ${LISTMONK_DB_USER}"
+fi
+if [ -n "${LISTMONK_DB_PASSWORD}" ]; then
+  sed -i "s|^password = .*|password = \"${LISTMONK_DB_PASSWORD}\"|" /listmonk/config.toml
+  echo "  ✓ DB password: ***"
+fi
+if [ -n "${LISTMONK_DB_DATABASE}" ]; then
+  sed -i "s|^database = .*|database = \"${LISTMONK_DB_DATABASE}\"|" /listmonk/config.toml
+  echo "  ✓ DB database: ${LISTMONK_DB_DATABASE}"
+fi
+if [ -n "${LISTMONK_DB_SSL_MODE}" ]; then
+  sed -i "s|^ssl_mode = .*|ssl_mode = \"${LISTMONK_DB_SSL_MODE}\"|" /listmonk/config.toml
+  echo "  ✓ DB SSL mode: ${LISTMONK_DB_SSL_MODE}"
+fi
+
 # Auto-installation and configuration initialization
 if [ "${AUTO_INSTALL}" = "true" ] || [ "${AUTO_INSTALL}" = "1" ]; then
   echo "AUTO_INSTALL enabled - checking database initialization..."
@@ -79,13 +106,16 @@ if [ "${AUTO_INSTALL}" = "true" ] || [ "${AUTO_INSTALL}" = "1" ]; then
 
     echo "✓ Database initialized"
 
-    # Run configuration initialization if script exists
-    if [ -f /listmonk/deployment/scripts/init_config.sh ]; then
+    # Run configuration initialization if script exists and has templates
+    if [ -f /listmonk/deployment/scripts/init_config.sh ] && [ -d /listmonk/deployment/configs ]; then
       echo "Running configuration initialization..."
-      /bin/sh /listmonk/deployment/scripts/init_config.sh
-      echo "✓ Configuration initialized"
+      if /bin/sh /listmonk/deployment/scripts/init_config.sh; then
+        echo "✓ Configuration initialized"
+      else
+        echo "⚠️  Warning: Configuration initialization failed, continuing anyway"
+      fi
     else
-      echo "⚠️  Warning: init_config.sh not found, skipping configuration initialization"
+      echo "⚠️  Skipping configuration initialization (templates not found)"
     fi
   else
     echo "✓ Database already initialized"

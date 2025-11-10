@@ -162,6 +162,12 @@ type Settings struct {
 		ScanInterval  string `json:"scan_interval"`
 	} `json:"bounce.mailboxes"`
 
+	Shopify struct {
+		Enabled               bool   `json:"enabled"`
+		WebhookSecret         string `json:"webhook_secret,omitempty"`
+		AttributionWindowDays int    `json:"attribution_window_days"`
+	} `json:"shopify"`
+
 	AdminCustomCSS  string `json:"appearance.admin.custom_css"`
 	AdminCustomJS   string `json:"appearance.admin.custom_js"`
 	PublicCustomCSS string `json:"appearance.public.custom_css"`

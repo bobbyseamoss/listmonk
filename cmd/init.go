@@ -146,6 +146,10 @@ type Config struct {
 	BounceForwardemailEnabled bool
 	BounceAzureEnabled        bool
 
+	ShopifyEnabled               bool
+	ShopifyWebhookSecret         string
+	ShopifyAttributionWindowDays int
+
 	PermissionsRaw json.RawMessage
 	Permissions    map[string]struct{}
 }
@@ -478,6 +482,15 @@ func initConstConfig(ko *koanf.Koanf) *Config {
 	c.BounceForwardemailEnabled = ko.Bool("bounce.forwardemail.enabled")
 	c.BounceAzureEnabled = ko.Bool("bounce.azure.enabled")
 	lo.Printf("DEBUG: BounceAzureEnabled = %v (from config key 'bounce.azure.enabled')", c.BounceAzureEnabled)
+
+	// Load Shopify settings
+	c.ShopifyEnabled = ko.Bool("shopify.enabled")
+	c.ShopifyWebhookSecret = ko.String("shopify.webhook_secret")
+	c.ShopifyAttributionWindowDays = ko.Int("shopify.attribution_window_days")
+	if c.ShopifyAttributionWindowDays == 0 {
+		c.ShopifyAttributionWindowDays = 7 // Default to 7 days
+	}
+
 	c.HasLegacyUser = ko.Exists("app.admin_username") || ko.Exists("app.admin_password")
 
 	b := md5.Sum([]byte(time.Now().String()))

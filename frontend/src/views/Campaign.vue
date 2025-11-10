@@ -312,6 +312,40 @@
         </section>
       </b-tab-item><!-- archive -->
 
+      <b-tab-item :label="$t('campaigns.purchaseAnalytics', 'Purchase Analytics')" icon="cart" value="purchase-analytics" :disabled="isNew">
+        <section class="wrap">
+          <div v-if="purchaseStats" class="columns">
+            <div class="column is-3">
+              <div class="box has-text-centered">
+                <p class="heading">{{ $t('campaigns.totalOrders', 'Total Orders') }}</p>
+                <p class="title">{{ purchaseStats.total_purchases || 0 }}</p>
+              </div>
+            </div>
+            <div class="column is-3">
+              <div class="box has-text-centered">
+                <p class="heading">{{ $t('campaigns.totalRevenue', 'Total Revenue') }}</p>
+                <p class="title">{{ $t('campaigns.currency', purchaseStats.currency || 'USD') }} {{ (purchaseStats.total_revenue || 0).toFixed(2) }}</p>
+              </div>
+            </div>
+            <div class="column is-3">
+              <div class="box has-text-centered">
+                <p class="heading">{{ $t('campaigns.avgOrderValue', 'Avg Order Value') }}</p>
+                <p class="title">{{ $t('campaigns.currency', purchaseStats.currency || 'USD') }} {{ (purchaseStats.avg_order_value || 0).toFixed(2) }}</p>
+              </div>
+            </div>
+          </div>
+          <div v-else-if="purchaseStatsLoading" class="has-text-centered">
+            <b-loading :active="true" :is-full-page="false" />
+          </div>
+          <div v-else class="notification is-light">
+            <p>{{ $t('campaigns.noPurchaseData', 'No purchase data attributed to this campaign yet.') }}</p>
+            <p class="mt-2 has-text-grey">
+              {{ $t('campaigns.purchaseDataHelp', 'Make sure Shopify integration is enabled in Settings and customers are clicking links in this campaign before making purchases.') }}
+            </p>
+          </div>
+        </section>
+      </b-tab-item><!-- purchase-analytics -->
+
       <b-tab-item label="Azure Analytics" icon="microsoft-azure" value="azure-analytics" :disabled="isNew">
         <campaign-azure-analytics v-if="data.id" :campaign-id="data.id" />
       </b-tab-item><!-- azure-analytics -->
@@ -407,6 +441,10 @@ export default Vue.extend({
         archiveMeta: {},
         testEmails: [],
       },
+
+      // Shopify purchase analytics
+      purchaseStats: null,
+      purchaseStatsLoading: false,
     };
   },
 
@@ -462,8 +500,33 @@ export default Vue.extend({
         });
       }
 
+      // Fetch purchase stats when the purchase-analytics tab is activated
+      if (tab === 'purchase-analytics' && !this.purchaseStats && !this.purchaseStatsLoading) {
+        this.fetchPurchaseStats();
+      }
+
       // this.$router.replace({ hash: `#${tab}` });
       window.history.replaceState({}, '', `#${tab}`);
+    },
+
+    async fetchPurchaseStats() {
+      if (!this.data.id) return;
+
+      this.purchaseStatsLoading = true;
+      try {
+        const response = await this.$api.getCampaignPurchaseStats(this.data.id);
+        this.purchaseStats = response.data;
+      } catch (e) {
+        // If error, set to empty object so we show "no data" message
+        this.purchaseStats = {
+          total_purchases: 0,
+          total_revenue: 0,
+          avg_order_value: 0,
+          currency: 'USD',
+        };
+      } finally {
+        this.purchaseStatsLoading = false;
+      }
     },
 
     onFillArchiveMeta() {

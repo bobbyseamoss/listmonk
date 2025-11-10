@@ -57,17 +57,26 @@ dev/active/[task-name]/
 
 ### campaigns-redesign/
 **Status**: ✅ Complete and deployed
-**Revision**: `listmonk420--deploy-20251108-105926`
+**Revision**: `listmonk420--0000097` (Nov 9, 2025)
 **Features**:
 - Email performance summary section (30-day aggregates) ✅
 - Placed Order column in campaigns table ✅
 - Revenue and order count per campaign ✅
+- Column reorganization (Start Date, Open Rate, Click Rate) ✅
+- Real-time stats for running campaigns ✅
+- Queue-based campaign support ✅
+- View/click counts display ✅
+- **Campaign progress bar with email counter** ✅ (NEW - Nov 9)
 - PostgreSQL aggregate query optimization ✅
 
 **Key Files**:
+- INDEX.md - Documentation navigation guide ⭐ **START HERE**
+- HANDOFF-NOV-9.md - Latest session handoff (Nov 9, 2025)
 - CONTEXT.md - Full implementation details
+- TASKS.md - Complete task breakdown
 - SQL-LESSONS.md - PostgreSQL patterns learned
 - FILES-MODIFIED.md - Complete file change reference
+- PHASE-6-PROGRESS-BAR.md - Progress bar implementation (Nov 9)
 
 ### shopify-integration/
 **Status**: ✅ Complete and stable
@@ -163,7 +172,7 @@ When a task is fully complete and tested:
 
 ---
 
-**Last Updated**: 2025-11-08
+**Last Updated**: 2025-11-09
 **Active Tasks**: 3 (campaigns-redesign, shopify-integration, queue-campaign-management)
-**Completed Tasks**: 2 (campaigns-redesign, shopify-integration)
-**Pending Tasks**: 1 (queue-campaign-management)
+**Completed Tasks**: 2 (campaigns-redesign ✅, shopify-integration ✅)
+**Pending Tasks**: 1 (queue-campaign-management ⏳)
