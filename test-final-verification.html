@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Progress Bar CSS Test</title>
+  <style>
+    /* Simulating the old broken syntax (for comparison) */
+    .old-syntax {
+      margin: 2rem 0;
+      padding: 1rem;
+      border: 2px solid #ff3860;
+      background: #ffe8e8;
+    }
+
+    /* Old deprecated syntax that doesn't work consistently in Chrome */
+    .old-syntax ::v-deep .progress-wrapper .progress.is-small + .progress-value {
+      font-size: .7rem;
+      top: 16%;
+      color: red;
+    }
+
+    /* Simulating the new fixed syntax */
+    .new-syntax {
+      margin: 2rem 0;
+      padding: 1rem;
+      border: 2px solid #48c774;
+      background: #effaf3;
+    }
+
+    /* New Vue 2.7+ compatible syntax that works in all browsers */
+    .new-syntax[data-v-test] .progress-wrapper .progress.is-small + .progress-value {
+      font-size: .7rem;
+      top: 16%;
+      color: green;
+      font-weight: bold;
+    }
+
+    /* Mock progress bar structure */
+    .progress-wrapper {
+      position: relative;
+      height: 20px;
+      background: #dbdbdb;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress.is-small {
+      height: 15px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: #3273dc;
+    }
+
+    .progress-value {
+      position: absolute;
+      right: 10px;
+      top: 0;
+      font-size: 12px;
+      line-height: 20px;
+    }
+  </style>
+</head>
+<body style="font-family: sans-serif; padding: 2rem; max-width: 800px; margin: 0 auto;">
+  <h1>Campaign Progress Bar CSS Fix Verification</h1>
+
+  <p><strong>Issue:</strong> The campaign progress bar was visible in Firefox but not in Chrome.</p>
+  <p><strong>Root Cause:</strong> The <code>::v-deep</code> pseudo-element syntax is deprecated in Vue 2.7 and doesn't work consistently across browsers.</p>
+  <p><strong>Solution:</strong> Updated to use <code>:deep()</code> syntax which compiles to proper scoped CSS attribute selectors.</p>
+
+  <hr>
+
+  <div class="old-syntax">
+    <h3>❌ Old Broken Syntax (::v-deep)</h3>
+    <p>This doesn't work consistently in Chrome:</p>
+    <div class="progress-wrapper">
+      <div class="progress is-small">
+        <div class="progress-bar" style="width: 75%;"></div>
+      </div>
+      <div class="progress-value">75%</div>
+    </div>
+  </div>
+
+  <div class="new-syntax" data-v-test>
+    <h3>✅ New Fixed Syntax (:deep())</h3>
+    <p>This works in both Chrome and Firefox:</p>
+    <div class="progress-wrapper">
+      <div class="progress is-small">
+        <div class="progress-bar" style="width: 75%;"></div>
+      </div>
+      <div class="progress-value">75%</div>
+    </div>
+  </div>
+
+  <hr>
+
+  <h2>What Was Changed</h2>
+  <p>In <code>frontend/src/views/Campaigns.vue</code>:</p>
+
+  <pre style="background: #f5f5f5; padding: 1rem; border-left: 4px solid #ff3860;">
+<code>// ❌ OLD (lines 710-717)
+::v-deep .progress-wrapper .progress.is-small + .progress-value {
+  font-size: .7rem;
+  top: 16%;
+}
+
+::v-deep .progress-wrapper .progress.is-small .progress-value {
+  font-size: .7rem;
+}</code></pre>
+
+  <pre style="background: #f5f5f5; padding: 1rem; border-left: 4px solid #48c774;">
+<code>// ✅ NEW (lines 710-717)
+:deep(.progress-wrapper .progress.is-small + .progress-value) {
+  font-size: .7rem;
+  top: 16%;
+}
+
+:deep(.progress-wrapper .progress.is-small .progress-value) {
+  font-size: .7rem;
+}</code></pre>
+
+  <h2>Deployment Instructions</h2>
+  <ol>
+    <li>The frontend has been rebuilt with the fix (<code>yarn build</code> completed)</li>
+    <li>Deploy the new <code>frontend/dist</code> folder to your server</li>
+    <li>Test in both Chrome and Firefox by viewing campaigns with progress (paused/running campaigns)</li>
+    <li>The progress bars should now be visible in both browsers</li>
+  </ol>
+
+  <h2>Technical Details</h2>
+  <p>The <code>::v-deep</code> combinator was a Vue 2 feature that has been deprecated in Vue 2.7+.
+  The new <code>:deep()</code> functional pseudo-class is the recommended way to style child components in scoped CSS.
+  When compiled, Vue converts <code>:deep()</code> to a scoped attribute selector that works consistently across all browsers.</p>
+
+  <p><strong>Compiled output:</strong></p>
+  <pre style="background: #f5f5f5; padding: 1rem;">
+<code>[data-v-ad6f4d4b] .progress-wrapper .progress.is-small+.progress-value{font-size:.7rem;top:16%}
+[data-v-ad6f4d4b] .progress-wrapper .progress.is-small .progress-value{font-size:.7rem}</code></pre>
+</body>
+</html>

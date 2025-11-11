@@ -1,7 +1,4 @@
 {
-  "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-  ],
   "permissions": {
     "allow": [
       "Edit:*",
@@ -13,6 +10,8 @@
     ],
     "defaultMode": "acceptEdits"
   },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [],
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -31,6 +30,17 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/post-tool-use-tracker.sh"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Run /dev-docs-update"
           }
         ]
       }

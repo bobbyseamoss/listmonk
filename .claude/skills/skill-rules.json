@@ -568,6 +568,39 @@
                 "envOverride": "SKIP_MIGRATION_GUIDELINES"
             }
         },
+        "browser-testing": {
+            "type": "domain",
+            "enforcement": "suggest",
+            "priority": "medium",
+            "description": "Browser testing guidance for frontend fixes using Playwright across multiple environments (Bobby Seamoss, Comma, Local)",
+            "promptTriggers": {
+                "keywords": [
+                    "browser",
+                    "test in browser",
+                    "frontend fix",
+                    "Chrome",
+                    "Firefox",
+                    "playwright",
+                    "verify fix",
+                    "screenshot test",
+                    "DOM inspection",
+                    "cross-browser",
+                    "test fix",
+                    "visual test",
+                    "selector test",
+                    "browser test"
+                ],
+                "intentPatterns": [
+                    "(test|verify|check).*?(browser|Chrome|Firefox)",
+                    "(test|verify).*?(frontend|UI|CSS|fix)",
+                    "browser.*?(test|check|verify)",
+                    "(take|capture).*?screenshot",
+                    "(cross-browser|multi-browser).*?test",
+                    "playwright.*?(test|script)"
+                ]
+            },
+            "suggestMessage": "🌐 Browser Testing Guidelines for Frontend Fixes\n\n📍 TEST ENVIRONMENTS:\n1. Bobby Seamoss (PRIMARY): https://list.bobbyseamoss.com\n   Username: adam | Password: bobbysea\n\n2. Comma: https://list.enjoycomma.com\n   Username: comma | Password: C0mm@69420\n\n3. Local: http://localhost:9000\n   Username: adam | Password: T@intshr3dd3r\n\n🔍 TESTING REQUIREMENTS:\n✓ Test in BOTH Chrome AND Firefox (unless told otherwise)\n✓ Use selectors to verify elements exist and are visible\n✓ Take screenshots for visual confirmation\n✓ Log results clearly for both browsers\n\n📚 SKILL INCLUDES:\n- Login credentials for all environments\n- Playwright test templates\n- Selector-based verification patterns\n- Screenshot capture techniques\n- Cross-browser testing best practices\n- Common troubleshooting tips\n\nUse Skill tool: 'browser-testing'"
+        },
     "notes": {
         "enforcement_types": {
             "suggest": "Skill suggestion appears but doesn't block execution",

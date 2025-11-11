@@ -154,6 +154,35 @@ WHERE new_column IS NULL;
 
 ---
 
+## Azure Deployment Environments
+
+This project has multiple Azure deployment environments:
+
+### Environment 1: Bobby Seamoss (listmonk420)
+- **Nickname:** Bobby / listmonk420
+- **URL:** https://list.bobbyseamoss.com
+- **Resource Group:** `rg-listmonk420`
+- **Container App:** `listmonk420`
+- **Container Registry:** `listmonk420acr.azurecr.io`
+- **Database:** `listmonk420-db.postgres.database.azure.com`
+- **Database Name:** `listmonk`
+- **Database User:** `listmonkadmin`
+
+### Environment 2: Comma (enjoycomma)
+- **Nickname:** Comma
+- **URL:** https://list.enjoycomma.com
+- **Resource Group:** `comma-rg`
+- **Container App:** `listmonk-comma`
+- **Container Registry:** `listmonkcommaacr.azurecr.io`
+- **Database:** `listmonk420-db.postgres.database.azure.com` (shared with Bobby)
+- **Database Name:** `listmonk_comma` (separate database on shared server)
+- **Database User:** `listmonkadmin`
+- **Location:** East US (container app), Central US (ACR)
+
+**Note:** When deploying to a specific environment, ensure you're using the correct resource names and credentials for that environment.
+
+---
+
 ## Docker Build Guide
 
 ### Dockerfile.build Structure
