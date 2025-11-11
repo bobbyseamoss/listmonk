@@ -1646,6 +1646,20 @@ WHERE campaign_id = $1
       WHERE campaign_id = $1 AND status = 'sent'
   );
 
+-- name: sync-queue-campaign-counts
+-- Sync campaign.sent count from email_queue for queue-based campaigns
+-- This ensures the campaign table reflects actual sends from the queue
+UPDATE campaigns c
+SET
+    sent = (
+        SELECT COUNT(*)
+        FROM email_queue
+        WHERE campaign_id = c.id AND status = 'sent'
+    ),
+    updated_at = NOW()
+WHERE c.id = ANY($1::INT[])
+  AND c.use_queue = true;
+
 -- Shopify Purchase Attribution Queries
 
 -- name: insert-purchase-attribution

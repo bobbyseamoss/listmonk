@@ -111,6 +111,74 @@ func (p *Processor) StartAutoPauseScheduler() {
 	}
 }
 
+// StartCampaignStatsSync starts the periodic campaign statistics sync
+// This runs every 5 minutes to sync campaign.sent counts from email_queue
+func (p *Processor) StartCampaignStatsSync() {
+	p.log.Println("starting campaign stats sync (every 5 minutes)")
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	// Run immediately on start
+	if err := p.syncRunningCampaignCounts(); err != nil {
+		p.log.Printf("error in initial campaign stats sync: %v", err)
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := p.syncRunningCampaignCounts(); err != nil {
+				p.log.Printf("error in campaign stats sync: %v", err)
+			}
+		case <-p.stopChan:
+			p.log.Println("stopping campaign stats sync")
+			return
+		}
+	}
+}
+
+// syncRunningCampaignCounts syncs campaign.sent counts from email_queue for running campaigns
+func (p *Processor) syncRunningCampaignCounts() error {
+	// Get all running queue-based campaign IDs
+	var runningCampaignIDs []int
+	err := p.db.Select(&runningCampaignIDs, `
+		SELECT id FROM campaigns
+		WHERE status = 'running'
+		  AND use_queue = true
+	`)
+	if err != nil {
+		return fmt.Errorf("error fetching running campaigns: %w", err)
+	}
+
+	if len(runningCampaignIDs) == 0 {
+		return nil // No running campaigns to sync
+	}
+
+	// Sync campaign.sent counts from email_queue
+	result, err := p.db.Exec(`
+		UPDATE campaigns c
+		SET
+			sent = (
+				SELECT COUNT(*)
+				FROM email_queue
+				WHERE campaign_id = c.id AND status = 'sent'
+			),
+			updated_at = NOW()
+		WHERE c.id = ANY($1)
+		  AND c.use_queue = true
+	`, runningCampaignIDs)
+	if err != nil {
+		return fmt.Errorf("error syncing campaign counts: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		p.log.Printf("📊 synced sent counts for %d running campaign(s)", rowsAffected)
+	}
+
+	return nil
+}
+
 // autoPauseResumeCampaigns automatically pauses campaigns when outside time window
 // and resumes them when inside time window
 func (p *Processor) autoPauseResumeCampaigns() error {
@@ -134,6 +202,41 @@ func (p *Processor) autoPauseResumeCampaigns() error {
 
 // autoPauseRunningCampaigns pauses all running campaigns when outside time window
 func (p *Processor) autoPauseRunningCampaigns() error {
+	// First, get list of running queue-based campaign IDs to sync
+	var runningCampaignIDs []int
+	err := p.db.Select(&runningCampaignIDs, `
+		SELECT id FROM campaigns
+		WHERE status = 'running'
+		  AND use_queue = true
+		  AND auto_paused = false
+	`)
+	if err != nil {
+		return fmt.Errorf("error fetching running campaigns: %w", err)
+	}
+
+	// Sync campaign.sent counts from email_queue before pausing
+	// This ensures the paused campaign shows accurate sent counts
+	if len(runningCampaignIDs) > 0 {
+		_, err = p.db.Exec(`
+			UPDATE campaigns c
+			SET
+				sent = (
+					SELECT COUNT(*)
+					FROM email_queue
+					WHERE campaign_id = c.id AND status = 'sent'
+				),
+				updated_at = NOW()
+			WHERE c.id = ANY($1)
+			  AND c.use_queue = true
+		`, runningCampaignIDs)
+		if err != nil {
+			p.log.Printf("warning: error syncing campaign counts before pause: %v", err)
+			// Continue with pause even if sync fails
+		} else {
+			p.log.Printf("✓ synced sent counts for %d campaign(s) before pausing", len(runningCampaignIDs))
+		}
+	}
+
 	// Update all running queue-based campaigns to paused status
 	// Only pause campaigns that aren't already auto-paused
 	res, err := p.db.Exec(`

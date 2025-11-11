@@ -770,7 +770,11 @@ func initQueueProcessor(db *sqlx.DB, settings models.Settings) *queue.Processor 
 	// Start the auto-pause/resume scheduler in a separate goroutine
 	go proc.StartAutoPauseScheduler()
 
-	lo.Println("started queue processor and auto-pause scheduler for automatic campaigns")
+	// Start the campaign stats sync in a separate goroutine
+	// This periodically syncs campaign.sent counts from email_queue
+	go proc.StartCampaignStatsSync()
+
+	lo.Println("started queue processor, auto-pause scheduler, and stats sync for automatic campaigns")
 	return proc
 }
 

@@ -697,22 +697,31 @@ export default Vue.extend({
 .campaign-progress {
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
+  min-height: 20px;
+  display: block;
 }
 
 .campaign-progress .progress {
   margin-bottom: 0;
+  height: 15px !important;
+  display: block;
+}
+
+.campaign-progress .progress-wrapper {
+  height: 15px;
+  display: block;
 }
 
 section.campaigns table tbody td .progress-wrapper .progress.is-small {
   height: 15px;
 }
 
-::v-deep .progress-wrapper .progress.is-small + .progress-value {
+:deep(.progress-wrapper .progress.is-small + .progress-value) {
   font-size: .7rem;
   top: 16%;
 }
 
-::v-deep .progress-wrapper .progress.is-small .progress-value {
+:deep(.progress-wrapper .progress.is-small .progress-value) {
   font-size: .7rem;
 }
 </style>
