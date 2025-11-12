@@ -365,10 +365,10 @@ export const getCampaignPurchaseStats = async (id) => http.get(
   { loading: models.campaigns },
 );
 
-// Get aggregate campaign performance summary (last 30 days)
-export const getCampaignsPerformanceSummary = async () => http.get(
+// Get aggregate campaign performance summary for specified timeframe
+export const getCampaignsPerformanceSummary = async (days = 1) => http.get(
   '/api/campaigns/performance/summary',
-  { loading: models.campaigns },
+  { params: { days }, loading: models.campaigns },
 );
 
 export const getSubscriberAzureDeliveryEvents = async (id, params) => http.get(

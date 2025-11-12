@@ -17,87 +17,343 @@
       </div>
     </header>
 
-    <b-table :data="logs.results" :hoverable="true" :loading="loading.logs" default-sort="createdAt" checkable
-      @check-all="onTableCheck" @check="onTableCheck" :checked-rows.sync="bulk.checked" detailed show-detail-icon
-      paginated backend-pagination pagination-position="both" @page-change="onPageChange"
-      :current-page="queryParams.page" :per-page="logs.perPage" :total="logs.total">
-      <template #top-left>
-        <div class="actions">
-          <template v-if="bulk.checked.length > 0">
-            <a class="a" href="#" @click.prevent="$utils.confirm(null, () => deleteLogs())" data-cy="btn-delete">
-              <b-icon icon="trash-can-outline" size="is-small" /> {{ $t('globals.buttons.delete') }}
-            </a>
-            <span>
-              {{ $t('globals.messages.numSelected', { num: bulk.checked.length }) }}
-              <span v-if="!bulk.all && logs.total > logs.perPage">
-                &mdash;
-                <a href="#" @click.prevent="selectAllLogs">
-                  Select all {{ logs.total }}
+    <b-tabs v-model="activeTab" @input="onTabChange" type="is-boxed">
+      <b-tab-item label="Delivered" icon="check-circle">
+        <b-table :data="logs.results" :hoverable="true" :loading="loading.logs" default-sort="createdAt" checkable
+          @check-all="onTableCheck" @check="onTableCheck" :checked-rows.sync="bulk.checked" detailed show-detail-icon
+          paginated backend-pagination pagination-position="both" @page-change="onPageChange"
+          :current-page="queryParams.page" :per-page="logs.perPage" :total="logs.total">
+          <template #top-left>
+            <div class="actions">
+              <template v-if="bulk.checked.length > 0">
+                <a class="a" href="#" @click.prevent="$utils.confirm(null, () => deleteLogs())" data-cy="btn-delete">
+                  <b-icon icon="trash-can-outline" size="is-small" /> {{ $t('globals.buttons.delete') }}
                 </a>
-              </span>
-            </span>
+                <span>
+                  {{ $t('globals.messages.numSelected', { num: bulk.checked.length }) }}
+                  <span v-if="!bulk.all && logs.total > logs.perPage">
+                    &mdash;
+                    <a href="#" @click.prevent="selectAllLogs">
+                      Select all {{ logs.total }}
+                    </a>
+                  </span>
+                </span>
+              </template>
+            </div>
           </template>
-        </div>
-      </template>
 
-      <b-table-column v-slot="props" field="webhook_type" label="Webhook Type">
-        <b-tag>{{ props.row.webhookType }}</b-tag>
-      </b-table-column>
+          <b-table-column v-slot="props" field="webhook_type" label="Webhook Type">
+            <b-tag>{{ props.row.webhookType }}</b-tag>
+          </b-table-column>
 
-      <b-table-column v-slot="props" field="event_type" label="Event Type">
-        <span v-if="props.row.eventType">{{ props.row.eventType }}</span>
-        <span v-else class="has-text-grey">-</span>
-      </b-table-column>
+          <b-table-column v-slot="props" field="event_type" label="Event Type">
+            <span v-if="props.row.eventType">{{ props.row.eventType }}</span>
+            <span v-else class="has-text-grey">-</span>
+          </b-table-column>
 
-      <b-table-column v-slot="props" field="response_status" label="Status">
-        <b-tag :type="props.row.responseStatus >= 200 && props.row.responseStatus < 300 ? 'is-success' : 'is-danger'">
-          {{ props.row.responseStatus }}
-        </b-tag>
-      </b-table-column>
+          <b-table-column v-slot="props" field="response_status" label="Status">
+            <b-tag :type="props.row.responseStatus >= 200 && props.row.responseStatus < 300 ? 'is-success' : 'is-danger'">
+              {{ props.row.responseStatus }}
+            </b-tag>
+          </b-table-column>
 
-      <b-table-column v-slot="props" field="processed" label="Processed">
-        <b-icon v-if="props.row.processed" icon="check-circle" type="is-success" size="is-small" />
-        <b-icon v-else icon="close-circle" type="is-danger" size="is-small" />
-      </b-table-column>
+          <b-table-column v-slot="props" field="processed" label="Processed">
+            <b-icon v-if="props.row.processed" icon="check-circle" type="is-success" size="is-small" />
+            <b-icon v-else icon="close-circle" type="is-danger" size="is-small" />
+          </b-table-column>
 
-      <b-table-column v-slot="props" field="created_at" label="Created At">
-        {{ $utils.niceDate(props.row.createdAt, true) }}
-      </b-table-column>
+          <b-table-column v-slot="props" field="created_at" label="Created At">
+            {{ $utils.niceDate(props.row.createdAt, true) }}
+          </b-table-column>
 
-      <b-table-column v-slot="props" cell-class="actions" align="right">
-        <div>
-          <a href="#" @click.prevent="$utils.confirm(null, () => deleteLog(props.row))"
-            data-cy="btn-delete" :aria-label="$t('globals.buttons.delete')">
-            <b-tooltip :label="$t('globals.buttons.delete')" type="is-dark">
-              <b-icon icon="trash-can-outline" size="is-small" />
-            </b-tooltip>
-          </a>
-        </div>
-      </b-table-column>
+          <b-table-column v-slot="props" cell-class="actions" align="right">
+            <div>
+              <a href="#" @click.prevent="$utils.confirm(null, () => deleteLog(props.row))"
+                data-cy="btn-delete" :aria-label="$t('globals.buttons.delete')">
+                <b-tooltip :label="$t('globals.buttons.delete')" type="is-dark">
+                  <b-icon icon="trash-can-outline" size="is-small" />
+                </b-tooltip>
+              </a>
+            </div>
+          </b-table-column>
 
-      <template #detail="props">
-        <div class="box">
-          <div class="mb-4" v-if="props.row.errorMessage">
-            <h4 class="title is-6 has-text-danger">Error</h4>
-            <pre class="is-size-7 has-text-danger">{{ props.row.errorMessage }}</pre>
-          </div>
+          <template #detail="props">
+            <div class="box">
+              <div class="mb-4" v-if="props.row.errorMessage">
+                <h4 class="title is-6 has-text-danger">Error</h4>
+                <pre class="is-size-7 has-text-danger">{{ props.row.errorMessage }}</pre>
+              </div>
 
-          <div class="mb-4" v-if="props.row.requestHeaders && Object.keys(props.row.requestHeaders).length > 0">
-            <h4 class="title is-6">Request Headers</h4>
-            <pre class="is-size-7">{{ JSON.stringify(props.row.requestHeaders, null, 2) }}</pre>
-          </div>
+              <div class="mb-4" v-if="props.row.requestHeaders && Object.keys(props.row.requestHeaders).length > 0">
+                <h4 class="title is-6">Request Headers</h4>
+                <pre class="is-size-7">{{ JSON.stringify(props.row.requestHeaders, null, 2) }}</pre>
+              </div>
 
-          <div class="mb-4">
-            <h4 class="title is-6">Request Body</h4>
-            <pre class="is-size-7">{{ formatJSON(props.row.requestBody) }}</pre>
-          </div>
-        </div>
-      </template>
+              <div class="mb-4">
+                <h4 class="title is-6">Request Body</h4>
+                <pre class="is-size-7">{{ formatJSON(props.row.requestBody) }}</pre>
+              </div>
+            </div>
+          </template>
 
-      <template #empty v-if="!loading.logs">
-        <empty-placeholder />
-      </template>
-    </b-table>
+          <template #empty v-if="!loading.logs">
+            <empty-placeholder />
+          </template>
+        </b-table>
+      </b-tab-item>
+
+      <b-tab-item label="Failed" icon="close-circle">
+        <b-table :data="logs.results" :hoverable="true" :loading="loading.logs" default-sort="createdAt" checkable
+          @check-all="onTableCheck" @check="onTableCheck" :checked-rows.sync="bulk.checked" detailed show-detail-icon
+          paginated backend-pagination pagination-position="both" @page-change="onPageChange"
+          :current-page="queryParams.page" :per-page="logs.perPage" :total="logs.total">
+          <template #top-left>
+            <div class="actions">
+              <template v-if="bulk.checked.length > 0">
+                <a class="a" href="#" @click.prevent="$utils.confirm(null, () => deleteLogs())" data-cy="btn-delete">
+                  <b-icon icon="trash-can-outline" size="is-small" /> {{ $t('globals.buttons.delete') }}
+                </a>
+                <span>
+                  {{ $t('globals.messages.numSelected', { num: bulk.checked.length }) }}
+                  <span v-if="!bulk.all && logs.total > logs.perPage">
+                    &mdash;
+                    <a href="#" @click.prevent="selectAllLogs">
+                      Select all {{ logs.total }}
+                    </a>
+                  </span>
+                </span>
+              </template>
+            </div>
+          </template>
+
+          <b-table-column v-slot="props" field="webhook_type" label="Webhook Type">
+            <b-tag>{{ props.row.webhookType }}</b-tag>
+          </b-table-column>
+
+          <b-table-column v-slot="props" field="event_type" label="Event Type">
+            <span v-if="props.row.eventType">{{ props.row.eventType }}</span>
+            <span v-else class="has-text-grey">-</span>
+          </b-table-column>
+
+          <b-table-column v-slot="props" field="response_status" label="Status">
+            <b-tag :type="props.row.responseStatus >= 200 && props.row.responseStatus < 300 ? 'is-success' : 'is-danger'">
+              {{ props.row.responseStatus }}
+            </b-tag>
+          </b-table-column>
+
+          <b-table-column v-slot="props" field="processed" label="Processed">
+            <b-icon v-if="props.row.processed" icon="check-circle" type="is-success" size="is-small" />
+            <b-icon v-else icon="close-circle" type="is-danger" size="is-small" />
+          </b-table-column>
+
+          <b-table-column v-slot="props" field="created_at" label="Created At">
+            {{ $utils.niceDate(props.row.createdAt, true) }}
+          </b-table-column>
+
+          <b-table-column v-slot="props" cell-class="actions" align="right">
+            <div>
+              <a href="#" @click.prevent="$utils.confirm(null, () => deleteLog(props.row))"
+                data-cy="btn-delete" :aria-label="$t('globals.buttons.delete')">
+                <b-tooltip :label="$t('globals.buttons.delete')" type="is-dark">
+                  <b-icon icon="trash-can-outline" size="is-small" />
+                </b-tooltip>
+              </a>
+            </div>
+          </b-table-column>
+
+          <template #detail="props">
+            <div class="box">
+              <div class="mb-4" v-if="props.row.errorMessage">
+                <h4 class="title is-6 has-text-danger">Error</h4>
+                <pre class="is-size-7 has-text-danger">{{ props.row.errorMessage }}</pre>
+              </div>
+
+              <div class="mb-4" v-if="props.row.requestHeaders && Object.keys(props.row.requestHeaders).length > 0">
+                <h4 class="title is-6">Request Headers</h4>
+                <pre class="is-size-7">{{ JSON.stringify(props.row.requestHeaders, null, 2) }}</pre>
+              </div>
+
+              <div class="mb-4">
+                <h4 class="title is-6">Request Body</h4>
+                <pre class="is-size-7">{{ formatJSON(props.row.requestBody) }}</pre>
+              </div>
+            </div>
+          </template>
+
+          <template #empty v-if="!loading.logs">
+            <empty-placeholder />
+          </template>
+        </b-table>
+      </b-tab-item>
+
+      <b-tab-item label="Views" icon="eye">
+        <b-table :data="logs.results" :hoverable="true" :loading="loading.logs" default-sort="createdAt" checkable
+          @check-all="onTableCheck" @check="onTableCheck" :checked-rows.sync="bulk.checked" detailed show-detail-icon
+          paginated backend-pagination pagination-position="both" @page-change="onPageChange"
+          :current-page="queryParams.page" :per-page="logs.perPage" :total="logs.total">
+          <template #top-left>
+            <div class="actions">
+              <template v-if="bulk.checked.length > 0">
+                <a class="a" href="#" @click.prevent="$utils.confirm(null, () => deleteLogs())" data-cy="btn-delete">
+                  <b-icon icon="trash-can-outline" size="is-small" /> {{ $t('globals.buttons.delete') }}
+                </a>
+                <span>
+                  {{ $t('globals.messages.numSelected', { num: bulk.checked.length }) }}
+                  <span v-if="!bulk.all && logs.total > logs.perPage">
+                    &mdash;
+                    <a href="#" @click.prevent="selectAllLogs">
+                      Select all {{ logs.total }}
+                    </a>
+                  </span>
+                </span>
+              </template>
+            </div>
+          </template>
+
+          <b-table-column v-slot="props" field="webhook_type" label="Webhook Type">
+            <b-tag>{{ props.row.webhookType }}</b-tag>
+          </b-table-column>
+
+          <b-table-column v-slot="props" field="event_type" label="Event Type">
+            <span v-if="props.row.eventType">{{ props.row.eventType }}</span>
+            <span v-else class="has-text-grey">-</span>
+          </b-table-column>
+
+          <b-table-column v-slot="props" field="response_status" label="Status">
+            <b-tag :type="props.row.responseStatus >= 200 && props.row.responseStatus < 300 ? 'is-success' : 'is-danger'">
+              {{ props.row.responseStatus }}
+            </b-tag>
+          </b-table-column>
+
+          <b-table-column v-slot="props" field="processed" label="Processed">
+            <b-icon v-if="props.row.processed" icon="check-circle" type="is-success" size="is-small" />
+            <b-icon v-else icon="close-circle" type="is-danger" size="is-small" />
+          </b-table-column>
+
+          <b-table-column v-slot="props" field="created_at" label="Created At">
+            {{ $utils.niceDate(props.row.createdAt, true) }}
+          </b-table-column>
+
+          <b-table-column v-slot="props" cell-class="actions" align="right">
+            <div>
+              <a href="#" @click.prevent="$utils.confirm(null, () => deleteLog(props.row))"
+                data-cy="btn-delete" :aria-label="$t('globals.buttons.delete')">
+                <b-tooltip :label="$t('globals.buttons.delete')" type="is-dark">
+                  <b-icon icon="trash-can-outline" size="is-small" />
+                </b-tooltip>
+              </a>
+            </div>
+          </b-table-column>
+
+          <template #detail="props">
+            <div class="box">
+              <div class="mb-4" v-if="props.row.errorMessage">
+                <h4 class="title is-6 has-text-danger">Error</h4>
+                <pre class="is-size-7 has-text-danger">{{ props.row.errorMessage }}</pre>
+              </div>
+
+              <div class="mb-4" v-if="props.row.requestHeaders && Object.keys(props.row.requestHeaders).length > 0">
+                <h4 class="title is-6">Request Headers</h4>
+                <pre class="is-size-7">{{ JSON.stringify(props.row.requestHeaders, null, 2) }}</pre>
+              </div>
+
+              <div class="mb-4">
+                <h4 class="title is-6">Request Body</h4>
+                <pre class="is-size-7">{{ formatJSON(props.row.requestBody) }}</pre>
+              </div>
+            </div>
+          </template>
+
+          <template #empty v-if="!loading.logs">
+            <empty-placeholder />
+          </template>
+        </b-table>
+      </b-tab-item>
+
+      <b-tab-item label="Clicks" icon="cursor-default-click">
+        <b-table :data="logs.results" :hoverable="true" :loading="loading.logs" default-sort="createdAt" checkable
+          @check-all="onTableCheck" @check="onTableCheck" :checked-rows.sync="bulk.checked" detailed show-detail-icon
+          paginated backend-pagination pagination-position="both" @page-change="onPageChange"
+          :current-page="queryParams.page" :per-page="logs.perPage" :total="logs.total">
+          <template #top-left>
+            <div class="actions">
+              <template v-if="bulk.checked.length > 0">
+                <a class="a" href="#" @click.prevent="$utils.confirm(null, () => deleteLogs())" data-cy="btn-delete">
+                  <b-icon icon="trash-can-outline" size="is-small" /> {{ $t('globals.buttons.delete') }}
+                </a>
+                <span>
+                  {{ $t('globals.messages.numSelected', { num: bulk.checked.length }) }}
+                  <span v-if="!bulk.all && logs.total > logs.perPage">
+                    &mdash;
+                    <a href="#" @click.prevent="selectAllLogs">
+                      Select all {{ logs.total }}
+                    </a>
+                  </span>
+                </span>
+              </template>
+            </div>
+          </template>
+
+          <b-table-column v-slot="props" field="webhook_type" label="Webhook Type">
+            <b-tag>{{ props.row.webhookType }}</b-tag>
+          </b-table-column>
+
+          <b-table-column v-slot="props" field="event_type" label="Event Type">
+            <span v-if="props.row.eventType">{{ props.row.eventType }}</span>
+            <span v-else class="has-text-grey">-</span>
+          </b-table-column>
+
+          <b-table-column v-slot="props" field="response_status" label="Status">
+            <b-tag :type="props.row.responseStatus >= 200 && props.row.responseStatus < 300 ? 'is-success' : 'is-danger'">
+              {{ props.row.responseStatus }}
+            </b-tag>
+          </b-table-column>
+
+          <b-table-column v-slot="props" field="processed" label="Processed">
+            <b-icon v-if="props.row.processed" icon="check-circle" type="is-success" size="is-small" />
+            <b-icon v-else icon="close-circle" type="is-danger" size="is-small" />
+          </b-table-column>
+
+          <b-table-column v-slot="props" field="created_at" label="Created At">
+            {{ $utils.niceDate(props.row.createdAt, true) }}
+          </b-table-column>
+
+          <b-table-column v-slot="props" cell-class="actions" align="right">
+            <div>
+              <a href="#" @click.prevent="$utils.confirm(null, () => deleteLog(props.row))"
+                data-cy="btn-delete" :aria-label="$t('globals.buttons.delete')">
+                <b-tooltip :label="$t('globals.buttons.delete')" type="is-dark">
+                  <b-icon icon="trash-can-outline" size="is-small" />
+                </b-tooltip>
+              </a>
+            </div>
+          </b-table-column>
+
+          <template #detail="props">
+            <div class="box">
+              <div class="mb-4" v-if="props.row.errorMessage">
+                <h4 class="title is-6 has-text-danger">Error</h4>
+                <pre class="is-size-7 has-text-danger">{{ props.row.errorMessage }}</pre>
+              </div>
+
+              <div class="mb-4" v-if="props.row.requestHeaders && Object.keys(props.row.requestHeaders).length > 0">
+                <h4 class="title is-6">Request Headers</h4>
+                <pre class="is-size-7">{{ JSON.stringify(props.row.requestHeaders, null, 2) }}</pre>
+              </div>
+
+              <div class="mb-4">
+                <h4 class="title is-6">Request Body</h4>
+                <pre class="is-size-7">{{ formatJSON(props.row.requestBody) }}</pre>
+              </div>
+            </div>
+          </template>
+
+          <template #empty v-if="!loading.logs">
+            <empty-placeholder />
+          </template>
+        </b-table>
+      </b-tab-item>
+    </b-tabs>
   </section>
 </template>
 
@@ -113,6 +369,8 @@ export default Vue.extend({
 
   data() {
     return {
+      activeTab: 0,
+
       logs: {
         results: [],
         total: 0,
@@ -136,6 +394,7 @@ export default Vue.extend({
         page: 1,
         webhookType: '',
         eventType: '',
+        statusFilter: 'delivered', // delivered, failed, views, clicks
       },
     };
   },
@@ -147,6 +406,34 @@ export default Vue.extend({
       } catch (e) {
         return str;
       }
+    },
+
+    onTabChange(newTab) {
+      // Reset page when changing tabs
+      this.queryParams.page = 1;
+      this.bulk.checked = [];
+      this.bulk.all = false;
+
+      // Set the status filter based on the tab
+      switch (newTab) {
+        case 0: // Delivered
+          this.queryParams.statusFilter = 'delivered';
+          break;
+        case 1: // Failed
+          this.queryParams.statusFilter = 'failed';
+          break;
+        case 2: // Views
+          this.queryParams.statusFilter = 'views';
+          break;
+        case 3: // Clicks
+          this.queryParams.statusFilter = 'clicks';
+          break;
+        default:
+          this.queryParams.statusFilter = 'delivered';
+          break;
+      }
+
+      this.getLogs();
     },
 
     onPageChange(p) {
@@ -171,6 +458,8 @@ export default Vue.extend({
 
       const params = new URLSearchParams();
       params.append('page', this.queryParams.page);
+      params.append('status_filter', this.queryParams.statusFilter);
+
       if (this.queryParams.webhookType) {
         params.append('webhook_type', this.queryParams.webhookType);
       }

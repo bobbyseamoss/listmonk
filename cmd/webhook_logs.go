@@ -12,21 +12,22 @@ import (
 // GetWebhookLogs retrieves webhook logs with pagination and filtering.
 func (a *App) GetWebhookLogs(c echo.Context) error {
 	var (
-		webhookType = c.QueryParam("webhook_type")
-		eventType   = c.QueryParam("event_type")
-		pg          = a.pg.NewFromURL(c.Request().URL.Query())
+		webhookType  = c.QueryParam("webhook_type")
+		eventType    = c.QueryParam("event_type")
+		statusFilter = c.QueryParam("status_filter")
+		pg           = a.pg.NewFromURL(c.Request().URL.Query())
 	)
 
 	// Get total count
 	var total int
-	if err := a.queries.GetWebhookLogsCount.Get(&total, webhookType, eventType); err != nil {
+	if err := a.queries.GetWebhookLogsCount.Get(&total, webhookType, eventType, statusFilter); err != nil {
 		a.log.Printf("error getting webhook logs count: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, a.i18n.T("globals.messages.internalError"))
 	}
 
 	// Get logs
 	var logs []models.WebhookLog
-	if err := a.queries.GetWebhookLogs.Select(&logs, webhookType, eventType, pg.Offset, pg.Limit); err != nil {
+	if err := a.queries.GetWebhookLogs.Select(&logs, webhookType, eventType, statusFilter, pg.Offset, pg.Limit); err != nil {
 		a.log.Printf("error getting webhook logs: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, a.i18n.T("globals.messages.internalError"))
 	}

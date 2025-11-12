@@ -724,20 +724,20 @@ LEFT JOIN azure_sent a ON a.campaign_id = c.id
 WHERE c.status=$1;
 
 -- name: get-campaign-queue-stats
--- Get queue stats for running campaigns that use the queue (messenger='automatic')
+-- Get queue stats for running and paused campaigns that use the queue (messenger='automatic')
 WITH views AS (
     SELECT campaign_id, COUNT(*) as count FROM campaign_views
-    WHERE campaign_id IN (SELECT id FROM campaigns WHERE status = 'running' AND use_queue = true)
+    WHERE campaign_id IN (SELECT id FROM campaigns WHERE status IN ('running', 'paused') AND use_queue = true)
     GROUP BY campaign_id
 ),
 clicks AS (
     SELECT campaign_id, COUNT(*) as count FROM link_clicks
-    WHERE campaign_id IN (SELECT id FROM campaigns WHERE status = 'running' AND use_queue = true)
+    WHERE campaign_id IN (SELECT id FROM campaigns WHERE status IN ('running', 'paused') AND use_queue = true)
     GROUP BY campaign_id
 ),
 azure_sent AS (
     SELECT campaign_id, COUNT(*) as count FROM azure_delivery_events
-    WHERE campaign_id IN (SELECT id FROM campaigns WHERE status = 'running' AND use_queue = true)
+    WHERE campaign_id IN (SELECT id FROM campaigns WHERE status IN ('running', 'paused') AND use_queue = true)
     AND status = 'Delivered'
     GROUP BY campaign_id
 )
@@ -762,7 +762,7 @@ LEFT JOIN email_queue eq ON eq.campaign_id = c.id
 LEFT JOIN views v ON v.campaign_id = c.id
 LEFT JOIN clicks cl ON cl.campaign_id = c.id
 LEFT JOIN azure_sent a ON a.campaign_id = c.id
-WHERE c.status = 'running' AND c.use_queue = true
+WHERE c.status IN ('running', 'paused') AND c.use_queue = true
 GROUP BY c.id, c.status, c.use_queue, c.messenger, c.started_at, c.updated_at, v.count, cl.count, a.count;
 
 -- name: campaign-has-lists
@@ -1240,13 +1240,39 @@ INSERT INTO webhook_logs (webhook_type, event_type, request_headers, request_bod
 SELECT * FROM webhook_logs
     WHERE ($1 = '' OR webhook_type = $1)
     AND ($2 = '' OR event_type = $2)
+    AND (
+        $3 = '' OR
+        ($3 = 'delivered' AND request_body::jsonb @> '[{"data": {"status": "Delivered"}}]') OR
+        ($3 = 'failed' AND (
+            request_body::jsonb @> '[{"data": {"status": "Suppressed"}}]' OR
+            request_body::jsonb @> '[{"data": {"status": "Bounced"}}]' OR
+            request_body::jsonb @> '[{"data": {"status": "Failed"}}]' OR
+            request_body::jsonb @> '[{"data": {"status": "Quarantined"}}]' OR
+            request_body::jsonb @> '[{"data": {"status": "FilteredSpam"}}]'
+        )) OR
+        ($3 = 'views' AND request_body::jsonb @> '[{"data": {"engagementType": "view"}}]') OR
+        ($3 = 'clicks' AND request_body::jsonb @> '[{"data": {"engagementType": "click"}}]')
+    )
     ORDER BY created_at DESC
-    OFFSET $3 LIMIT $4;
+    OFFSET $4 LIMIT $5;
 
 -- name: get-webhook-logs-count
 SELECT COUNT(*) AS total FROM webhook_logs
     WHERE ($1 = '' OR webhook_type = $1)
-    AND ($2 = '' OR event_type = $2);
+    AND ($2 = '' OR event_type = $2)
+    AND (
+        $3 = '' OR
+        ($3 = 'delivered' AND request_body::jsonb @> '[{"data": {"status": "Delivered"}}]') OR
+        ($3 = 'failed' AND (
+            request_body::jsonb @> '[{"data": {"status": "Suppressed"}}]' OR
+            request_body::jsonb @> '[{"data": {"status": "Bounced"}}]' OR
+            request_body::jsonb @> '[{"data": {"status": "Failed"}}]' OR
+            request_body::jsonb @> '[{"data": {"status": "Quarantined"}}]' OR
+            request_body::jsonb @> '[{"data": {"status": "FilteredSpam"}}]'
+        )) OR
+        ($3 = 'views' AND request_body::jsonb @> '[{"data": {"engagementType": "view"}}]') OR
+        ($3 = 'clicks' AND request_body::jsonb @> '[{"data": {"engagementType": "click"}}]')
+    );
 
 -- name: get-all-webhook-logs
 SELECT * FROM webhook_logs
@@ -1705,16 +1731,25 @@ GROUP BY currency;
 SELECT * FROM subscribers WHERE LOWER(email) = LOWER($1) LIMIT 1;
 
 -- name: get-campaigns-performance-summary
--- Get aggregate performance metrics for all campaigns in the last 30 days
+-- Get aggregate performance metrics for all campaigns in a specified timeframe
+-- $1: number of days to look back
 WITH delivery_stats AS (
     -- Get actual delivery counts from Azure delivery events
     SELECT
         campaign_id,
         COUNT(*) AS delivered
     FROM azure_delivery_events
-    WHERE created_at >= NOW() - INTERVAL '30 days'
+    WHERE event_timestamp >= NOW() - ($1::TEXT || ' days')::INTERVAL
         AND status = 'Delivered'
     GROUP BY campaign_id
+),
+error_stats AS (
+    -- Get error counts from Azure delivery events
+    SELECT
+        COUNT(*) AS total_errors
+    FROM azure_delivery_events
+    WHERE event_timestamp >= NOW() - ($1::TEXT || ' days')::INTERVAL
+        AND status = 'Failed'
 ),
 recent_campaigns AS (
     SELECT
@@ -1727,23 +1762,23 @@ recent_campaigns AS (
     LEFT JOIN (
         SELECT campaign_id, COUNT(*) AS views
         FROM campaign_views
-        WHERE created_at >= NOW() - INTERVAL '30 days'
+        WHERE created_at >= NOW() - ($1::TEXT || ' days')::INTERVAL
         GROUP BY campaign_id
     ) cv ON c.id = cv.campaign_id
     LEFT JOIN (
         SELECT campaign_id, COUNT(*) AS clicks
         FROM link_clicks
-        WHERE created_at >= NOW() - INTERVAL '30 days'
+        WHERE created_at >= NOW() - ($1::TEXT || ' days')::INTERVAL
         GROUP BY campaign_id
     ) lc ON c.id = lc.campaign_id
-    WHERE c.updated_at >= NOW() - INTERVAL '30 days'
+    WHERE c.updated_at >= NOW() - ($1::TEXT || ' days')::INTERVAL
 ),
 purchase_data AS (
     SELECT
         COUNT(*) AS total_orders,
         COALESCE(SUM(total_price), 0) AS total_revenue
     FROM purchase_attributions
-    WHERE created_at >= NOW() - INTERVAL '30 days'
+    WHERE created_at >= NOW() - ($1::TEXT || ' days')::INTERVAL
 )
 SELECT
     COALESCE(AVG(CASE WHEN sent > 0 THEN (views::FLOAT / sent::FLOAT) * 100 ELSE 0 END), 0) AS avg_open_rate,
@@ -1756,9 +1791,9 @@ SELECT
         ELSE 0
     END AS order_rate,
     CASE
-        WHEN COALESCE(SUM(sent), 0) > 0 THEN (SELECT COALESCE(MAX(total_revenue), 0) FROM purchase_data) / SUM(sent)::FLOAT
+        WHEN COALESCE(SUM(sent), 0) > 0 THEN ((SELECT COALESCE(MAX(total_errors), 0) FROM error_stats)::FLOAT / SUM(sent)::FLOAT) * 100
         ELSE 0
-    END AS revenue_per_recipient
+    END AS error_rate
 FROM recent_campaigns;
 
 -- name: get-campaigns-purchase-stats
