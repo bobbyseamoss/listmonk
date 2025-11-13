@@ -39,8 +39,8 @@
         "matcher": "auto",
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "Run /dev-docs-update"
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/precompact-dev-docs-update.sh"
           }
         ]
       }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/knadh/listmonk/models"
+	"github.com/lib/pq"
 )
 
 // Processor handles the queue-based email delivery system
@@ -166,7 +167,7 @@ func (p *Processor) syncRunningCampaignCounts() error {
 			updated_at = NOW()
 		WHERE c.id = ANY($1)
 		  AND c.use_queue = true
-	`, runningCampaignIDs)
+	`, pq.Array(runningCampaignIDs))
 	if err != nil {
 		return fmt.Errorf("error syncing campaign counts: %w", err)
 	}
@@ -463,8 +464,9 @@ func (p *Processor) processQueue() error {
 		// Update batch usage counter NOW (before spawning goroutine)
 		batchUsage[serverUUID]++
 
-		// Wait for rate limiter to allow next send
-		// This ensures we respect the configured message rate (messages per second)
+		// CRITICAL: Enforce account-wide rate limit BEFORE spawning goroutine
+		// This prevents Azure rate limit violations that result in 1-hour cooldowns
+		// The ticker controls send rate, semaphore controls concurrency
 		if rateLimiter != nil {
 			<-rateLimiter.C
 		}
@@ -474,7 +476,7 @@ func (p *Processor) processQueue() error {
 		go func(em EmailQueueItem, srv string) {
 			defer wg.Done()
 
-			// Acquire semaphore
+			// Acquire semaphore to limit concurrent SMTP connections
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
@@ -485,28 +487,9 @@ func (p *Processor) processQueue() error {
 			// 2. Preventing rate limit consumption for emails that would be skipped
 			// 3. Allowing queue processor to move through Smart Sending-blocked subscribers instantly
 
-			// CRITICAL: Check account-wide rate limit before sending
-			// This is the primary rate limit that takes precedence over all others
-			canSend, err := p.checkAccountRateLimit()
-			if err != nil {
-				p.log.Printf("error checking account rate limit: %v", err)
-				// On error, be conservative and don't send
-				if err := p.markFailed(em.ID, fmt.Sprintf("account rate limit check failed: %v", err)); err != nil {
-					p.log.Printf("error marking email %d as failed: %v", em.ID, err)
-				}
-				return
-			}
-
-			if !canSend {
-				// We've hit the account-wide rate limit, skip this email for now
-				// It will be retried in the next batch
-				p.log.Printf("skipping email %d due to account-wide rate limit", em.ID)
-				// Mark it back to queued so it gets picked up later
-				if _, err := p.db.Exec(`UPDATE email_queue SET status = $1, updated_at = NOW() WHERE id = $2`, StatusQueued, em.ID); err != nil {
-					p.log.Printf("error resetting email %d to queued: %v", em.ID, err)
-				}
-				return
-			}
+			// Rate limiting is enforced BEFORE goroutine spawn (line 470-472)
+			// This prevents Azure rate limit violations without database contention
+			// Ticker controls send rate, semaphore controls concurrency
 
 			// Send the email
 			if err := p.sendEmail(em, srv); err != nil {
@@ -683,50 +666,28 @@ func (p *Processor) isWithinTimeWindow() bool {
 func (p *Processor) getNextBatch() ([]EmailQueueItem, error) {
 	var emails []EmailQueueItem
 
-	// Get settings to check if Smart Sending is enabled
-	settings, err := p.getSettings()
-	if err != nil {
-		return nil, fmt.Errorf("error getting settings: %w", err)
-	}
+	// CRITICAL FIX: Do NOT apply Smart Sending filter here!
+	// Smart Sending should be enforced when emails are QUEUED, not when fetched.
+	// Once an email is in email_queue, it was intentionally queued and should be sent.
+	// Applying Smart Sending filter here causes massive slowdowns:
+	//   - Campaign 65 had 78,000 emails queued
+	//   - Smart Sending filtered out 99%+ of them at fetch time
+	//   - Only 1-2 emails per batch instead of 100
+	//   - Send rate dropped from 2000/hour to 60/hour
+	//
+	// Fetch all queued emails that are ready to send
+	query := `
+		SELECT id, campaign_id, subscriber_id, status, priority,
+		       scheduled_at, sent_at, assigned_smtp_server_uuid,
+		       retry_count, last_error, created_at, updated_at
+		FROM email_queue
+		WHERE status = $1
+		  AND scheduled_at <= NOW()
+		ORDER BY priority DESC, scheduled_at ASC
+		LIMIT $2
+	`
 
-	var query string
-	var args []interface{}
-
-	if settings.AppSmartSendingEnabled {
-		// OPTIMIZED: Filter Smart Sending subscribers at SQL level
-		// This prevents fetching emails that will be skipped, avoiding rate limit waste
-		query = `
-			SELECT eq.id, eq.campaign_id, eq.subscriber_id, eq.status, eq.priority,
-			       eq.scheduled_at, eq.sent_at, eq.assigned_smtp_server_uuid,
-			       eq.retry_count, eq.last_error, eq.created_at, eq.updated_at
-			FROM email_queue eq
-			LEFT JOIN subscriber_last_send sls ON eq.subscriber_id = sls.subscriber_id
-			WHERE eq.status = $1
-			  AND eq.scheduled_at <= NOW()
-			  AND (
-			    sls.last_campaign_send_at IS NULL
-			    OR sls.last_campaign_send_at <= NOW() - INTERVAL '1 hour' * $2
-			  )
-			ORDER BY eq.priority DESC, eq.scheduled_at ASC
-			LIMIT $3
-		`
-		args = []interface{}{StatusQueued, settings.AppSmartSendingPeriodHours, p.cfg.BatchSize}
-	} else {
-		// Smart Sending disabled, fetch all queued emails
-		query = `
-			SELECT id, campaign_id, subscriber_id, status, priority,
-			       scheduled_at, sent_at, assigned_smtp_server_uuid,
-			       retry_count, last_error, created_at, updated_at
-			FROM email_queue
-			WHERE status = $1
-			  AND scheduled_at <= NOW()
-			ORDER BY priority DESC, scheduled_at ASC
-			LIMIT $2
-		`
-		args = []interface{}{StatusQueued, p.cfg.BatchSize}
-	}
-
-	if err := p.db.Select(&emails, query, args...); err != nil {
+	if err := p.db.Select(&emails, query, StatusQueued, p.cfg.BatchSize); err != nil {
 		return nil, err
 	}
 

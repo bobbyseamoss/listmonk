@@ -1242,16 +1242,16 @@ SELECT * FROM webhook_logs
     AND ($2 = '' OR event_type = $2)
     AND (
         $3 = '' OR
-        ($3 = 'delivered' AND request_body::jsonb @> '[{"data": {"status": "Delivered"}}]') OR
+        ($3 = 'delivered' AND request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Delivered"}}]') OR
         ($3 = 'failed' AND (
-            request_body::jsonb @> '[{"data": {"status": "Suppressed"}}]' OR
-            request_body::jsonb @> '[{"data": {"status": "Bounced"}}]' OR
-            request_body::jsonb @> '[{"data": {"status": "Failed"}}]' OR
-            request_body::jsonb @> '[{"data": {"status": "Quarantined"}}]' OR
-            request_body::jsonb @> '[{"data": {"status": "FilteredSpam"}}]'
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Suppressed"}}]' OR
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Bounced"}}]' OR
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Failed"}}]' OR
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Quarantined"}}]' OR
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "FilteredSpam"}}]'
         )) OR
-        ($3 = 'views' AND request_body::jsonb @> '[{"data": {"engagementType": "view"}}]') OR
-        ($3 = 'clicks' AND request_body::jsonb @> '[{"data": {"engagementType": "click"}}]')
+        ($3 = 'views' AND request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailEngagementTrackingReportReceived", "data": {"engagementType": "view"}}]') OR
+        ($3 = 'clicks' AND request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailEngagementTrackingReportReceived", "data": {"engagementType": "click"}}]')
     )
     ORDER BY created_at DESC
     OFFSET $4 LIMIT $5;
@@ -1262,16 +1262,16 @@ SELECT COUNT(*) AS total FROM webhook_logs
     AND ($2 = '' OR event_type = $2)
     AND (
         $3 = '' OR
-        ($3 = 'delivered' AND request_body::jsonb @> '[{"data": {"status": "Delivered"}}]') OR
+        ($3 = 'delivered' AND request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Delivered"}}]') OR
         ($3 = 'failed' AND (
-            request_body::jsonb @> '[{"data": {"status": "Suppressed"}}]' OR
-            request_body::jsonb @> '[{"data": {"status": "Bounced"}}]' OR
-            request_body::jsonb @> '[{"data": {"status": "Failed"}}]' OR
-            request_body::jsonb @> '[{"data": {"status": "Quarantined"}}]' OR
-            request_body::jsonb @> '[{"data": {"status": "FilteredSpam"}}]'
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Suppressed"}}]' OR
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Bounced"}}]' OR
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Failed"}}]' OR
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Quarantined"}}]' OR
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "FilteredSpam"}}]'
         )) OR
-        ($3 = 'views' AND request_body::jsonb @> '[{"data": {"engagementType": "view"}}]') OR
-        ($3 = 'clicks' AND request_body::jsonb @> '[{"data": {"engagementType": "click"}}]')
+        ($3 = 'views' AND request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailEngagementTrackingReportReceived", "data": {"engagementType": "view"}}]') OR
+        ($3 = 'clicks' AND request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailEngagementTrackingReportReceived", "data": {"engagementType": "click"}}]')
     );
 
 -- name: get-all-webhook-logs

@@ -30,7 +30,7 @@ Use this skill when:
 ### 2. Bobby Seamoss (Primary Test Environment)
 - **URL**: `https://list.bobbyseamoss.com`
 - **Username**: `adam`
-- **Password**: `bobbysea`
+- **Password**: `T@intshr3dd3r`
 - **Use For**: Most production-like testing, primary validation environment
 - **Note**: This is the default environment for testing unless otherwise specified
 
@@ -191,7 +191,7 @@ const ENVIRONMENTS = {
   bobby: {
     url: 'https://list.bobbyseamoss.com',
     username: 'adam',
-    password: 'bobbysea'
+    password: 'T@intshr3dd3r'
   },
   comma: {
     url: 'https://list.enjoycomma.com',

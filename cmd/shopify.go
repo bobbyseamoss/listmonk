@@ -271,19 +271,29 @@ func (app *App) GetCampaignPurchaseStats(c echo.Context) error {
 func (app *App) GetCampaignsPerformanceSummary(c echo.Context) error {
 	var summary models.CampaignsPerformanceSummary
 
-	// Get aggregate performance stats
-	err := app.queries.GetCampaignsPerformanceSummary.Get(&summary)
+	// Parse and validate the "days" query parameter (defaults to 1 for "Today")
+	days := 1
+	if daysParam := c.QueryParam("days"); daysParam != "" {
+		parsedDays, err := strconv.Atoi(daysParam)
+		if err != nil || parsedDays < 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid 'days' parameter. Must be a positive integer.")
+		}
+		days = parsedDays
+	}
+
+	// Get aggregate performance stats for the specified timeframe
+	err := app.queries.GetCampaignsPerformanceSummary.Get(&summary, days)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// No campaigns found, return zero stats
 			summary = models.CampaignsPerformanceSummary{
-				AvgOpenRate:         0,
-				AvgClickRate:        0,
-				TotalSent:           0,
-				TotalOrders:         0,
-				TotalRevenue:        0,
-				OrderRate:           0,
-				RevenuePerRecipient: 0,
+				AvgOpenRate:  0,
+				AvgClickRate: 0,
+				TotalSent:    0,
+				TotalOrders:  0,
+				TotalRevenue: 0,
+				OrderRate:    0,
+				ErrorRate:    0,
 			}
 		} else {
 			app.log.Printf("error fetching campaigns performance summary: %v", err)

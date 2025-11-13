@@ -429,13 +429,13 @@ type CampaignPurchaseStats struct {
 
 // CampaignsPerformanceSummary represents aggregate performance metrics for all campaigns.
 type CampaignsPerformanceSummary struct {
-	AvgOpenRate         float64 `db:"avg_open_rate" json:"avg_open_rate"`
-	AvgClickRate        float64 `db:"avg_click_rate" json:"avg_click_rate"`
-	TotalSent           int     `db:"total_sent" json:"total_sent"`
-	TotalOrders         int     `db:"total_orders" json:"total_orders"`
-	TotalRevenue        float64 `db:"total_revenue" json:"total_revenue"`
-	OrderRate           float64 `db:"order_rate" json:"order_rate"`
-	RevenuePerRecipient float64 `db:"revenue_per_recipient" json:"revenue_per_recipient"`
+	AvgOpenRate  float64 `db:"avg_open_rate" json:"avgOpenRate"`
+	AvgClickRate float64 `db:"avg_click_rate" json:"avgClickRate"`
+	TotalSent    int     `db:"total_sent" json:"totalSent"`
+	TotalOrders  int     `db:"total_orders" json:"totalOrders"`
+	TotalRevenue float64 `db:"total_revenue" json:"totalRevenue"`
+	OrderRate    float64 `db:"order_rate" json:"orderRate"`
+	ErrorRate    float64 `db:"error_rate" json:"errorRate"`
 }
 
 // CampaignPurchaseStatsListItem represents purchase stats for a single campaign in a list.

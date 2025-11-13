@@ -399,15 +399,25 @@ func (c *Core) CampaignHasLists(id int, listIDs []int) (bool, error) {
 // GetRunningCampaignStats returns the progress stats of running campaigns.
 func (c *Core) GetRunningCampaignStats() ([]models.CampaignStats, error) {
 	out := []models.CampaignStats{}
-	if err := c.q.GetCampaignStatus.Select(&out, models.CampaignStatusRunning); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
 
-		c.log.Printf("error fetching campaign stats: %v", err)
+	// Fetch running campaigns
+	if err := c.q.GetCampaignStatus.Select(&out, models.CampaignStatusRunning); err != nil && err != sql.ErrNoRows {
+		c.log.Printf("error fetching running campaign stats: %v", err)
 		return nil, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
-	} else if len(out) == 0 {
+	}
+
+	// Also fetch paused campaigns (for queue-based campaigns that are paused)
+	pausedCampaigns := []models.CampaignStats{}
+	if err := c.q.GetCampaignStatus.Select(&pausedCampaigns, models.CampaignStatusPaused); err != nil && err != sql.ErrNoRows {
+		c.log.Printf("error fetching paused campaign stats: %v", err)
+		// Don't fail - just log and continue without paused campaigns
+	}
+
+	// Combine running and paused campaigns
+	out = append(out, pausedCampaigns...)
+
+	if len(out) == 0 {
 		return nil, nil
 	}
 

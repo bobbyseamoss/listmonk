@@ -1,107 +1,126 @@
 const { chromium } = require('playwright');
 
-(async () => {
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
+async function verifyProgressBarFix() {
+  console.log('=== Verifying Progress Bar Fix ===\n');
+
+  const browser = await chromium.launch({
+    headless: false
+  });
+  const context = await browser.newContext({
+    ignoreHTTPSErrors: true
+  });
   const page = await context.newPage();
 
   try {
-    console.log('✅ Verifying Progress Bar Font Size Fix\n');
-
     // Login
-    await page.goto('https://list.bobbyseamoss.com/admin/login', { waitUntil: 'load' });
+    console.log('1. Logging in to Bobby Seamoss...');
+    await page.goto('https://list.bobbyseamoss.com/admin/login');
     await page.fill('input[name="username"]', 'adam');
-    await page.fill('input[name="password"]', 'T@intshr3dd3r');
+    await page.fill('input[name="password"]', 'bobbysea');
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(2000);
+    await page.waitForURL('**/admin/**', { timeout: 10000 });
+    console.log('✓ Logged in successfully\n');
 
-    // Navigate to campaigns
-    await page.goto('https://list.bobbyseamoss.com/admin/campaigns', { waitUntil: 'load' });
-    await page.waitForTimeout(3000);
+    // Navigate to Campaigns page
+    console.log('2. Navigating to Campaigns page...');
+    await page.goto('https://list.bobbyseamoss.com/admin/campaigns');
+    await page.waitForTimeout(3000); // Wait for data to load
+    console.log('✓ Campaigns page loaded\n');
 
-    // Check progress-value elements
-    const progressValueElements = await page.evaluate(() => {
-      const elements = document.querySelectorAll('.progress-value');
-      const results = [];
+    // Find campaign 65 (paused queue-based campaign)
+    console.log('3. Looking for campaign 65...');
+    const campaignRows = await page.locator('table tbody tr').all();
+    console.log(`Found ${campaignRows.length} campaigns\n`);
 
-      elements.forEach((el, index) => {
-        const computedStyle = window.getComputedStyle(el);
-        results.push({
-          index,
-          text: el.textContent?.trim(),
-          fontSize: computedStyle.fontSize,
-          fontSizeInRem: parseFloat(computedStyle.fontSize) / 15, // Base font size is 15px
-        });
-      });
+    let foundCampaign65 = false;
+    let progressText = '';
 
-      return results;
-    });
+    for (let i = 0; i < campaignRows.length; i++) {
+      const row = campaignRows[i];
 
-    console.log('=== PROGRESS BAR TEXT FONT SIZES ===\n');
+      // Get campaign ID from the first cell
+      const idCell = row.locator('td').nth(0);
+      const idText = await idCell.textContent().catch(() => '');
 
-    if (progressValueElements.length === 0) {
-      console.log('⚠️  No .progress-value elements found');
-    } else {
-      let allCorrect = true;
+      if (idText.includes('65')) {
+        foundCampaign65 = true;
 
-      progressValueElements.forEach(el => {
-        const expectedPx = 10.5; // 0.7rem * 15px base = 10.5px
-        const actualPx = parseFloat(el.fontSize);
-        const isCorrect = Math.abs(actualPx - expectedPx) < 0.1;
+        // Get campaign name
+        const nameCell = row.locator('td').nth(1);
+        const campaignName = await nameCell.textContent().catch(() => 'Unknown');
 
-        console.log(`Element ${el.index}:`);
-        console.log(`  Text: ${el.text}`);
-        console.log(`  Font Size: ${el.fontSize} (${el.fontSizeInRem.toFixed(2)}rem)`);
-        console.log(`  Expected: 10.5px (0.70rem)`);
-        console.log(`  Status: ${isCorrect ? '✅ CORRECT' : '❌ INCORRECT'}\n`);
+        // Get status
+        const statusBadge = row.locator('.tag');
+        const statusText = await statusBadge.textContent().catch(() => '');
 
-        if (!isCorrect) {
-          allCorrect = false;
+        // Get progress text (should be in one of the cells)
+        const cells = await row.locator('td').all();
+        for (let j = 0; j < cells.length; j++) {
+          const text = await cells[j].textContent().catch(() => '');
+          // Look for pattern like "44173 / 78190"
+          if (text.match(/\d+\s*\/\s*\d+/)) {
+            progressText = text.trim();
+            break;
+          }
         }
-      });
 
-      console.log('\n=== SUMMARY ===');
-      if (allCorrect) {
-        console.log('✅ ALL PROGRESS BAR TEXT IS NOW 0.7rem (10.5px) - FIX SUCCESSFUL!');
-      } else {
-        console.log('❌ Some elements still have incorrect font size');
+        console.log(`Found Campaign 65:`);
+        console.log(`  Name: ${campaignName.trim()}`);
+        console.log(`  Status: ${statusText.trim()}`);
+        console.log(`  Progress: ${progressText}`);
+        console.log('');
+
+        // Verify the fix
+        const match = progressText.match(/(\d+)\s*\/\s*(\d+)/);
+        if (match) {
+          const sent = parseInt(match[1]);
+          const total = parseInt(match[2]);
+
+          console.log('=== VERIFICATION ===');
+          console.log(`Sent count: ${sent}`);
+          console.log(`Total count: ${total}`);
+          console.log('');
+
+          if (sent === 21934) {
+            console.log('❌ FAILED: Still showing Azure delivered count (21934)');
+            console.log('Expected: Should show queue_sent count (around 44173)');
+          } else if (sent >= 44000 && sent <= 45000) {
+            console.log('✅ SUCCESS: Showing correct queue_sent count!');
+            console.log('The fix is working correctly.');
+          } else {
+            console.log(`⚠️  UNEXPECTED: Showing ${sent}`);
+            console.log('Expected: Around 44173 (queue_sent count)');
+          }
+        } else {
+          console.log('⚠️  Could not parse progress text');
+        }
+
+        break;
       }
     }
 
-    // Also check CSS rules
-    const cssRules = await page.evaluate(() => {
-      const results = [];
+    if (!foundCampaign65) {
+      console.log('❌ Campaign 65 not found on the page');
+    }
 
-      for (const sheet of document.styleSheets) {
-        try {
-          const rules = sheet.cssRules || sheet.rules;
-          for (const rule of rules) {
-            if (rule.style && rule.selectorText?.includes('progress-value')) {
-              results.push({
-                selector: rule.selectorText,
-                fontSize: rule.style.fontSize,
-                href: sheet.href || 'inline',
-              });
-            }
-          }
-        } catch (e) {
-          // CORS issues
-        }
-      }
-
-      return results;
+    // Take screenshot
+    console.log('\n4. Taking screenshot...');
+    await page.screenshot({
+      path: 'screenshots/verify-progress-bar-fix.png',
+      fullPage: true
     });
+    console.log('✓ Screenshot saved to screenshots/verify-progress-bar-fix.png\n');
 
-    console.log('\n=== CSS RULES FOR .progress-value ===\n');
-    cssRules.forEach(rule => {
-      console.log(`Selector: ${rule.selector}`);
-      console.log(`Font Size: ${rule.fontSize}`);
-      console.log(`Source: ${rule.href.substring(0, 80)}...\n`);
-    });
+    // Keep browser open for inspection
+    console.log('Keeping browser open for 5 seconds...');
+    await page.waitForTimeout(5000);
 
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error('\n❌ Error during verification:', error.message);
+    console.error(error.stack);
   } finally {
     await browser.close();
   }
-})();
+}
+
+verifyProgressBarFix();

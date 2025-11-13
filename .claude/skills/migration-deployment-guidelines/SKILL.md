@@ -167,6 +167,20 @@ This project has multiple Azure deployment environments:
 - **Database:** `listmonk420-db.postgres.database.azure.com`
 - **Database Name:** `listmonk`
 - **Database User:** `listmonkadmin`
+- **Database Password:** `T@intshr3dd3r`
+- **SSL Mode:** `require`
+- **SMTP Servers:** 29 Azure Communication Services domains (mail2-mail30.bobbyseamoss.com)
+- **Communication Service:** `comma-email-comm`
+- **Email Service:** `comma-email-service`
+
+**Connection String (PostgreSQL):**
+```bash
+PGPASSWORD='T@intshr3dd3r' psql "sslmode=require host=listmonk420-db.postgres.database.azure.com user=listmonkadmin dbname=listmonk"
+```
+
+**Known Issues:**
+- **Message-ID Lookup Failures:** The `email_queue` table is missing an `azure_message_id` column, preventing proper correlation between sent emails and Azure delivery webhook events. Webhook logs show "Message-ID lookup failed" errors and fall back to recipient email matching.
+- **Domain Reputation:** All mail2-mail30.bobbyseamoss.com domains have low Gmail reputation, causing 11-13% failure rate per domain. Requires domain warming strategy (see Bobby Seamoss Failure Analysis report).
 
 ### Environment 2: Comma (enjoycomma)
 - **Nickname:** Comma

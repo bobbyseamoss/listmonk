@@ -754,7 +754,7 @@ func initQueueProcessor(db *sqlx.DB, settings models.Settings) *queue.Processor 
 	}
 
 	cfg := queue.Config{
-		PollInterval:          time.Minute * 1, // Check for emails every minute
+		PollInterval:          time.Second * 5, // Check for emails every 5 seconds for responsive processing
 		BatchSize:             100,
 		TimeWindowStart:       settings.AppSendTimeStart,
 		TimeWindowEnd:         settings.AppSendTimeEnd,

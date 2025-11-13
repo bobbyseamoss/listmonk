@@ -21,7 +21,14 @@
     <section class="performance-summary" v-if="performanceSummary">
       <div class="box">
         <details open>
-          <summary class="title is-6">{{ $t('campaigns.performanceSummary', 'Email performance last 30 days') }}</summary>
+          <summary class="title is-6">
+            {{ $t('campaigns.performanceSummary', 'Email performance') }}
+            <b-select v-model="selectedTimeframe" size="is-small" style="margin-left: 10px;">
+              <option v-for="opt in timeframeOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </b-select>
+          </summary>
           <div class="columns stats-grid">
             <div class="column is-3">
               <div class="stat-item">
@@ -43,8 +50,8 @@
             </div>
             <div class="column is-3">
               <div class="stat-item">
-                <p class="stat-value">${{ formatCurrency(performanceSummary.revenuePerRecipient) }}</p>
-                <p class="stat-label">{{ $t('campaigns.revenuePerRecipient', 'Revenue per recipient') }}</p>
+                <p class="stat-value" style="color: red;">{{ formatPercent(performanceSummary.errorRate) }}</p>
+                <p class="stat-label">{{ $t('campaigns.errorRate', 'Error Rate') }}</p>
               </div>
             </div>
           </div>
@@ -298,6 +305,13 @@ export default Vue.extend({
     return {
       previewItem: null,
       performanceSummary: null,
+      selectedTimeframe: 1, // Default to "Today" (1 day)
+      timeframeOptions: [
+        { label: 'Today', value: 1 },
+        { label: '7 Days', value: 7 },
+        { label: '14 Days', value: 14 },
+        { label: '30 Days', value: 30 },
+      ],
       queryParams: {
         page: 1,
         query: '',
@@ -307,6 +321,12 @@ export default Vue.extend({
       pollID: null,
       campaignStatsData: {},
     };
+  },
+
+  watch: {
+    selectedTimeframe() {
+      this.getPerformanceSummary();
+    },
   },
 
   methods: {
@@ -543,7 +563,7 @@ export default Vue.extend({
     },
 
     getPerformanceSummary() {
-      this.$api.getCampaignsPerformanceSummary().then((data) => {
+      this.$api.getCampaignsPerformanceSummary(this.selectedTimeframe).then((data) => {
         this.performanceSummary = data;
       }).catch(() => {
         // Silently fail if there's no data

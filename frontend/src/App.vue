@@ -192,7 +192,7 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['serverConfig', 'profile']),
+    ...mapState(['serverConfig', 'profile', 'settings']),
 
     isGlobalNotices() {
       return (this.serverConfig.needs_restart
@@ -211,7 +211,10 @@ export default Vue.extend({
     },
 
     logoUrl() {
-      // Use environment variable if set, otherwise use default Bobby Sea Moss logo
+      // Priority: 1. Settings logo_url, 2. Environment variable, 3. Default Bobby Sea Moss logo
+      if (this.settings && this.settings['app.logo_url']) {
+        return this.settings['app.logo_url'];
+      }
       return import.meta.env.VITE_LOGO_URL || 'https://d3k81ch9hvuctc.cloudfront.net/company/XFsBBP/images/6066d5d2-0701-4193-a8e7-13b624efc474.png';
     },
   },
