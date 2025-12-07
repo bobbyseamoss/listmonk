@@ -215,6 +215,7 @@ func (c *Core) CreateCampaign(o models.Campaign, listIDs []int, mediaIDs []int) 
 		o.ArchiveMeta,
 		pq.Array(mediaIDs),
 		o.BodySource,
+		o.BypassTimeWindow,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return models.Campaign{}, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("campaigns.noSubs"))
@@ -253,7 +254,8 @@ func (c *Core) UpdateCampaign(id int, o models.Campaign, listIDs []int, mediaIDs
 		o.ArchiveTemplateID,
 		o.ArchiveMeta,
 		pq.Array(mediaIDs),
-		o.BodySource)
+		o.BodySource,
+		o.BypassTimeWindow)
 	if err != nil {
 		c.log.Printf("error updating campaign: %v", err)
 		return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
@@ -570,12 +572,28 @@ func (c *Core) DeleteCampaignLinkClicks(before time.Time) error {
 }
 
 // QueueCampaignEmails queues all emails for a campaign to be sent via the queue system
+// Smart Sending is applied at queue time - subscribers who received ANY campaign email
+// within the Smart Sending period will be excluded from this campaign.
 func (c *Core) QueueCampaignEmails(campID int) (int, error) {
-	// Queue all campaign emails (initially with same scheduled_at time)
-	if _, err := c.q.QueueCampaignEmails.Exec(campID); err != nil {
+	// Get settings for Smart Sending and scheduler
+	settings, err := c.GetSettings()
+	if err != nil {
+		c.log.Printf("error getting settings for queueing: %v", err)
+		return 0, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "settings", "error", pqErrMsg(err)))
+	}
+
+	// Queue all campaign emails with Smart Sending filter applied
+	// $1 = campaign_id, $2 = smart_sending_enabled, $3 = smart_sending_period_hours
+	if _, err := c.q.QueueCampaignEmails.Exec(campID, settings.AppSmartSendingEnabled, settings.AppSmartSendingPeriodHours); err != nil {
 		c.log.Printf("error queuing campaign emails: %v", err)
 		return 0, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+
+	// Log Smart Sending status
+	if settings.AppSmartSendingEnabled {
+		c.log.Printf("Smart Sending enabled: excluding subscribers who received email in last %d hours", settings.AppSmartSendingPeriodHours)
 	}
 
 	// Get the count of queued emails
@@ -584,14 +602,6 @@ func (c *Core) QueueCampaignEmails(campID int) (int, error) {
 		c.log.Printf("error getting queued email count: %v", err)
 		return 0, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
-	}
-
-	// Get settings for scheduler
-	settings, err := c.GetSettings()
-	if err != nil {
-		c.log.Printf("error getting settings for scheduling: %v", err)
-		return 0, echo.NewHTTPError(http.StatusInternalServerError,
-			c.i18n.Ts("globals.messages.errorFetching", "name", "settings", "error", pqErrMsg(err)))
 	}
 
 	// Schedule emails with staggered times and SMTP server assignments

@@ -539,7 +539,7 @@ counts AS (
 camp AS (
     INSERT INTO campaigns (uuid, type, name, subject, from_email, body, altbody,
         content_type, send_at, headers, tags, messenger, template_id, to_send,
-        max_subscriber_id, archive, archive_slug, archive_template_id, archive_meta, body_source)
+        max_subscriber_id, archive, archive_slug, archive_template_id, archive_meta, body_source, bypass_time_window)
         SELECT $1, $2, $3, $4, $5,
             -- body
             COALESCE(NULLIF($6, ''), (SELECT body FROM tpl), ''),
@@ -554,7 +554,9 @@ camp AS (
             $17,
             $18,
             -- body_source
-            COALESCE($20, (SELECT body_source FROM tpl))
+            COALESCE($20, (SELECT body_source FROM tpl)),
+            -- bypass_time_window
+            $21
         RETURNING id
 ),
 med AS (
@@ -1002,6 +1004,7 @@ WITH camp AS (
         archive_template_id=(CASE WHEN $7::content_type = 'visual' THEN NULL ELSE $16::INT END),
         archive_meta=$17,
         body_source=$19,
+        bypass_time_window=$20,
         updated_at=NOW()
     WHERE id = $1 RETURNING id
 ),
@@ -1278,6 +1281,25 @@ SELECT COUNT(*) AS total FROM webhook_logs
 SELECT * FROM webhook_logs
     ORDER BY created_at DESC;
 
+-- name: get-filtered-webhook-logs
+SELECT * FROM webhook_logs
+    WHERE ($1 = '' OR webhook_type = $1)
+    AND ($2 = '' OR event_type = $2)
+    AND (
+        $3 = '' OR
+        ($3 = 'delivered' AND request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Delivered"}}]') OR
+        ($3 = 'failed' AND (
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Suppressed"}}]' OR
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Bounced"}}]' OR
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Failed"}}]' OR
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "Quarantined"}}]' OR
+            request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailDeliveryReportReceived", "data": {"status": "FilteredSpam"}}]'
+        )) OR
+        ($3 = 'views' AND request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailEngagementTrackingReportReceived", "data": {"engagementType": "view"}}]') OR
+        ($3 = 'clicks' AND request_body::jsonb @> '[{"eventType": "Microsoft.Communication.EmailEngagementTrackingReportReceived", "data": {"engagementType": "click"}}]')
+    )
+    ORDER BY created_at DESC;
+
 -- name: delete-webhook-logs
 DELETE FROM webhook_logs WHERE id = ANY($1);
 
@@ -1496,6 +1518,8 @@ DELETE FROM roles WHERE id=$1;
 -- name: queue-campaign-emails
 -- Queue all emails for a campaign to be sent via the queue system
 -- Emails are scheduled 2 minutes in the future to give the queue processor time to start
+-- $1 = campaign_id, $2 = smart_sending_enabled (boolean), $3 = smart_sending_period_hours (integer)
+-- When Smart Sending is enabled, excludes subscribers who received ANY campaign email within the period
 INSERT INTO email_queue (campaign_id, subscriber_id, status, priority, scheduled_at, created_at, updated_at)
 SELECT
     $1 as campaign_id,
@@ -1507,7 +1531,17 @@ SELECT
     NOW() as updated_at
 FROM campaign_lists cl
 INNER JOIN subscriber_lists sl ON (cl.list_id = sl.list_id AND sl.status = 'confirmed')
+INNER JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status = 'enabled')
 WHERE cl.campaign_id = $1
+    -- Smart Sending filter: exclude subscribers who received an email within the period
+    AND (
+        NOT $2  -- Smart Sending disabled, include everyone
+        OR NOT EXISTS (
+            SELECT 1 FROM subscriber_last_send sls
+            WHERE sls.subscriber_id = sl.subscriber_id
+            AND sls.last_campaign_send_at > NOW() - INTERVAL '1 hour' * $3
+        )
+    )
 ON CONFLICT DO NOTHING;
 
 -- name: get-queued-email-count
