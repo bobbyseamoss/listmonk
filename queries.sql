@@ -1516,10 +1516,9 @@ DELETE FROM roles WHERE id=$1;
 -- Queue system queries
 
 -- name: queue-campaign-emails
--- Queue all emails for a campaign to be sent via the queue system
--- Emails are scheduled 2 minutes in the future to give the queue processor time to start
--- $1 = campaign_id, $2 = smart_sending_enabled (boolean), $3 = smart_sending_period_hours (integer)
--- When Smart Sending is enabled, excludes subscribers who received ANY campaign email within the period
+-- Queue all emails for a campaign to be sent via the queue system.
+-- $1 = campaign_id, $2 = smart_sending_enabled (boolean), $3 = smart_sending_period_hours (integer).
+-- When Smart Sending is enabled, excludes subscribers who received ANY campaign email within the period.
 INSERT INTO email_queue (campaign_id, subscriber_id, status, priority, scheduled_at, created_at, updated_at)
 SELECT
     $1 as campaign_id,
@@ -1533,15 +1532,11 @@ FROM campaign_lists cl
 INNER JOIN subscriber_lists sl ON (cl.list_id = sl.list_id AND sl.status = 'confirmed')
 INNER JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status = 'enabled')
 WHERE cl.campaign_id = $1
-    -- Smart Sending filter: exclude subscribers who received an email within the period
-    AND (
-        $2::BOOLEAN = FALSE  -- Smart Sending disabled, include everyone
-        OR NOT EXISTS (
-            SELECT 1 FROM subscriber_last_send sls
-            WHERE sls.subscriber_id = sl.subscriber_id
-            AND sls.last_campaign_send_at > NOW() - INTERVAL '1 hour' * $3::INTEGER
-        )
-    )
+    AND ($2::BOOLEAN = FALSE OR NOT EXISTS (
+        SELECT 1 FROM subscriber_last_send sls
+        WHERE sls.subscriber_id = sl.subscriber_id
+        AND sls.last_campaign_send_at > NOW() - INTERVAL '1 hour' * $3::INTEGER
+    ))
 ON CONFLICT DO NOTHING;
 
 -- name: get-queued-email-count
