@@ -1535,11 +1535,11 @@ INNER JOIN subscribers s ON (s.id = sl.subscriber_id AND s.status = 'enabled')
 WHERE cl.campaign_id = $1
     -- Smart Sending filter: exclude subscribers who received an email within the period
     AND (
-        NOT $2  -- Smart Sending disabled, include everyone
+        $2::BOOLEAN = FALSE  -- Smart Sending disabled, include everyone
         OR NOT EXISTS (
             SELECT 1 FROM subscriber_last_send sls
             WHERE sls.subscriber_id = sl.subscriber_id
-            AND sls.last_campaign_send_at > NOW() - INTERVAL '1 hour' * $3
+            AND sls.last_campaign_send_at > NOW() - INTERVAL '1 hour' * $3::INTEGER
         )
     )
 ON CONFLICT DO NOTHING;
