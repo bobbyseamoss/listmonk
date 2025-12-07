@@ -54,6 +54,10 @@
             <shopify-settings :form="form" :key="key" />
           </b-tab-item><!-- shopify -->
 
+          <b-tab-item :label="$t('settings.spintax.name', 'Spintax')">
+            <spintax-settings :form="form" :key="key" />
+          </b-tab-item><!-- spintax -->
+
           <b-tab-item label="Campaigns">
             <campaign-settings :form="form" :key="key" />
           </b-tab-item><!-- campaigns -->
@@ -85,6 +89,7 @@ import PrivacySettings from './settings/privacy.vue';
 import SecuritySettings from './settings/security.vue';
 import ShopifySettings from './settings/shopify.vue';
 import SmtpSettings from './settings/smtp.vue';
+import SpintaxSettings from './settings/spintax.vue';
 
 export default Vue.extend({
   components: {
@@ -98,6 +103,7 @@ export default Vue.extend({
     CampaignSettings,
     MessengerSettings,
     ShopifySettings,
+    SpintaxSettings,
     AppearanceSettings,
   },
 
@@ -195,6 +201,15 @@ export default Vue.extend({
         form.shopify.webhook_secret = '';
       } else if (this.hasDummy(form.shopify.webhook_secret)) {
         hasDummy = 'shopify';
+      }
+
+      // Spintax API key
+      if (form.spintax?.ai?.api_key) {
+        if (this.isDummy(form.spintax.ai.api_key)) {
+          form.spintax.ai.api_key = '';
+        } else if (this.hasDummy(form.spintax.ai.api_key)) {
+          hasDummy = 'spintax';
+        }
       }
 
       for (let i = 0; i < form.messengers.length; i += 1) {

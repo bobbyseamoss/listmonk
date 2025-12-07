@@ -287,9 +287,9 @@ export const deleteWebhookLogs = async (ids) => {
   return http.delete('/api/webhook-logs', { params });
 };
 
-export const exportWebhookLogs = async () => http.get(
+export const exportWebhookLogs = async (params) => http.get(
   '/api/webhook-logs/export',
-  { responseType: 'blob' },
+  { params, responseType: 'blob' },
 );
 
 // Campaigns.
@@ -658,3 +658,14 @@ export const deleteRole = (id) => http.delete(
   `/api/roles/${id}`,
   { loading: models.userRoles },
 );
+
+// Spintax API
+export const getSpintaxSettings = () => http.get('/api/spintax/settings');
+
+export const processSpintax = (text) => http.post('/api/spintax/process', { text });
+
+export const previewSpintax = (text, count = 5) => http.post('/api/spintax/preview', { text, count });
+
+export const validateSpintax = (text) => http.post('/api/spintax/validate', { text });
+
+export const generateSpintax = (data) => http.post('/api/spintax/generate', data);
