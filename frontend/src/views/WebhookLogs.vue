@@ -8,14 +8,47 @@
         </h1>
       </div>
       <div class="column has-text-right">
-        <b-button @click="exportLogs" type="is-primary" icon-left="download" :loading="loading.export">
-          Export All
+        <b-button @click="exportLogs('csv')" type="is-primary" icon-left="download" :loading="loading.export">
+          Export CSV
         </b-button>
         <b-button @click="clearAllLogs" type="is-danger" icon-left="delete" :loading="loading.clearAll" class="ml-2">
           Clear All
         </b-button>
       </div>
     </header>
+
+    <!-- Filters -->
+    <div class="columns filters mb-4">
+      <div class="column is-3">
+        <b-field label="Status Filter">
+          <b-select v-model="queryParams.statusFilter" expanded @input="onFilterChange">
+            <option value="">All</option>
+            <option value="delivered">Delivered</option>
+            <option value="failed">Failed (Bounced, Suppressed, etc.)</option>
+            <option value="views">Views</option>
+            <option value="clicks">Clicks</option>
+          </b-select>
+        </b-field>
+      </div>
+      <div class="column is-3">
+        <b-field label="Webhook Source">
+          <b-select v-model="queryParams.webhookType" expanded @input="onFilterChange">
+            <option value="">All</option>
+            <option value="azure">Azure</option>
+            <option value="ses">SES</option>
+            <option value="sendgrid">SendGrid</option>
+            <option value="postmark">Postmark</option>
+          </b-select>
+        </b-field>
+      </div>
+      <div class="column is-3">
+        <b-field label="&nbsp;">
+          <b-button v-if="hasActiveFilters" @click="clearFilters" type="is-light" icon-left="close">
+            Clear Filters
+          </b-button>
+        </b-field>
+      </div>
+    </div>
 
     <b-table :data="logs.results" :hoverable="true" :loading="loading.logs" default-sort="createdAt" checkable
       @check-all="onTableCheck" @check="onTableCheck" :checked-rows.sync="bulk.checked" detailed show-detail-icon
@@ -40,24 +73,14 @@
         </div>
       </template>
 
-      <b-table-column v-slot="props" field="webhook_type" label="Webhook Type">
+      <b-table-column v-slot="props" field="webhook_type" label="Webhook Source">
         <b-tag>{{ props.row.webhookType }}</b-tag>
-      </b-table-column>
-
-      <b-table-column v-slot="props" field="event_type" label="Event Type">
-        <span v-if="props.row.eventType">{{ props.row.eventType }}</span>
-        <span v-else class="has-text-grey">-</span>
       </b-table-column>
 
       <b-table-column v-slot="props" field="event_status" label="Status">
         <b-tag :type="getStatusTagType(props.row)">
           {{ getEventStatus(props.row) }}
         </b-tag>
-      </b-table-column>
-
-      <b-table-column v-slot="props" field="processed" label="Processed">
-        <b-icon v-if="props.row.processed" icon="check-circle" type="is-success" size="is-small" />
-        <b-icon v-else icon="close-circle" type="is-danger" size="is-small" />
       </b-table-column>
 
       <b-table-column v-slot="props" field="created_at" label="Created At">
@@ -136,6 +159,7 @@ export default Vue.extend({
         page: 1,
         webhookType: '',
         eventType: '',
+        statusFilter: '',
       },
     };
   },
@@ -154,18 +178,25 @@ export default Vue.extend({
       try {
         const body = JSON.parse(row.requestBody);
 
-        // Azure webhooks come as an array
+        // Azure webhooks come as an array with eventType
         if (Array.isArray(body) && body.length > 0) {
           const event = body[0];
 
-          // For delivery reports, return the status
+          // Azure delivery reports
           if (event.eventType === 'Microsoft.Communication.EmailDeliveryReportReceived') {
             return event.data?.status || '-';
           }
 
-          // For engagement reports, return the engagement type
+          // Azure engagement reports
           if (event.eventType === 'Microsoft.Communication.EmailEngagementTrackingReportReceived') {
             return event.data?.engagementType || '-';
+          }
+
+          // SendGrid webhooks - array of events with 'event' field
+          if (event.event) {
+            // Capitalize first letter for display consistency
+            const sgEvent = event.event;
+            return sgEvent.charAt(0).toUpperCase() + sgEvent.slice(1);
           }
         }
 
@@ -180,16 +211,26 @@ export default Vue.extend({
     // Determine tag color based on status
     getStatusTagType(row) {
       const status = this.getEventStatus(row);
+      const statusLower = typeof status === 'string' ? status.toLowerCase() : '';
 
-      // Delivery statuses
-      if (status === 'Delivered') return 'is-success';
+      // Success/Delivered statuses (green)
+      if (status === 'Delivered' || statusLower === 'delivered') return 'is-success';
+      if (statusLower === 'processed') return 'is-success';
+
+      // Failure statuses (red)
       if (['Bounced', 'Failed', 'Suppressed', 'Quarantined', 'FilteredSpam'].includes(status)) {
         return 'is-danger';
       }
+      if (['bounce', 'dropped', 'blocked', 'spamreport', 'unsubscribe'].includes(statusLower)) {
+        return 'is-danger';
+      }
 
-      // Engagement types
-      if (status === 'view') return 'is-info';
-      if (status === 'click') return 'is-link';
+      // Warning/Pending statuses (yellow/warning)
+      if (statusLower === 'deferred') return 'is-warning';
+
+      // Engagement types (blue/info)
+      if (status === 'view' || statusLower === 'open') return 'is-info';
+      if (status === 'click' || statusLower === 'click') return 'is-link';
 
       // HTTP status codes
       if (typeof status === 'number') {
@@ -202,6 +243,23 @@ export default Vue.extend({
 
     onPageChange(p) {
       this.queryParams.page = p;
+      this.getLogs();
+    },
+
+    onFilterChange() {
+      this.queryParams.page = 1; // Reset to first page when filtering
+      this.bulk.checked = [];
+      this.bulk.all = false;
+      this.getLogs();
+    },
+
+    clearFilters() {
+      this.queryParams.webhookType = '';
+      this.queryParams.eventType = '';
+      this.queryParams.statusFilter = '';
+      this.queryParams.page = 1;
+      this.bulk.checked = [];
+      this.bulk.all = false;
       this.getLogs();
     },
 
@@ -230,6 +288,9 @@ export default Vue.extend({
       if (this.queryParams.eventType) {
         params.event_type = this.queryParams.eventType;
       }
+      if (this.queryParams.statusFilter) {
+        params.status_filter = this.queryParams.statusFilter;
+      }
 
       this.$api.getWebhookLogs(params).then((data) => {
         this.logs = data;
@@ -254,14 +315,29 @@ export default Vue.extend({
       });
     },
 
-    exportLogs() {
+    exportLogs(format = 'csv') {
       this.loading.export = true;
-      this.$api.exportWebhookLogs().then((blob) => {
+
+      // Build params including current filters
+      const params = { format };
+      if (this.queryParams.webhookType) {
+        params.webhook_type = this.queryParams.webhookType;
+      }
+      if (this.queryParams.eventType) {
+        params.event_type = this.queryParams.eventType;
+      }
+      if (this.queryParams.statusFilter) {
+        params.status_filter = this.queryParams.statusFilter;
+      }
+
+      this.$api.exportWebhookLogs(params).then((blob) => {
         // The blob is already returned from the API
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `webhook-logs-${new Date().toISOString().split('T')[0]}.json`;
+        const ext = format === 'csv' ? 'csv' : 'json';
+        const filterSuffix = this.queryParams.statusFilter ? `-${this.queryParams.statusFilter}` : '';
+        link.download = `webhook-logs${filterSuffix}-${new Date().toISOString().split('T')[0]}.${ext}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -295,6 +371,12 @@ export default Vue.extend({
 
   computed: {
     ...mapState(['loading']),
+
+    hasActiveFilters() {
+      return this.queryParams.webhookType !== ''
+             || this.queryParams.eventType !== ''
+             || this.queryParams.statusFilter !== '';
+    },
   },
 
   mounted() {
