@@ -140,6 +140,9 @@ func (a *App) BounceWebhook(c echo.Context) error {
 		webhookType = "native"
 	}
 
+	// Debug: Log incoming webhook
+	a.log.Printf("DEBUG: BounceWebhook received service='%s', BounceSendgridEnabled=%v", service, a.cfg.BounceSendgridEnabled)
+
 	// Defer logging the webhook after processing
 	defer func() {
 		a.logWebhook(webhookType, eventType, c.Request().Header, rawReq, responseStatus, "", processed, errorMsg)
