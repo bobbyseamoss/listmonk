@@ -150,6 +150,20 @@ type Config struct {
 	ShopifyWebhookSecret         string
 	ShopifyAttributionWindowDays int
 
+	// Spintax configuration
+	SpintaxEnabled        bool
+	SpintaxAIEnabled      bool
+	SpintaxAIAPIKey       string
+	SpintaxVariationLevel int
+
+	// Azure suppression list configuration (via environment variables)
+	AzureSuppressionEnabled          bool   `koanf:"azure.suppression.enabled"`
+	AzureSuppressionSubscriptionID   string `koanf:"azure.suppression.subscription_id"`
+	AzureSuppressionResourceGroup    string `koanf:"azure.suppression.resource_group"`
+	AzureSuppressionEmailServiceName string `koanf:"azure.suppression.email_service_name"`
+	AzureSuppressionDomainName       string `koanf:"azure.suppression.domain_name"`
+	AzureSuppressionListName         string `koanf:"azure.suppression.list_name"`
+
 	PermissionsRaw json.RawMessage
 	Permissions    map[string]struct{}
 }
@@ -478,6 +492,7 @@ func initConstConfig(ko *koanf.Koanf) *Config {
 	lo.Printf("DEBUG: BounceWebhooksEnabled = %v (from config key 'bounce.webhooks_enabled')", c.BounceWebhooksEnabled)
 	c.BounceSESEnabled = ko.Bool("bounce.ses_enabled")
 	c.BounceSendgridEnabled = ko.Bool("bounce.sendgrid_enabled")
+	lo.Printf("DEBUG: BounceSendgridEnabled = %v (from config key 'bounce.sendgrid_enabled')", c.BounceSendgridEnabled)
 	c.BouncePostmarkEnabled = ko.Bool("bounce.postmark.enabled")
 	c.BounceForwardemailEnabled = ko.Bool("bounce.forwardemail.enabled")
 	c.BounceAzureEnabled = ko.Bool("bounce.azure.enabled")
@@ -489,6 +504,15 @@ func initConstConfig(ko *koanf.Koanf) *Config {
 	c.ShopifyAttributionWindowDays = ko.Int("shopify.attribution_window_days")
 	if c.ShopifyAttributionWindowDays == 0 {
 		c.ShopifyAttributionWindowDays = 7 // Default to 7 days
+	}
+
+	// Load Spintax settings
+	c.SpintaxEnabled = ko.Bool("spintax.enabled")
+	c.SpintaxAIEnabled = ko.Bool("spintax.ai.enabled")
+	c.SpintaxAIAPIKey = ko.String("spintax.ai.api_key")
+	c.SpintaxVariationLevel = ko.Int("spintax.ai.variation_level")
+	if c.SpintaxVariationLevel == 0 {
+		c.SpintaxVariationLevel = 3 // Default to level 3 (medium)
 	}
 
 	c.HasLegacyUser = ko.Exists("app.admin_username") || ko.Exists("app.admin_password")
@@ -587,6 +611,7 @@ func initCampaignManager(msgrs []manager.Messenger, q *models.Queries, u *UrlCon
 		SlidingWindowRate:     ko.Int("app.message_sliding_window_rate"),
 		ScanInterval:          time.Second * 5,
 		ScanCampaigns:         !ko.Bool("passive"),
+		SpintaxEnabled:        ko.Bool("spintax.enabled"),
 	}, newManagerStore(q, co, md), i, lo)
 
 	// Attach all messengers to the campaign manager.
@@ -672,7 +697,7 @@ func initSMTPMessengers(db *sqlx.DB) []manager.Messenger {
 				lo.Fatalf("error initializing e-mail messenger: %v", err)
 			}
 			out = append(out, msgr)
-			lo.Printf("initialized named email messenger: email-%s", s.Name)
+			lo.Printf("initialized named email messenger: %s", s.Name)
 		}
 	}
 
@@ -744,13 +769,18 @@ func initAutomaticMessenger(db *sqlx.DB) manager.Messenger {
 
 // initQueueProcessor initializes and starts the queue processor for automatic campaigns
 func initQueueProcessor(db *sqlx.DB, settings models.Settings) *queue.Processor {
-	// Parse sliding window duration
+	// Parse sliding window duration and limit - only if sliding window is enabled
 	var slidingDuration time.Duration
-	if settings.AppMessageSlidingWindowDuration != "" {
-		d, err := time.ParseDuration(settings.AppMessageSlidingWindowDuration)
-		if err == nil {
-			slidingDuration = d
+	var slidingLimit int
+	if settings.AppMessageSlidingWindow {
+		// Only apply sliding window settings if the feature is enabled
+		if settings.AppMessageSlidingWindowDuration != "" {
+			d, err := time.ParseDuration(settings.AppMessageSlidingWindowDuration)
+			if err == nil {
+				slidingDuration = d
+			}
 		}
+		slidingLimit = settings.AppMessageSlidingWindowRate
 	}
 
 	cfg := queue.Config{
@@ -759,7 +789,7 @@ func initQueueProcessor(db *sqlx.DB, settings models.Settings) *queue.Processor 
 		TimeWindowStart:       settings.AppSendTimeStart,
 		TimeWindowEnd:         settings.AppSendTimeEnd,
 		SlidingWindowDuration: slidingDuration,
-		SlidingWindowLimit:    settings.AppMessageSlidingWindowRate,
+		SlidingWindowLimit:    slidingLimit,
 	}
 
 	proc := queue.New(db, cfg, lo)
