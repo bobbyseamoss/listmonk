@@ -16,6 +16,7 @@ max_lifetime = "300s"
 # Bounce webhook configuration
 [bounce]
 webhooks_enabled = true
+sendgrid_enabled = true
 
 [bounce.azure]
 enabled = true
