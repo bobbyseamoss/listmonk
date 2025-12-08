@@ -628,6 +628,26 @@ func (a *App) GetCampaignViewAnalytics(c echo.Context) error {
 		return c.JSON(http.StatusOK, okResp{out})
 	}
 
+	// SendGrid delivery stats.
+	if typ == "sendgrid-delivery" {
+		out, err := a.core.GetCampaignSendgridDeliveryCounts(ids, from, to)
+		if err != nil {
+			return err
+		}
+
+		return c.JSON(http.StatusOK, okResp{out})
+	}
+
+	// SendGrid engagement stats.
+	if typ == "sendgrid-engagement" {
+		out, err := a.core.GetCampaignSendgridEngagementCounts(ids, from, to)
+		if err != nil {
+			return err
+		}
+
+		return c.JSON(http.StatusOK, okResp{out})
+	}
+
 	// Campaign link stats.
 	if typ == "links" {
 		out, err := a.core.GetCampaignAnalyticsLinks(ids, typ, from, to)

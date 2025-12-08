@@ -510,6 +510,38 @@ func (c *Core) GetCampaignAzureDeliveryCounts(campIDs []int, fromDate, toDate st
 	return out, nil
 }
 
+// GetCampaignSendgridDeliveryCounts returns SendGrid delivery event counts grouped by event type.
+func (c *Core) GetCampaignSendgridDeliveryCounts(campIDs []int, fromDate, toDate string) ([]models.CampaignAzureDeliveryCount, error) {
+	if !strHasLen(fromDate, 10, 30) || !strHasLen(toDate, 10, 30) {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("analytics.invalidDates"))
+	}
+
+	out := []models.CampaignAzureDeliveryCount{}
+	if err := c.q.GetCampaignSendgridDeliveryCounts.Select(&out, pq.Array(campIDs), fromDate, toDate); err != nil {
+		c.log.Printf("error fetching campaign SendGrid delivery counts: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.analytics}", "error", pqErrMsg(err)))
+	}
+
+	return out, nil
+}
+
+// GetCampaignSendgridEngagementCounts returns SendGrid engagement event counts grouped by event type.
+func (c *Core) GetCampaignSendgridEngagementCounts(campIDs []int, fromDate, toDate string) ([]models.CampaignAzureDeliveryCount, error) {
+	if !strHasLen(fromDate, 10, 30) || !strHasLen(toDate, 10, 30) {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, c.i18n.T("analytics.invalidDates"))
+	}
+
+	out := []models.CampaignAzureDeliveryCount{}
+	if err := c.q.GetCampaignSendgridEngagementCounts.Select(&out, pq.Array(campIDs), fromDate, toDate); err != nil {
+		c.log.Printf("error fetching campaign SendGrid engagement counts: %v", err)
+		return nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.analytics}", "error", pqErrMsg(err)))
+	}
+
+	return out, nil
+}
+
 // GetCampaignUnsubscribers returns the list of subscribers who unsubscribed after receiving the campaign.
 func (c *Core) GetCampaignUnsubscribers(campID int) ([]models.CampaignUnsubscriber, error) {
 	out := []models.CampaignUnsubscriber{}

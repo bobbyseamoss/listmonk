@@ -333,6 +333,16 @@ export const getCampaignAzureDeliveryCounts = async (params) => http.get(
   { params, loading: models.campaigns },
 );
 
+export const getCampaignSendgridDeliveryCounts = async (params) => http.get(
+  '/api/campaigns/analytics/sendgrid-delivery',
+  { params, loading: models.campaigns },
+);
+
+export const getCampaignSendgridEngagementCounts = async (params) => http.get(
+  '/api/campaigns/analytics/sendgrid-engagement',
+  { params, loading: models.campaigns },
+);
+
 export const getCampaignLinkCounts = async (params) => http.get(
   '/api/campaigns/analytics/links',
   { params, loading: models.campaigns },

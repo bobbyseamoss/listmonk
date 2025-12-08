@@ -887,6 +887,22 @@ SELECT campaign_id, status, COUNT(*) AS "count"
     GROUP BY campaign_id, status
     ORDER BY campaign_id, status;
 
+-- name: get-campaign-sendgrid-delivery-counts
+-- Get counts of SendGrid delivery events by event_type for campaigns
+SELECT campaign_id, event_type AS status, COUNT(*) AS "count"
+    FROM sendgrid_delivery_events
+    WHERE campaign_id=ANY($1) AND event_timestamp >= $2 AND event_timestamp <= $3
+    GROUP BY campaign_id, event_type
+    ORDER BY campaign_id, event_type;
+
+-- name: get-campaign-sendgrid-engagement-counts
+-- Get counts of SendGrid engagement events by event_type for campaigns
+SELECT campaign_id, event_type AS status, COUNT(*) AS "count"
+    FROM sendgrid_engagement_events
+    WHERE campaign_id=ANY($1) AND event_timestamp >= $2 AND event_timestamp <= $3
+    GROUP BY campaign_id, event_type
+    ORDER BY campaign_id, event_type;
+
 -- name: get-campaign-unsubscribers
 -- Get the list of subscribers who unsubscribed from any list that the campaign was sent to
 -- This tracks subscribers who unsubscribed after receiving the campaign email

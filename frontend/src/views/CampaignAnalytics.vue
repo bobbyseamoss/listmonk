@@ -86,6 +86,44 @@
         </div>
       </div>
 
+      <!-- SendGrid Delivery Status Counts -->
+      <div class="chart" v-if="sendgridDeliveryCounts.length > 0">
+        <div class="columns">
+          <div class="column is-12">
+            <h4>SendGrid Delivery Status</h4>
+            <div class="box">
+              <div class="columns is-multiline">
+                <div class="column is-3" v-for="item in sendgridDeliveryCountsSummary" :key="item.status">
+                  <div class="has-text-centered">
+                    <p class="heading">{{ item.status }}</p>
+                    <p class="title">{{ $utils.niceNumber(item.count) }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SendGrid Engagement Status Counts -->
+      <div class="chart" v-if="sendgridEngagementCounts.length > 0">
+        <div class="columns">
+          <div class="column is-12">
+            <h4>SendGrid Engagement</h4>
+            <div class="box">
+              <div class="columns is-multiline">
+                <div class="column is-3" v-for="item in sendgridEngagementCountsSummary" :key="item.status">
+                  <div class="has-text-centered">
+                    <p class="heading">{{ item.status }}</p>
+                    <p class="title">{{ $utils.niceNumber(item.count) }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Unsubscribers Section -->
       <div class="chart" v-if="form.campaigns.length === 1 && unsubscribers.length > 0">
         <div class="columns">
@@ -161,6 +199,8 @@ export default Vue.extend({
       unsubscribers: [],
       unsubscribersLoading: false,
       azureDeliveryCounts: [],
+      sendgridDeliveryCounts: [],
+      sendgridEngagementCounts: [],
       urls: [],
       charts: {
         views: {
@@ -390,6 +430,40 @@ export default Vue.extend({
         this.azureDeliveryCounts = [];
       });
     },
+
+    getSendgridDeliveryCounts() {
+      if (this.form.campaigns.length === 0) {
+        this.sendgridDeliveryCounts = [];
+        return;
+      }
+
+      this.$api.getCampaignSendgridDeliveryCounts({
+        id: this.form.campaigns.map((c) => c.id),
+        from: this.form.from,
+        to: this.form.to,
+      }).then((data) => {
+        this.sendgridDeliveryCounts = data;
+      }).catch(() => {
+        this.sendgridDeliveryCounts = [];
+      });
+    },
+
+    getSendgridEngagementCounts() {
+      if (this.form.campaigns.length === 0) {
+        this.sendgridEngagementCounts = [];
+        return;
+      }
+
+      this.$api.getCampaignSendgridEngagementCounts({
+        id: this.form.campaigns.map((c) => c.id),
+        from: this.form.from,
+        to: this.form.to,
+      }).then((data) => {
+        this.sendgridEngagementCounts = data;
+      }).catch(() => {
+        this.sendgridEngagementCounts = [];
+      });
+    },
   },
 
   computed: {
@@ -406,6 +480,34 @@ export default Vue.extend({
       });
 
       // Convert to array and sort by count descending
+      return Object.keys(statusMap)
+        .map((status) => ({ status, count: statusMap[status] }))
+        .sort((a, b) => b.count - a.count);
+    },
+
+    sendgridDeliveryCountsSummary() {
+      const statusMap = {};
+      this.sendgridDeliveryCounts.forEach((item) => {
+        if (!statusMap[item.status]) {
+          statusMap[item.status] = 0;
+        }
+        statusMap[item.status] += item.count;
+      });
+
+      return Object.keys(statusMap)
+        .map((status) => ({ status, count: statusMap[status] }))
+        .sort((a, b) => b.count - a.count);
+    },
+
+    sendgridEngagementCountsSummary() {
+      const statusMap = {};
+      this.sendgridEngagementCounts.forEach((item) => {
+        if (!statusMap[item.status]) {
+          statusMap[item.status] = 0;
+        }
+        statusMap[item.status] += item.count;
+      });
+
       return Object.keys(statusMap)
         .map((status) => ({ status, count: statusMap[status] }))
         .sort((a, b) => b.count - a.count);
@@ -449,6 +551,10 @@ export default Vue.extend({
 
           // Get Azure delivery counts
           this.getAzureDeliveryCounts();
+
+          // Get SendGrid delivery and engagement counts
+          this.getSendgridDeliveryCounts();
+          this.getSendgridEngagementCounts();
 
           // Fetch count for each analytics type (views, counts, bounces);
           Object.keys(this.charts).forEach((k) => {

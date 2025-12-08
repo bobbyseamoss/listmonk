@@ -75,8 +75,10 @@ type Queries struct {
 	GetCampaignClickCounts          *sqlx.Stmt `query:"get-campaign-click-counts"`
 	GetCampaignLinkCounts           *sqlx.Stmt `query:"get-campaign-link-counts"`
 	GetCampaignBounceCounts         *sqlx.Stmt `query:"get-campaign-bounce-counts"`
-	GetCampaignAzureDeliveryCounts  *sqlx.Stmt `query:"get-campaign-azure-delivery-counts"`
-	GetCampaignUnsubscribers        *sqlx.Stmt `query:"get-campaign-unsubscribers"`
+	GetCampaignAzureDeliveryCounts     *sqlx.Stmt `query:"get-campaign-azure-delivery-counts"`
+	GetCampaignSendgridDeliveryCounts  *sqlx.Stmt `query:"get-campaign-sendgrid-delivery-counts"`
+	GetCampaignSendgridEngagementCounts *sqlx.Stmt `query:"get-campaign-sendgrid-engagement-counts"`
+	GetCampaignUnsubscribers           *sqlx.Stmt `query:"get-campaign-unsubscribers"`
 	DeleteCampaignViews        *sqlx.Stmt `query:"delete-campaign-views"`
 	DeleteCampaignLinkClicks   *sqlx.Stmt `query:"delete-campaign-link-clicks"`
 
@@ -132,12 +134,13 @@ type Queries struct {
 	DeleteBounces               *sqlx.Stmt `query:"delete-bounces"`
 	DeleteBouncesBySubscriber   *sqlx.Stmt `query:"delete-bounces-by-subscriber"`
 
-	CreateWebhookLog       *sqlx.Stmt `query:"create-webhook-log"`
-	GetWebhookLogs         *sqlx.Stmt `query:"get-webhook-logs"`
-	GetWebhookLogsCount    *sqlx.Stmt `query:"get-webhook-logs-count"`
-	GetAllWebhookLogs      *sqlx.Stmt `query:"get-all-webhook-logs"`
-	DeleteWebhookLogs      *sqlx.Stmt `query:"delete-webhook-logs"`
-	DeleteAllWebhookLogs   *sqlx.Stmt `query:"delete-all-webhook-logs"`
+	CreateWebhookLog        *sqlx.Stmt `query:"create-webhook-log"`
+	GetWebhookLogs          *sqlx.Stmt `query:"get-webhook-logs"`
+	GetWebhookLogsCount     *sqlx.Stmt `query:"get-webhook-logs-count"`
+	GetAllWebhookLogs       *sqlx.Stmt `query:"get-all-webhook-logs"`
+	GetFilteredWebhookLogs  *sqlx.Stmt `query:"get-filtered-webhook-logs"`
+	DeleteWebhookLogs       *sqlx.Stmt `query:"delete-webhook-logs"`
+	DeleteAllWebhookLogs    *sqlx.Stmt `query:"delete-all-webhook-logs"`
 
 	GetDBInfo              string     `query:"get-db-info"`
 
