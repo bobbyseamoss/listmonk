@@ -194,18 +194,200 @@ func (a *App) BounceWebhook(c echo.Context) error {
 
 	// SendGrid.
 	case service == "sendgrid" && a.cfg.BounceSendgridEnabled:
-		var (
-			sig = c.Request().Header.Get("X-Twilio-Email-Event-Webhook-Signature")
-			ts  = c.Request().Header.Get("X-Twilio-Email-Event-Webhook-Timestamp")
-		)
-
-		// Sendgrid sends multiple bounces.
-		bs, err := a.bounce.Sendgrid.ProcessBounce(sig, ts, rawReq)
+		// Process all SendGrid events
+		result, err := a.bounce.Sendgrid.ProcessEvents(rawReq)
 		if err != nil {
 			a.log.Printf("error processing sendgrid notification: %v", err)
+			errorMsg = err.Error()
+			responseStatus = http.StatusBadRequest
 			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidData"))
 		}
-		bounces = append(bounces, bs...)
+
+		// Log each event individually for the webhook logs
+		for _, evt := range result.Events {
+			eventType = evt.Event
+			a.logWebhook("sendgrid", evt.Event, c.Request().Header, rawReq, http.StatusOK, evt.Email, true, "")
+		}
+
+		// Record ALL SendGrid events to dedicated tables for analytics
+		for _, evt := range result.Events {
+			tstamp := time.Unix(evt.Timestamp, 0)
+
+			// Look up campaign and subscriber IDs
+			var campaignID, subscriberID int
+
+			// Try to find by UUIDs from X-headers first
+			if evt.CampaignUUID != "" && evt.SubscriberUUID != "" {
+				_ = a.db.QueryRow(`
+					SELECT c.id, s.id
+					FROM campaigns c, subscribers s
+					WHERE c.uuid = $1 AND s.uuid = $2
+				`, evt.CampaignUUID, evt.SubscriberUUID).Scan(&campaignID, &subscriberID)
+			}
+
+			// Fallback: look up by email
+			if subscriberID == 0 && evt.Email != "" {
+				_ = a.db.QueryRow(`
+					SELECT id FROM subscribers WHERE LOWER(email) = LOWER($1)
+				`, evt.Email).Scan(&subscriberID)
+			}
+
+			// Try to find campaign from recent sends if not found
+			if campaignID == 0 && subscriberID > 0 {
+				_ = a.db.QueryRow(`
+					SELECT campaign_id FROM email_queue
+					WHERE subscriber_id = $1 AND status = 'sent'
+					ORDER BY sent_at DESC LIMIT 1
+				`, subscriberID).Scan(&campaignID)
+			}
+
+			// Categorize event type for storage
+			switch evt.Event {
+			case "delivered", "processed", "bounce", "dropped", "blocked", "deferred", "spamreport", "unsubscribe":
+				// Delivery events - store in sendgrid_delivery_events
+				_, err := a.db.Exec(`
+					INSERT INTO sendgrid_delivery_events
+						(sg_message_id, campaign_id, subscriber_id, event_type, email, reason, bounce_classification, smtp_id, ip, event_timestamp)
+					VALUES ($1, NULLIF($2, 0), NULLIF($3, 0), $4, $5, $6, $7, $8, $9, $10)
+				`, evt.SGMessageID, campaignID, subscriberID, evt.Event, evt.Email, evt.Reason, evt.BounceClassification, evt.SMTPID, evt.IP, tstamp)
+				if err != nil {
+					a.log.Printf("SendGrid: error storing delivery event: %v", err)
+				}
+
+			case "open", "click":
+				// Engagement events - store in sendgrid_engagement_events
+				_, err := a.db.Exec(`
+					INSERT INTO sendgrid_engagement_events
+						(sg_message_id, campaign_id, subscriber_id, event_type, email, url, user_agent, ip, event_timestamp)
+					VALUES ($1, NULLIF($2, 0), NULLIF($3, 0), $4, $5, $6, $7, $8, $9)
+				`, evt.SGMessageID, campaignID, subscriberID, evt.Event, evt.Email, evt.URL, evt.UserAgent, evt.IP, tstamp)
+				if err != nil {
+					a.log.Printf("SendGrid: error storing engagement event: %v", err)
+				}
+			}
+		}
+
+		// Add bounces
+		bounces = append(bounces, result.Bounces...)
+
+		// Process engagement events (opens, clicks) - also record to campaign_views/link_clicks
+		for _, eng := range result.Engagements {
+			// Look up campaign and subscriber IDs
+			var campaignID, subscriberID int
+
+			// Try to find by UUIDs from X-headers first
+			if eng.CampaignUUID != "" && eng.SubscriberUUID != "" {
+				err := a.db.QueryRow(`
+					SELECT c.id, s.id
+					FROM campaigns c, subscribers s
+					WHERE c.uuid = $1 AND s.uuid = $2
+				`, eng.CampaignUUID, eng.SubscriberUUID).Scan(&campaignID, &subscriberID)
+				if err != nil {
+					a.log.Printf("SendGrid: could not find campaign/subscriber by UUIDs: %v", err)
+				}
+			}
+
+			// Fallback: look up by email
+			if subscriberID == 0 && eng.Email != "" {
+				err := a.db.QueryRow(`
+					SELECT id FROM subscribers WHERE LOWER(email) = LOWER($1)
+				`, eng.Email).Scan(&subscriberID)
+				if err != nil {
+					a.log.Printf("SendGrid: could not find subscriber by email %s: %v", eng.Email, err)
+					continue
+				}
+			}
+
+			if subscriberID == 0 {
+				a.log.Printf("SendGrid: skipping engagement - no subscriber found for %s", eng.Email)
+				continue
+			}
+
+			// If no campaign from headers, try to find from recent queue sends
+			if campaignID == 0 {
+				_ = a.db.QueryRow(`
+					SELECT campaign_id FROM email_queue
+					WHERE subscriber_id = $1 AND status = 'sent'
+					ORDER BY sent_at DESC LIMIT 1
+				`, subscriberID).Scan(&campaignID)
+			}
+
+			// Fallback: try campaign_views
+			if campaignID == 0 {
+				_ = a.db.QueryRow(`
+					SELECT c.id FROM campaigns c
+					JOIN campaign_views cv ON cv.campaign_id = c.id
+					WHERE cv.subscriber_id = $1
+					ORDER BY cv.created_at DESC
+					LIMIT 1
+				`, subscriberID).Scan(&campaignID)
+			}
+
+			if campaignID == 0 {
+				a.log.Printf("SendGrid: skipping engagement - no campaign found for subscriber %d", subscriberID)
+				continue
+			}
+
+			switch eng.Event {
+			case "open":
+				// Record view with deduplication
+				_, err := a.db.Exec(`
+					INSERT INTO campaign_views (campaign_id, subscriber_id, created_at)
+					SELECT $1, $2, $3
+					WHERE NOT EXISTS (
+						SELECT 1 FROM campaign_views
+						WHERE campaign_id = $1
+						AND subscriber_id = $2
+						AND ABS(EXTRACT(EPOCH FROM (created_at - $3))) <= 5
+					)
+				`, campaignID, subscriberID, eng.Timestamp)
+				if err != nil {
+					a.log.Printf("SendGrid: error recording view: %v", err)
+				} else {
+					a.log.Printf("SendGrid: recorded view for campaign %d, subscriber %d", campaignID, subscriberID)
+				}
+
+			case "click":
+				if eng.URL == "" {
+					continue
+				}
+
+				// Find or create link
+				var linkID int
+				err := a.db.QueryRow(`
+					INSERT INTO links (uuid, url, created_at)
+					VALUES (gen_random_uuid(), $1, NOW())
+					ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url
+					RETURNING id
+				`, eng.URL).Scan(&linkID)
+				if err != nil {
+					a.log.Printf("SendGrid: error finding/creating link: %v", err)
+					continue
+				}
+
+				// Record click with deduplication
+				_, err = a.db.Exec(`
+					INSERT INTO link_clicks (campaign_id, subscriber_id, link_id, created_at)
+					SELECT $1, $2, $3, $4
+					WHERE NOT EXISTS (
+						SELECT 1 FROM link_clicks
+						WHERE campaign_id = $1
+						AND subscriber_id = $2
+						AND link_id = $3
+						AND ABS(EXTRACT(EPOCH FROM (created_at - $4))) <= 5
+					)
+				`, campaignID, subscriberID, linkID, eng.Timestamp)
+				if err != nil {
+					a.log.Printf("SendGrid: error recording click: %v", err)
+				} else {
+					a.log.Printf("SendGrid: recorded click for campaign %d, subscriber %d, link %d", campaignID, subscriberID, linkID)
+				}
+			}
+		}
+
+		// Skip the default logging since we logged each event individually
+		processed = true
+		return c.JSON(http.StatusOK, okResp{true})
 
 	// Postmark.
 	case service == "postmark" && a.cfg.BouncePostmarkEnabled:
