@@ -390,7 +390,8 @@ func (a *App) BounceWebhook(c echo.Context) error {
 
 		// Skip the default logging since we logged each event individually
 		processed = true
-		return c.JSON(http.StatusOK, okResp{true})
+		// NOTE: Don't return early here - let the function continue to process bounces
+		// The bounces array was populated at line 274: bounces = append(bounces, result.Bounces...)
 
 	// Postmark.
 	case service == "postmark" && a.cfg.BouncePostmarkEnabled:
@@ -514,8 +515,10 @@ func (a *App) BounceWebhook(c echo.Context) error {
 					// Extract status reason and delivery details
 					statusReason := ""
 					deliveryDetailsJSON := ""
+					var deliveryDetails map[string]interface{}
 
-					if deliveryDetails, ok := event.Data["deliveryStatusDetails"].(map[string]interface{}); ok {
+					if dd, ok := event.Data["deliveryStatusDetails"].(map[string]interface{}); ok {
+						deliveryDetails = dd
 						if statusMessage, ok := deliveryDetails["statusMessage"].(string); ok {
 							statusReason = statusMessage
 						}
@@ -523,6 +526,13 @@ func (a *App) BounceWebhook(c echo.Context) error {
 						if detailsBytes, err := json.Marshal(deliveryDetails); err == nil {
 							deliveryDetailsJSON = string(detailsBytes)
 						}
+					}
+
+					// Check if this is a rate limit failure and handle it
+					// Azure may report "Failed" or "Throttled" statuses when rate limited
+					sender, _ := event.Data["sender"].(string)
+					if a.rateLimitTracker != nil && (status == "Failed" || status == "Throttled") {
+						a.rateLimitTracker.HandleAzureDeliveryFailure("", sender, status, deliveryDetails)
 					}
 
 					// Store delivery event in azure_delivery_events table

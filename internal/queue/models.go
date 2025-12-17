@@ -7,18 +7,19 @@ import (
 
 // EmailQueueItem represents a single email in the queue
 type EmailQueueItem struct {
-	ID                    int64     `db:"id" json:"id"`
-	CampaignID            int       `db:"campaign_id" json:"campaign_id"`
-	SubscriberID          int       `db:"subscriber_id" json:"subscriber_id"`
-	Status                string    `db:"status" json:"status"`
-	Priority              int       `db:"priority" json:"priority"`
-	ScheduledAt           time.Time `db:"scheduled_at" json:"scheduled_at"`
-	SentAt                 *time.Time       `db:"sent_at" json:"sent_at,omitempty"`
-	AssignedSMTPServerUUID sql.NullString  `db:"assigned_smtp_server_uuid" json:"assigned_smtp_server_uuid"`
-	RetryCount             int             `db:"retry_count" json:"retry_count"`
-	LastError              sql.NullString  `db:"last_error" json:"last_error,omitempty"`
-	CreatedAt             time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt             time.Time `db:"updated_at" json:"updated_at"`
+	ID                     int64          `db:"id" json:"id"`
+	CampaignID             int            `db:"campaign_id" json:"campaign_id"`
+	SubscriberID           int            `db:"subscriber_id" json:"subscriber_id"`
+	SubscriberEmail        string         `db:"subscriber_email" json:"subscriber_email"` // For domain-based routing
+	Status                 string         `db:"status" json:"status"`
+	Priority               int            `db:"priority" json:"priority"`
+	ScheduledAt            time.Time      `db:"scheduled_at" json:"scheduled_at"`
+	SentAt                 *time.Time     `db:"sent_at" json:"sent_at,omitempty"`
+	AssignedSMTPServerUUID sql.NullString `db:"assigned_smtp_server_uuid" json:"assigned_smtp_server_uuid"`
+	RetryCount             int            `db:"retry_count" json:"retry_count"`
+	LastError              sql.NullString `db:"last_error" json:"last_error,omitempty"`
+	CreatedAt              time.Time      `db:"created_at" json:"created_at"`
+	UpdatedAt              time.Time      `db:"updated_at" json:"updated_at"`
 }
 
 // Queue item statuses
@@ -54,6 +55,7 @@ type SMTPRateLimitState struct {
 type ServerCapacity struct {
 	UUID                string
 	Name                string
+	Host                string
 	DailyLimit          int
 	DailyUsed           int
 	DailyRemaining      int

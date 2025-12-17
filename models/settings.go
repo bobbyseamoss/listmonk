@@ -17,6 +17,8 @@ type Settings struct {
 	CheckUpdates                  bool     `json:"app.check_updates"`
 	AppLang                       string   `json:"app.lang"`
 	AppTimezone                   string   `json:"app.timezone"`
+	AppAbuseEmail                 string   `json:"app.abuse_email"`
+	AppFeedbackSenderId           string   `json:"app.feedback_sender_id"`
 
 	AppBatchSize             int    `json:"app.batch_size"`
 	AppConcurrency           int    `json:"app.concurrency"`
@@ -167,10 +169,26 @@ type Settings struct {
 		Enabled               bool   `json:"enabled"`
 		WebhookSecret         string `json:"webhook_secret,omitempty"`
 		AttributionWindowDays int    `json:"attribution_window_days"`
+		StoreURL              string `json:"store_url"`
+		AccessToken           string `json:"access_token,omitempty"`
 	} `json:"shopify"`
+
+	// Spintax configuration
+	Spintax struct {
+		Enabled bool `json:"enabled"`
+		AI      struct {
+			Enabled        bool   `json:"enabled"`
+			APIKey         string `json:"api_key,omitempty"`
+			VariationLevel int    `json:"variation_level"` // 1-5
+		} `json:"ai"`
+	} `json:"spintax"`
 
 	AdminCustomCSS  string `json:"appearance.admin.custom_css"`
 	AdminCustomJS   string `json:"appearance.admin.custom_js"`
 	PublicCustomCSS string `json:"appearance.public.custom_css"`
 	PublicCustomJS  string `json:"appearance.public.custom_js"`
+
+	// Domain routing - maps email domains to routing type: "azure", "sendgrid", or "disabled"
+	// e.g., {"gmail.com": "sendgrid", "yahoo.com": "azure", "spam.com": "disabled"}
+	DomainRouting map[string]string `json:"domain_routing"`
 }

@@ -46,6 +46,10 @@
             <smtp-settings :form="form" :key="key" />
           </b-tab-item><!-- mail servers -->
 
+          <b-tab-item label="Domain Routing">
+            <domain-routing-settings :form="form" :key="key" />
+          </b-tab-item><!-- domain routing -->
+
           <b-tab-item :label="$t('settings.bounces.name')">
             <bounce-settings :form="form" :key="key" />
           </b-tab-item><!-- bounces -->
@@ -81,6 +85,7 @@ import { mapState } from 'vuex';
 import AppearanceSettings from './settings/appearance.vue';
 import BounceSettings from './settings/bounces.vue';
 import CampaignSettings from './settings/campaigns.vue';
+import DomainRoutingSettings from './settings/domain-routing.vue';
 import GeneralSettings from './settings/general.vue';
 import MediaSettings from './settings/media.vue';
 import MessengerSettings from './settings/messengers.vue';
@@ -99,6 +104,7 @@ export default Vue.extend({
     SecuritySettings,
     MediaSettings,
     SmtpSettings,
+    DomainRoutingSettings,
     BounceSettings,
     CampaignSettings,
     MessengerSettings,

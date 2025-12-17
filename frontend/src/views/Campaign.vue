@@ -138,6 +138,15 @@
                   </div>
                 </div>
 
+                <div class="columns" v-if="form.messenger === 'automatic'">
+                  <div class="column is-8">
+                    <b-field label="Bypass Sending Time Window" data-cy="btn-bypass-time-window"
+                      message="Send immediately regardless of configured sending time window. Useful for test campaigns outside normal sending hours.">
+                      <b-switch v-model="form.bypassTimeWindow" :disabled="!canEdit" />
+                    </b-field>
+                  </div>
+                </div>
+
                 <div>
                   <p class="has-text-right">
                     <a href="#" @click.prevent="onShowHeaders" data-cy="btn-headers">
@@ -436,6 +445,7 @@ export default Vue.extend({
         // Parsed Date() version of send_at from the API.
         sendAtDate: null,
         sendLater: false,
+        bypassTimeWindow: false,
         archive: false,
         archiveMetaStr: '{}',
         archiveMeta: {},
@@ -637,6 +647,7 @@ export default Vue.extend({
         send_at: this.form.sendLater ? this.form.sendAtDate : null,
         headers: this.form.headers,
         media: this.form.media.map((m) => m.id),
+        bypass_time_window: this.form.bypassTimeWindow,
       };
 
       this.$api.createCampaign(data).then((d) => {
@@ -666,6 +677,7 @@ export default Vue.extend({
         archive_template_id: this.form.archiveTemplateId,
         archive_meta: this.form.archiveMeta,
         media: this.form.media.map((m) => m.id),
+        bypass_time_window: this.form.bypassTimeWindow,
       };
 
       let typMsg = 'globals.messages.updated';

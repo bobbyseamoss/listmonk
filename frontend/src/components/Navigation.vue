@@ -69,6 +69,9 @@
         data-cy="webhook-logs" icon="webhook" :label="'Webhook Logs'" />
     </b-menu-item><!-- settings -->
 
+    <b-menu-item :to="{ name: 'shopifyOrderTally' }" tag="router-link" :active="activeItem.shopifyOrderTally"
+      icon="shopping" label="Shopify Order Tally" /><!-- shopify order tally -->
+
     <b-menu-item v-if="isMobile" icon="logout-variant" :label="$t('users.logout')" @click.prevent="doLogout" />
   </b-menu-list>
 </template>

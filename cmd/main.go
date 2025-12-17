@@ -15,6 +15,7 @@ import (
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/v2"
 	"github.com/knadh/listmonk/internal/auth"
+	"github.com/knadh/listmonk/internal/azure"
 	"github.com/knadh/listmonk/internal/bounce"
 	"github.com/knadh/listmonk/internal/buflog"
 	"github.com/knadh/listmonk/internal/captcha"
@@ -25,6 +26,7 @@ import (
 	"github.com/knadh/listmonk/internal/media"
 	"github.com/knadh/listmonk/internal/messenger/email"
 	"github.com/knadh/listmonk/internal/queue"
+	"github.com/knadh/listmonk/internal/ratelimit"
 	"github.com/knadh/listmonk/internal/subimporter"
 	"github.com/knadh/listmonk/models"
 	"github.com/knadh/paginator"
@@ -33,26 +35,28 @@ import (
 
 // App contains the "global" shared components, controllers and fields.
 type App struct {
-	cfg          *Config
-	urlCfg       *UrlConfig
-	fs           stuffbin.FileSystem
-	db           *sqlx.DB
-	queries      *models.Queries
-	core         *core.Core
-	manager      *manager.Manager
-	messengers   []manager.Messenger
-	emailMsgr    manager.Messenger
-	importer     *subimporter.Importer
-	auth         *auth.Auth
-	media        media.Store
-	bounce       *bounce.Manager
-	captcha      *captcha.Captcha
-	i18n         *i18n.I18n
-	pg           *paginator.Paginator
-	events       *events.Events
-	log          *log.Logger
-	bufLog       *buflog.BufLog
-	queueProc    *queue.Processor
+	cfg               *Config
+	urlCfg            *UrlConfig
+	fs                stuffbin.FileSystem
+	db                *sqlx.DB
+	queries           *models.Queries
+	core              *core.Core
+	manager           *manager.Manager
+	messengers        []manager.Messenger
+	emailMsgr         manager.Messenger
+	importer          *subimporter.Importer
+	auth              *auth.Auth
+	media             media.Store
+	bounce            *bounce.Manager
+	captcha           *captcha.Captcha
+	i18n              *i18n.I18n
+	pg                *paginator.Paginator
+	events            *events.Events
+	log               *log.Logger
+	bufLog            *buflog.BufLog
+	queueProc         *queue.Processor
+	azureSuppression  *azure.SuppressionClient
+	rateLimitTracker  *ratelimit.Tracker
 
 	about         about
 	fnOptinNotify func(models.Subscriber, []int) (int, error)
@@ -256,28 +260,52 @@ func main() {
 		return mgr.PushCampaignMessageByID(campaignID, subID, serverUUID)
 	})
 
+	// Initialize the Azure suppression list client
+	azureSuppression := azure.NewSuppressionClient(azure.SuppressionConfig{
+		Enabled:          cfg.AzureSuppressionEnabled,
+		SubscriptionID:   cfg.AzureSuppressionSubscriptionID,
+		ResourceGroup:    cfg.AzureSuppressionResourceGroup,
+		EmailServiceName: cfg.AzureSuppressionEmailServiceName,
+		DomainName:       cfg.AzureSuppressionDomainName,
+		ListName:         cfg.AzureSuppressionListName,
+	}, lo)
+	if cfg.AzureSuppressionEnabled {
+		lo.Printf("Azure suppression list integration enabled for %s/%s", cfg.AzureSuppressionDomainName, cfg.AzureSuppressionListName)
+	}
+
+	// Initialize the rate limit tracker for auto-disabling throttled SMTP servers
+	rateLimitTracker := ratelimit.NewTracker(db, lo)
+	go rateLimitTracker.StartReenableScheduler(make(chan struct{})) // Runs forever, checking every minute
+
+	// Wire up the rate limit handler for the queue processor
+	queueProc.SetRateLimitHandler(func(serverUUID, serverName string, err error) {
+		rateLimitTracker.HandleRateLimitError(serverUUID, serverName, err)
+	})
+
 	// =========================================================================
 	// Initialize the App{} with all the global shared components, controllers and fields.
 	app := &App{
-		cfg:        cfg,
-		urlCfg:     urlCfg,
-		fs:         fs,
-		db:         db,
-		queries:    queries,
-		core:       core,
-		manager:    mgr,
-		messengers: msgrs,
-		emailMsgr:  emailMsgr,
-		importer:   importer,
-		auth:       auth,
-		media:      media,
-		bounce:     bounce,
-		captcha:    initCaptcha(),
-		i18n:       i18n,
-		log:        lo,
-		events:     evStream,
-		bufLog:     bufLog,
-		queueProc:  queueProc,
+		cfg:              cfg,
+		urlCfg:           urlCfg,
+		fs:               fs,
+		db:               db,
+		queries:          queries,
+		core:             core,
+		manager:          mgr,
+		messengers:       msgrs,
+		emailMsgr:        emailMsgr,
+		importer:         importer,
+		auth:             auth,
+		media:            media,
+		bounce:           bounce,
+		captcha:          initCaptcha(),
+		i18n:             i18n,
+		log:              lo,
+		events:           evStream,
+		bufLog:           bufLog,
+		queueProc:        queueProc,
+		azureSuppression: azureSuppression,
+		rateLimitTracker: rateLimitTracker,
 
 		pg: paginator.New(paginator.Opt{
 			DefaultPerPage: 20,

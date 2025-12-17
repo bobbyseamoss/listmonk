@@ -211,6 +211,16 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PUT("/api/templates/:id/default", pm(hasID(a.TemplateSetDefault), "templates:manage"))
 		g.DELETE("/api/templates/:id", pm(hasID(a.DeleteTemplate), "templates:manage"))
 
+		// Spintax API endpoints
+		g.GET("/api/spintax/settings", pm(a.GetSpintaxSettings, "templates:get"))
+		g.POST("/api/spintax/process", pm(a.ProcessSpintax, "templates:manage"))
+		g.POST("/api/spintax/preview", pm(a.PreviewSpintax, "templates:get"))
+		g.POST("/api/spintax/validate", pm(a.ValidateSpintax, "templates:get"))
+		g.POST("/api/spintax/generate", pm(a.GenerateSpintax, "templates:manage"))
+
+		// Shopify Order Tally API endpoint
+		g.GET("/api/shopify/order-tally", pm(handleGetShopifyOrderTally, "settings:get"))
+
 		g.DELETE("/api/maintenance/subscribers/:type", pm(a.GCSubscribers, "settings:maintain"))
 		g.DELETE("/api/maintenance/analytics/:type", pm(a.GCCampaignAnalytics, "settings:maintain"))
 		g.DELETE("/api/maintenance/subscriptions/unconfirmed", pm(a.GCSubscriptions, "settings:maintain"))

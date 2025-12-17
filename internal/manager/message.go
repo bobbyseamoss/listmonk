@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/knadh/listmonk/internal/spintax"
 	"github.com/knadh/listmonk/models"
 )
 
@@ -15,10 +16,11 @@ func (m *Manager) NewCampaignMessage(c *models.Campaign, s models.Subscriber) (C
 		Campaign:   c,
 		Subscriber: s,
 
-		subject:  c.Subject,
-		from:     c.FromEmail,
-		to:       s.Email,
-		unsubURL: fmt.Sprintf(m.cfg.UnsubURL, c.UUID, s.UUID),
+		subject:        c.Subject,
+		from:           c.FromEmail,
+		to:             s.Email,
+		unsubURL:       fmt.Sprintf(m.cfg.UnsubURL, c.UUID, s.UUID),
+		spintaxEnabled: m.cfg.SpintaxEnabled,
 	}
 
 	if err := msg.render(); err != nil {
@@ -42,11 +44,21 @@ func (m *CampaignMessage) render() error {
 		out.Reset()
 	}
 
+	// Apply spintax processing to subject if enabled.
+	if m.spintaxEnabled && spintax.HasSpintax(m.subject) {
+		m.subject = spintax.Process(m.subject)
+	}
+
 	// Compile the main template.
 	if err := m.Campaign.Tpl.ExecuteTemplate(&out, models.BaseTpl, m); err != nil {
 		return err
 	}
 	m.body = out.Bytes()
+
+	// Apply spintax processing to body if enabled.
+	if m.spintaxEnabled && spintax.HasSpintax(string(m.body)) {
+		m.body = []byte(spintax.Process(string(m.body)))
+	}
 
 	// Is there an alt body?
 	if m.Campaign.ContentType != models.CampaignContentTypePlain && m.Campaign.AltBody.Valid {
@@ -58,6 +70,11 @@ func (m *CampaignMessage) render() error {
 			m.altBody = b.Bytes()
 		} else {
 			m.altBody = []byte(m.Campaign.AltBody.String)
+		}
+
+		// Apply spintax processing to alt body if enabled.
+		if m.spintaxEnabled && spintax.HasSpintax(string(m.altBody)) {
+			m.altBody = []byte(spintax.Process(string(m.altBody)))
 		}
 	}
 

@@ -42,6 +42,24 @@
     </b-field>
 
     <hr />
+    <div>
+      <h2 class="is-size-4 mb-5">
+        Email Headers
+      </h2>
+      <b-field label="Abuse Email" label-position="on-border"
+        message="Email address for spam/abuse reports. Used in X-Report-Abuse header.">
+        <b-input v-model="data['app.abuse_email']" name="app.abuse_email"
+          placeholder="abuse@yoursite.com" type="email" :maxlength="200" />
+      </b-field>
+
+      <b-field label="Feedback Sender ID" label-position="on-border"
+        message="5-15 character identifier for Google Postmaster Tools Feedback-ID header. Must be consistent across all emails.">
+        <b-input v-model="data['app.feedback_sender_id']" name="app.feedback_sender_id"
+          placeholder="yoursite" :maxlength="15" pattern="[a-zA-Z0-9-]{5,15}" />
+      </b-field>
+    </div>
+
+    <hr />
 
     <div>
       <h2 class="is-size-4 mb-5">

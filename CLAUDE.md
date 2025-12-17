@@ -369,6 +369,7 @@ Each SMTP server now supports:
 
 **Campaign Form** (`frontend/src/views/Campaign.vue`):
 - "automatic (queue-based)" option in messenger dropdown
+- "Bypass Sending Time Window" toggle (only shows for automatic messenger)
 
 ### Queue Processor Features
 
@@ -376,18 +377,39 @@ Each SMTP server now supports:
 - Tracks daily usage per SMTP server
 - Respects daily limits (stops when limit reached)
 - Respects sliding window rate limits (existing feature)
-- Selects server with most remaining capacity
+- Round-robin selection when servers have equal capacity
+
+**Round-Robin SMTP Selection** (`internal/queue/processor.go:852-916`):
+- When multiple servers have the same remaining capacity, uses round-robin
+- Servers sorted by UUID for consistent ordering
+- Uses mutex-protected counter for thread safety
+- Logs each round-robin selection for debugging
 
 **Time Window Enforcement**:
 - Only processes emails within configured time window
 - Calculates sending hours per day for estimates
 - Aligns scheduled times to window boundaries
 
+**Bypass Time Window** (per-campaign):
+- Campaigns can set `bypass_time_window=true` to send outside time window
+- Toggle appears in Campaign form when messenger is "automatic"
+- Bypass campaigns are NOT auto-paused when time window ends
+- Queue processor processes bypass campaign emails even outside window
+- Useful for testing campaigns during off-hours
+
 **Delivery Estimation**:
 - Calculates campaign completion time
 - Distributes emails proportionally across servers
 - Provides daily breakdown of sending schedule
 - Indicates if campaign fits within single day
+
+**Stuck Email Recovery** (`internal/queue/processor.go:669-693`):
+- Automatically recovers emails stuck in "sending" status for >5 minutes
+- Runs on every batch fetch (every poll interval)
+- Resets stuck emails back to "queued" for retry
+- Prevents permanent stalls from crashes, timeouts, or failures
+- Logs recovery count when emails are recovered
+- Appends recovery reason to last_error field for debugging
 
 ### Integration Points
 
@@ -406,6 +428,51 @@ Each SMTP server now supports:
 - Creates email_queue, smtp_daily_usage, smtp_rate_limit_state tables
 - Adds queue tracking columns to campaigns table
 - Registered in cmd/upgrade.go migList
+
+**v7.3.0 Migration** (`internal/migrations/v7.3.0.go`):
+- Adds bypass_time_window column to campaigns table
+- Allows per-campaign bypass of sending time window
+
+### Rate Limit Auto-Disable
+
+**Module**: `internal/ratelimit/tracker.go`
+
+The rate limit tracker automatically disables SMTP servers that hit rate limits and re-enables them after the cooldown period.
+
+**Detection Patterns**:
+- "too many requests", "rate limit", "throttl"
+- Azure SMTP codes: 451 4.7.1, 452 4.3.1, 421 4.7.0
+- Azure webhook statuses: "Failed", "Throttled"
+
+**Behavior**:
+- Parses Retry-After values or uses 1-hour default
+- Adds 10% margin to all cooldown periods
+- Updates database settings to disable server (`enabled = false`)
+- Background scheduler checks every minute to re-enable expired servers
+- Logs all disable/re-enable actions
+
+**Integration Points**:
+- Queue processor: `SetRateLimitHandler()` callback on send errors
+- Azure webhook handler: Checks delivery status for rate limit failures
+
+### Email Headers
+
+**Settings** (Settings > General > Email Headers):
+- `app.abuse_email`: Email for spam/abuse reports
+- `app.feedback_sender_id`: 5-15 char identifier for Google Postmaster Tools
+
+**Headers Added to Every Email**:
+- `Reply-To`: Uses `app.from_email` setting
+- `List-Unsubscribe`: Unsubscribe URL (existing)
+- `List-Unsubscribe-Post`: One-click unsubscribe (existing)
+- `X-Report-Abuse`: "Please report any spam or abuse to: {abuse_email}"
+- `Feedback-ID`: `{campaign_uuid}:{campaign_id}:{subscriber_uuid}:{sender_id}` per Google spec
+
+**Code Locations**:
+- Header setting: `internal/manager/manager.go:317-337` (queue path), `:669-689` (direct path)
+- Settings model: `models/settings.go:20-21`
+- UI: `frontend/src/views/settings/general.vue:44-60`
+- Migration: `internal/migrations/v7.6.0.go`
 
 ### Common Use Cases
 

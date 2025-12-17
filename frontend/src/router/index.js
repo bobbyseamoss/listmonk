@@ -149,6 +149,12 @@ const routes = [
     meta: { title: 'maintenance.title', group: 'settings' },
     component: () => import('../views/Maintenance.vue'),
   },
+  {
+    path: '/shopify/order-tally',
+    name: 'shopifyOrderTally',
+    meta: { title: 'Shopify Order Tally', group: 'shopify' },
+    component: () => import('../views/ShopifyOrderTally.vue'),
+  },
 ];
 
 const router = new VueRouter({

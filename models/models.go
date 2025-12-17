@@ -241,6 +241,10 @@ type Campaign struct {
 	ArchiveTemplateID null.Int        `db:"archive_template_id" json:"archive_template_id"`
 	ArchiveMeta       json.RawMessage `db:"archive_meta" json:"archive_meta"`
 
+	// BypassTimeWindow allows campaigns to be sent outside the configured time window
+	// (useful for test campaigns when outside normal sending hours)
+	BypassTimeWindow bool `db:"bypass_time_window" json:"bypass_time_window"`
+
 	// TemplateBody is joined in from templates by the next-campaigns query.
 	TemplateBody        string             `db:"template_body" json:"-"`
 	ArchiveTemplateBody string             `db:"archive_template_body" json:"-"`

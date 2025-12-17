@@ -606,6 +606,8 @@ func initCampaignManager(msgrs []manager.Messenger, q *models.Queries, u *UrlCon
 		ArchiveURL:            u.ArchiveURL,
 		RootURL:               u.RootURL,
 		UnsubHeader:           ko.Bool("privacy.unsubscribe_header"),
+		AbuseEmail:            ko.String("app.abuse_email"),
+		FeedbackSenderId:      ko.String("app.feedback_sender_id"),
 		SlidingWindow:         ko.Bool("app.message_sliding_window"),
 		SlidingWindowDuration: ko.Duration("app.message_sliding_window_duration"),
 		SlidingWindowRate:     ko.Int("app.message_sliding_window_rate"),

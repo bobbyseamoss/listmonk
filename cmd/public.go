@@ -264,16 +264,33 @@ func (a *App) SubscriptionPrefs(c echo.Context) error {
 	}
 
 	// Simple unsubscribe.
+	// NOTE: All unsubscribes are global - subscriber is blocklisted and removed from all lists.
+	// This ensures compliance with user intent to stop receiving emails entirely.
 	var (
-		campUUID  = c.Param("campUUID")
-		subUUID   = c.Param("subUUID")
-		blocklist = a.cfg.Privacy.AllowBlocklist && req.Blocklist
+		campUUID = c.Param("campUUID")
+		subUUID  = c.Param("subUUID")
+		// Always blocklist on any unsubscribe action (global unsubscribe)
+		blocklist = true
 	)
 	if !req.Manage || blocklist {
+		// Get subscriber email before unsubscribing (for Azure suppression list)
+		sub, err := a.core.GetSubscriber(0, subUUID, "")
+		if err != nil {
+			return c.Render(http.StatusInternalServerError, tplMessage,
+				makeMsgTpl(a.i18n.T("public.errorTitle"), "", a.i18n.T("public.errorProcessingRequest")))
+		}
+
 		if err := a.core.UnsubscribeByCampaign(subUUID, campUUID, blocklist); err != nil {
 			return c.Render(http.StatusInternalServerError, tplMessage,
 				makeMsgTpl(a.i18n.T("public.errorTitle"), "", a.i18n.T("public.errorProcessingRequest")))
 		}
+
+		// Add to Azure domain suppression list (fire and forget - don't fail unsubscribe if this fails)
+		go func(email string) {
+			if err := a.azureSuppression.AddToSuppressionList(email); err != nil {
+				a.log.Printf("Failed to add %s to Azure suppression list: %v", email, err)
+			}
+		}(sub.Email)
 
 		return c.Render(http.StatusOK, tplMessage,
 			makeMsgTpl(a.i18n.T("public.unsubbedTitle"), "", a.i18n.T("public.unsubbedInfo")))

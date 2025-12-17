@@ -679,3 +679,6 @@ export const previewSpintax = (text, count = 5) => http.post('/api/spintax/previ
 export const validateSpintax = (text) => http.post('/api/spintax/validate', { text });
 
 export const generateSpintax = (data) => http.post('/api/spintax/generate', data);
+
+// Shopify Order Tally API
+export const getShopifyOrderTally = (params) => http.get('/api/shopify/order-tally', { params });

@@ -132,12 +132,33 @@ func (a *Azure) ProcessDeliveryEvent(rawEvent map[string]interface{}) (models.Bo
 		return bounce, false, fmt.Errorf("error unmarshalling delivery data: %v", err)
 	}
 
+	// Extract status message from deliveryStatusDetails for error analysis
+	statusMessage := ""
+	if data.DeliveryStatusDetails != nil {
+		if msg, ok := data.DeliveryStatusDetails["statusMessage"].(string); ok {
+			statusMessage = strings.ToLower(msg)
+		}
+	}
+
+	// Check if this is a Gmail "low reputation domain" rejection (550 5.7.1)
+	// These are NOT permanent bounces - they're temporary spam rejections based on sender reputation
+	// The subscriber's email address is valid, so we should NOT blocklist them
+	isGmailReputationBlock := strings.Contains(statusMessage, "550 5.7.1") ||
+		strings.Contains(statusMessage, "550-5.7.1") ||
+		strings.Contains(statusMessage, "very low reputation of the sending")
+
 	// Determine if this is a bounce event and what type
 	shouldRecord := false
 	bounceType := models.BounceTypeHard
 
 	switch data.Status {
 	case StatusBounced, StatusFailed, StatusSuppressed:
+		// Check for Gmail reputation blocks - treat as soft bounce (won't blocklist)
+		if isGmailReputationBlock {
+			// Don't record Gmail reputation blocks at all - these are sender reputation issues,
+			// not problems with the recipient's email address
+			return bounce, false, nil
+		}
 		// Hard bounces - permanent delivery failures
 		shouldRecord = true
 		bounceType = models.BounceTypeHard

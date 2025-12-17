@@ -66,6 +66,42 @@
         </div>
       </div>
 
+      <hr />
+
+      <h4 class="title is-6">Shopify Admin API (for Order Tally)</h4>
+      <p class="has-text-grey mb-4">
+        Configure your Shopify Admin API credentials to use the Order Tally feature.
+        Create a custom app in Shopify Admin → Settings → Apps and sales channels → Develop apps.
+      </p>
+
+      <div class="columns mb-4">
+        <div class="column">
+          <b-field
+            label="Store URL"
+            message="Your Shopify store URL (e.g., your-store.myshopify.com)">
+            <b-input
+              v-model="storeUrl"
+              type="text"
+              name="store_url"
+              placeholder="your-store.myshopify.com" />
+          </b-field>
+        </div>
+      </div>
+
+      <div class="columns mb-4">
+        <div class="column">
+          <b-field
+            label="Admin API Access Token"
+            message="Your Shopify Admin API access token (starts with shpat_). Leave blank to keep existing.">
+            <b-input
+              v-model="accessToken"
+              type="password"
+              name="access_token"
+              placeholder="shpat_..." />
+          </b-field>
+        </div>
+      </div>
+
       <div class="notification is-info is-light">
         <p><strong>{{ $t('settings.shopify.howItWorks', 'How it works:') }}</strong></p>
         <ol>
@@ -118,6 +154,22 @@ export default Vue.extend({
       },
       set(value) {
         this.$set(this.form.shopify, 'attribution_window_days', value);
+      },
+    },
+    storeUrl: {
+      get() {
+        return this.form.shopify?.store_url || '';
+      },
+      set(value) {
+        this.$set(this.form.shopify, 'store_url', value);
+      },
+    },
+    accessToken: {
+      get() {
+        return this.form.shopify?.access_token || '';
+      },
+      set(value) {
+        this.$set(this.form.shopify, 'access_token', value);
       },
     },
   },

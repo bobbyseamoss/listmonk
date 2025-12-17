@@ -120,12 +120,13 @@ type CampaignMessage struct {
 	Campaign   *models.Campaign
 	Subscriber models.Subscriber
 
-	from     string
-	to       string
-	subject  string
-	body     []byte
-	altBody  []byte
-	unsubURL string
+	from           string
+	to             string
+	subject        string
+	body           []byte
+	altBody        []byte
+	unsubURL       string
+	spintaxEnabled bool
 
 	pipe *pipe
 }
@@ -151,6 +152,8 @@ type Config struct {
 	ArchiveURL            string
 	RootURL               string
 	UnsubHeader           bool
+	AbuseEmail            string
+	FeedbackSenderId      string
 
 	// Interval to scan the DB for active campaign checkpoints.
 	ScanInterval time.Duration
@@ -161,6 +164,11 @@ type Config struct {
 	// (exposed to the internet, private etc.) where only one does campaign
 	// processing while the others handle other kinds of traffic.
 	ScanCampaigns bool
+
+	// SpintaxEnabled indicates whether spintax processing is enabled for messages.
+	// When enabled, spintax syntax like {option1|option2|option3} will be processed
+	// and a random variation selected for each message.
+	SpintaxEnabled bool
 }
 
 var pushTimeout = time.Second * 3
@@ -304,6 +312,28 @@ func (m *Manager) PushCampaignMessageByID(campaignID int, subscriberID int, serv
 	if m.cfg.UnsubHeader {
 		h.Set("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
 		h.Set("List-Unsubscribe", `<`+msg.unsubURL+`>`)
+	}
+
+	// Set Reply-To header (uses the default from_email)
+	if m.cfg.FromEmail != "" {
+		h.Set("Reply-To", m.cfg.FromEmail)
+	}
+
+	// Set X-Report-Abuse header if abuse email is configured
+	if m.cfg.AbuseEmail != "" {
+		h.Set("X-Report-Abuse", "Please report any spam or abuse to: "+m.cfg.AbuseEmail)
+	}
+
+	// Set Feedback-ID header for Google Postmaster Tools
+	// Format: campaignID:listID:subscriberID:senderID (per Google's spec)
+	if m.cfg.FeedbackSenderId != "" {
+		// Use campaign UUID and subscriber UUID for tracking, sender ID for consistency
+		feedbackID := fmt.Sprintf("%s:%d:%s:%s",
+			msg.Campaign.UUID,
+			msg.Campaign.ID,
+			msg.Subscriber.UUID,
+			m.cfg.FeedbackSenderId)
+		h.Set("Feedback-ID", feedbackID)
 	}
 
 	// Attach any custom headers
@@ -634,6 +664,28 @@ func (m *Manager) worker() {
 			if m.cfg.UnsubHeader {
 				h.Set("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
 				h.Set("List-Unsubscribe", `<`+msg.unsubURL+`>`)
+			}
+
+			// Set Reply-To header (uses the default from_email)
+			if m.cfg.FromEmail != "" {
+				h.Set("Reply-To", m.cfg.FromEmail)
+			}
+
+			// Set X-Report-Abuse header if abuse email is configured
+			if m.cfg.AbuseEmail != "" {
+				h.Set("X-Report-Abuse", "Please report any spam or abuse to: "+m.cfg.AbuseEmail)
+			}
+
+			// Set Feedback-ID header for Google Postmaster Tools
+			// Format: campaignID:listID:subscriberID:senderID (per Google's spec)
+			if m.cfg.FeedbackSenderId != "" {
+				// Use campaign UUID and subscriber UUID for tracking, sender ID for consistency
+				feedbackID := fmt.Sprintf("%s:%d:%s:%s",
+					msg.Campaign.UUID,
+					msg.Campaign.ID,
+					msg.Subscriber.UUID,
+					m.cfg.FeedbackSenderId)
+				h.Set("Feedback-ID", feedbackID)
 			}
 
 			// Attach any custom headers.

@@ -1,115 +1,176 @@
 package webhooks
 
 import (
-	"crypto/ecdsa"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/asn1"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 	"time"
 
 	"github.com/knadh/listmonk/models"
 )
 
-type sendgridNotif struct {
+// SendgridEvent represents a single event from SendGrid webhook
+type SendgridEvent struct {
 	Email                string `json:"email"`
 	Timestamp            int64  `json:"timestamp"`
 	Event                string `json:"event"`
 	BounceClassification string `json:"bounce_classification"`
+	Reason               string `json:"reason"`
+	Type                 string `json:"type"`
+	SGMessageID          string `json:"sg_message_id"`
+	SMTPID               string `json:"smtp-id"`
+	URL                  string `json:"url"`       // For click events
+	UserAgent            string `json:"useragent"` // For open/click events
+	IP                   string `json:"ip"`
 
-	// SendGrid flattens all X-headers and adds them to the bounce
-	// event notification.
-	CampaignUUID string `json:"XListmonkCampaign"`
+	// SendGrid flattens all X-headers and adds them to the event notification.
+	CampaignUUID   string `json:"XListmonkCampaign"`
+	SubscriberUUID string `json:"XListmonkSubscriber"`
 }
 
-// Sendgrid handles Sendgrid/SNS webhook notifications including confirming SNS topic subscription
-// requests and bounce notifications.
-type Sendgrid struct {
-	pubKey *ecdsa.PublicKey
+// SendgridEngagement represents an engagement event (open, click)
+type SendgridEngagement struct {
+	Email          string
+	Event          string // "open" or "click"
+	URL            string // For clicks
+	UserAgent      string
+	IP             string
+	Timestamp      time.Time
+	CampaignUUID   string
+	SubscriberUUID string
 }
+
+// SendgridResult contains the processed results from SendGrid webhooks
+type SendgridResult struct {
+	Bounces     []models.Bounce
+	Engagements []SendgridEngagement
+	Events      []SendgridEvent // All raw events for logging
+}
+
+// Sendgrid handles Sendgrid webhook notifications
+type Sendgrid struct{}
 
 // NewSendgrid returns a new Sendgrid instance.
 func NewSendgrid(key string) (*Sendgrid, error) {
-	// Get the certificate from the key.
-	sigB, err := base64.StdEncoding.DecodeString(key)
-	if err != nil {
-		return nil, err
-	}
-
-	pubKey, err := x509.ParsePKIXPublicKey(sigB)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Sendgrid{pubKey: pubKey.(*ecdsa.PublicKey)}, nil
+	// Key is ignored - no signature validation
+	return &Sendgrid{}, nil
 }
 
-// ProcessBounce processes Sendgrid bounce notifications and returns one or more Bounce objects.
-func (s *Sendgrid) ProcessBounce(sig, timestamp string, b []byte) ([]models.Bounce, error) {
-	if err := s.verifyNotif(sig, timestamp, b); err != nil {
-		return nil, err
-	}
-
-	var notifs []sendgridNotif
-	if err := json.Unmarshal(b, &notifs); err != nil {
+// ProcessEvents processes all SendGrid webhook events and returns bounces, engagements, and raw events
+func (s *Sendgrid) ProcessEvents(b []byte) (*SendgridResult, error) {
+	var events []SendgridEvent
+	if err := json.Unmarshal(b, &events); err != nil {
 		return nil, fmt.Errorf("error unmarshalling Sendgrid notification: %v", err)
 	}
 
-	out := make([]models.Bounce, 0, len(notifs))
-	for _, n := range notifs {
-		if n.Event != "bounce" {
-			continue
-		}
-
-		typ := models.BounceTypeHard
-		if n.BounceClassification == "technical" || n.BounceClassification == "content" {
-			typ = models.BounceTypeSoft
-		}
-
-		tstamp := time.Unix(n.Timestamp, 0)
-		bn := models.Bounce{
-			CampaignUUID: n.CampaignUUID,
-			Email:        strings.ToLower(n.Email),
-			Type:         typ,
-			Meta:         json.RawMessage(b),
-			Source:       "sendgrid",
-			CreatedAt:    tstamp,
-		}
-		out = append(out, bn)
+	result := &SendgridResult{
+		Bounces:     make([]models.Bounce, 0),
+		Engagements: make([]SendgridEngagement, 0),
+		Events:      events,
 	}
 
-	return out, nil
+	for _, e := range events {
+		tstamp := time.Unix(e.Timestamp, 0)
+
+		switch e.Event {
+		case "bounce":
+			typ := models.BounceTypeHard
+			if e.BounceClassification == "technical" || e.BounceClassification == "content" {
+				typ = models.BounceTypeSoft
+			}
+			result.Bounces = append(result.Bounces, models.Bounce{
+				CampaignUUID:   e.CampaignUUID,
+				SubscriberUUID: e.SubscriberUUID,
+				Email:          strings.ToLower(e.Email),
+				Type:           typ,
+				Meta:           json.RawMessage(b),
+				Source:         "sendgrid",
+				CreatedAt:      tstamp,
+			})
+
+		case "dropped":
+			typ := models.BounceTypeHard
+			if e.Type == "expired" {
+				typ = models.BounceTypeSoft
+			}
+			result.Bounces = append(result.Bounces, models.Bounce{
+				CampaignUUID:   e.CampaignUUID,
+				SubscriberUUID: e.SubscriberUUID,
+				Email:          strings.ToLower(e.Email),
+				Type:           typ,
+				Meta:           json.RawMessage(b),
+				Source:         "sendgrid",
+				CreatedAt:      tstamp,
+			})
+
+		case "spamreport", "unsubscribe":
+			result.Bounces = append(result.Bounces, models.Bounce{
+				CampaignUUID:   e.CampaignUUID,
+				SubscriberUUID: e.SubscriberUUID,
+				Email:          strings.ToLower(e.Email),
+				Type:           models.BounceTypeComplaint,
+				Meta:           json.RawMessage(b),
+				Source:         "sendgrid",
+				CreatedAt:      tstamp,
+			})
+
+		case "blocked":
+			result.Bounces = append(result.Bounces, models.Bounce{
+				CampaignUUID:   e.CampaignUUID,
+				SubscriberUUID: e.SubscriberUUID,
+				Email:          strings.ToLower(e.Email),
+				Type:           models.BounceTypeHard,
+				Meta:           json.RawMessage(b),
+				Source:         "sendgrid",
+				CreatedAt:      tstamp,
+			})
+
+		case "deferred":
+			result.Bounces = append(result.Bounces, models.Bounce{
+				CampaignUUID:   e.CampaignUUID,
+				SubscriberUUID: e.SubscriberUUID,
+				Email:          strings.ToLower(e.Email),
+				Type:           models.BounceTypeSoft,
+				Meta:           json.RawMessage(b),
+				Source:         "sendgrid",
+				CreatedAt:      tstamp,
+			})
+
+		case "open":
+			result.Engagements = append(result.Engagements, SendgridEngagement{
+				Email:          strings.ToLower(e.Email),
+				Event:          "open",
+				UserAgent:      e.UserAgent,
+				IP:             e.IP,
+				Timestamp:      tstamp,
+				CampaignUUID:   e.CampaignUUID,
+				SubscriberUUID: e.SubscriberUUID,
+			})
+
+		case "click":
+			result.Engagements = append(result.Engagements, SendgridEngagement{
+				Email:          strings.ToLower(e.Email),
+				Event:          "click",
+				URL:            e.URL,
+				UserAgent:      e.UserAgent,
+				IP:             e.IP,
+				Timestamp:      tstamp,
+				CampaignUUID:   e.CampaignUUID,
+				SubscriberUUID: e.SubscriberUUID,
+			})
+
+		// delivered, processed, etc. are logged but no action needed
+		}
+	}
+
+	return result, nil
 }
 
-// verifyNotif verifies the signature on a notification payload.
-func (s *Sendgrid) verifyNotif(sig, timestamp string, b []byte) error {
-	sigB, err := base64.StdEncoding.DecodeString(sig)
+// ProcessBounce is kept for backwards compatibility but now just wraps ProcessEvents
+func (s *Sendgrid) ProcessBounce(sig, timestamp string, b []byte) ([]models.Bounce, error) {
+	result, err := s.ProcessEvents(b)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	ecdsaSig := struct {
-		R *big.Int
-		S *big.Int
-	}{}
-
-	if _, err := asn1.Unmarshal(sigB, &ecdsaSig); err != nil {
-		return fmt.Errorf("error asn1 unmarshal of signature: %v", err)
-	}
-
-	h := sha256.New()
-	h.Write([]byte(timestamp))
-	h.Write(b)
-	hash := h.Sum(nil)
-
-	if !ecdsa.Verify(s.pubKey, hash, ecdsaSig.R, ecdsaSig.S) {
-		return errors.New("invalid signature")
-	}
-
-	return nil
+	return result.Bounces, nil
 }

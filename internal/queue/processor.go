@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +13,9 @@ import (
 	"github.com/knadh/listmonk/models"
 	"github.com/lib/pq"
 )
+
+// RateLimitHandler is a callback for handling rate limit errors
+type RateLimitHandler func(serverUUID, serverName string, err error)
 
 // Processor handles the queue-based email delivery system
 type Processor struct {
@@ -23,9 +27,16 @@ type Processor struct {
 	getCampaign func(int) (*models.Campaign, error)
 	pushEmail   func(campaignID int, subID int, serverUUID string) error
 
+	// Rate limit handler callback
+	rateLimitHandler RateLimitHandler
+
 	// Control channels
 	stopChan chan struct{}
 	doneChan chan struct{}
+
+	// Round-robin counter for distributing emails across servers with equal capacity
+	rrCounter uint64
+	rrMutex   sync.Mutex
 }
 
 // Config holds the queue processor configuration
@@ -63,6 +74,11 @@ func New(db *sqlx.DB, cfg Config, log *log.Logger) *Processor {
 // SetPushEmailCallback sets the callback function for actually sending emails
 func (p *Processor) SetPushEmailCallback(fn func(campaignID int, subID int, serverUUID string) error) {
 	p.pushEmail = fn
+}
+
+// SetRateLimitHandler sets the callback function for handling rate limit errors
+func (p *Processor) SetRateLimitHandler(fn RateLimitHandler) {
+	p.rateLimitHandler = fn
 }
 
 // Start begins processing the queue
@@ -183,14 +199,21 @@ func (p *Processor) syncRunningCampaignCounts() error {
 // autoPauseResumeCampaigns automatically pauses campaigns when outside time window
 // and resumes them when inside time window
 func (p *Processor) autoPauseResumeCampaigns() error {
+	// Fetch current settings dynamically from database
+	// This ensures we always use the latest time window values even if changed in UI
+	settings, err := p.getSettings()
+	if err != nil {
+		return fmt.Errorf("error fetching settings for auto-pause: %w", err)
+	}
+
 	// Check if time window is configured
-	if p.cfg.TimeWindowStart == "" || p.cfg.TimeWindowEnd == "" {
+	if settings.AppSendTimeStart == "" || settings.AppSendTimeEnd == "" {
 		// No time window configured, nothing to do
 		return nil
 	}
 
-	// Check if we're currently within the time window
-	withinWindow := p.isWithinTimeWindow()
+	// Check if we're currently within the time window using dynamic settings
+	withinWindow := p.isWithinTimeWindowDynamic(settings)
 
 	if withinWindow {
 		// We're inside the window - resume any auto-paused campaigns
@@ -202,18 +225,24 @@ func (p *Processor) autoPauseResumeCampaigns() error {
 }
 
 // autoPauseRunningCampaigns pauses all running campaigns when outside time window
+// except for campaigns with bypass_time_window=true
 func (p *Processor) autoPauseRunningCampaigns() error {
 	// First, get list of running queue-based campaign IDs to sync
+	// Exclude campaigns with bypass_time_window=true - they should keep running
+	// Check for both use_queue=true AND messenger='automatic' to catch campaigns
+	// that were started before use_queue was properly set
 	var runningCampaignIDs []int
 	err := p.db.Select(&runningCampaignIDs, `
 		SELECT id FROM campaigns
 		WHERE status = 'running'
-		  AND use_queue = true
+		  AND (use_queue = true OR messenger = 'automatic')
 		  AND auto_paused = false
+		  AND bypass_time_window = false
 	`)
 	if err != nil {
 		return fmt.Errorf("error fetching running campaigns: %w", err)
 	}
+
 
 	// Sync campaign.sent counts from email_queue before pausing
 	// This ensures the paused campaign shows accurate sent counts
@@ -240,6 +269,9 @@ func (p *Processor) autoPauseRunningCampaigns() error {
 
 	// Update all running queue-based campaigns to paused status
 	// Only pause campaigns that aren't already auto-paused
+	// IMPORTANT: Skip campaigns with bypass_time_window=true - they should keep running
+	// Check for both use_queue=true AND messenger='automatic' to catch campaigns
+	// that were started before use_queue was properly set
 	res, err := p.db.Exec(`
 		UPDATE campaigns
 		SET status = 'paused',
@@ -247,8 +279,9 @@ func (p *Processor) autoPauseRunningCampaigns() error {
 		    auto_paused_at = NOW(),
 		    updated_at = NOW()
 		WHERE status = 'running'
-		  AND use_queue = true
+		  AND (use_queue = true OR messenger = 'automatic')
 		  AND auto_paused = false
+		  AND bypass_time_window = false
 	`)
 	if err != nil {
 		return fmt.Errorf("error auto-pausing campaigns: %w", err)
@@ -265,10 +298,12 @@ func (p *Processor) autoPauseRunningCampaigns() error {
 // resumeAutoPausedCampaigns resumes ALL paused queue-based campaigns when inside time window
 func (p *Processor) resumeAutoPausedCampaigns() error {
 	// First, get all paused queue-based campaign IDs
+	// Check for both use_queue=true AND messenger='automatic' to catch campaigns
+	// that were started before use_queue was properly set
 	var pausedCampaignIDs []int
 	err := p.db.Select(&pausedCampaignIDs, `
 		SELECT id FROM campaigns
-		WHERE status = 'paused' AND use_queue = true
+		WHERE status = 'paused' AND (use_queue = true OR messenger = 'automatic')
 	`)
 	if err != nil {
 		return fmt.Errorf("error fetching paused campaigns: %w", err)
@@ -303,6 +338,8 @@ func (p *Processor) resumeAutoPausedCampaigns() error {
 
 	// Update ALL paused queue-based campaigns back to running status
 	// This includes both auto-paused and manually paused campaigns
+	// Check for both use_queue=true AND messenger='automatic' to catch campaigns
+	// that were started before use_queue was properly set
 	res, err := p.db.Exec(`
 		UPDATE campaigns
 		SET status = 'running',
@@ -310,7 +347,7 @@ func (p *Processor) resumeAutoPausedCampaigns() error {
 		    auto_paused_at = NULL,
 		    updated_at = NOW()
 		WHERE status = 'paused'
-		  AND use_queue = true
+		  AND (use_queue = true OR messenger = 'automatic')
 	`)
 	if err != nil {
 		return fmt.Errorf("error resuming campaigns: %w", err)
@@ -348,12 +385,25 @@ func (p *Processor) processQueue() error {
 	}
 
 	// Check if we're within the time window
-	if !p.isWithinTimeWindow() {
-		return nil
+	withinWindow := p.isWithinTimeWindow()
+
+	// If outside time window, only process campaigns that have bypass_time_window=true
+	bypassOnly := !withinWindow
+
+	// If outside window and no bypass campaigns exist, skip processing entirely
+	if bypassOnly {
+		hasbypassCampaigns, err := p.hasBypassTimeWindowCampaigns()
+		if err != nil {
+			p.log.Printf("error checking bypass campaigns: %v", err)
+			return nil
+		}
+		if !hasbypassCampaigns {
+			return nil
+		}
 	}
 
-	// Get the next batch of emails to send
-	emails, err := p.getNextBatch()
+	// Get the next batch of emails to send (filtered to bypass campaigns if outside window)
+	emails, err := p.getNextBatch(bypassOnly)
 	if err != nil {
 		return fmt.Errorf("error getting next batch: %w", err)
 	}
@@ -428,7 +478,12 @@ func (p *Processor) processQueue() error {
 	// Process each email concurrently
 	for _, email := range emails {
 		// Find a server that can send this email
-		serverUUID := p.selectServer(capacities, email)
+		serverUUID, isDisabled := p.selectServer(capacities, email)
+		if isDisabled {
+			// Domain is disabled - mark as failed and skip
+			_ = p.markFailed(email.ID, "domain routing disabled - sending blocked")
+			continue
+		}
 		if serverUUID == "" {
 			// No server available, skip for now
 			p.log.Printf("⚠️  no SMTP server available for email %d (campaign %d, subscriber %d) - all servers at capacity",
@@ -500,6 +555,12 @@ func (p *Processor) processQueue() error {
 				}
 				p.log.Printf("✗ error sending email %d (campaign %d, subscriber %d) via SMTP server '%s': %v",
 					em.ID, em.CampaignID, em.SubscriberID, serverName, err)
+
+				// Check if this is a rate limit error and notify the handler
+				if p.rateLimitHandler != nil {
+					p.rateLimitHandler(srv, serverName, err)
+				}
+
 				if err := p.markFailed(em.ID, err.Error()); err != nil {
 					p.log.Printf("error marking email %d as failed: %v", em.ID, err)
 				}
@@ -628,20 +689,25 @@ func (p *Processor) checkCompletedCampaigns() error {
 }
 
 // isWithinTimeWindow checks if the current time is within the configured sending window
+// Uses dynamically-fetched settings to ensure UI changes take effect immediately
 func (p *Processor) isWithinTimeWindow() bool {
-	// If no time window is configured, always allow sending
-	if p.cfg.TimeWindowStart == "" || p.cfg.TimeWindowEnd == "" {
-		return true
-	}
-
-	// Get configured timezone from settings
+	// Get settings dynamically from database to pick up any UI changes
 	settings, err := p.getSettings()
 	if err != nil {
-		p.log.Printf("error getting settings for timezone: %v, using system time", err)
-		// Fall back to system time on error
-		now := time.Now()
-		currentTime := now.Format("15:04")
-		return currentTime >= p.cfg.TimeWindowStart && currentTime <= p.cfg.TimeWindowEnd
+		p.log.Printf("error getting settings for time window check: %v", err)
+		return true // Default to allow sending on error
+	}
+
+	// Use the dynamic isWithinTimeWindowDynamic function
+	return p.isWithinTimeWindowDynamic(settings)
+}
+
+// isWithinTimeWindowDynamic checks if the current time is within the sending window
+// using dynamically-fetched settings instead of cached config values
+func (p *Processor) isWithinTimeWindowDynamic(settings models.Settings) bool {
+	// If no time window is configured, always allow sending
+	if settings.AppSendTimeStart == "" || settings.AppSendTimeEnd == "" {
+		return true
 	}
 
 	// Load the configured timezone
@@ -651,7 +717,7 @@ func (p *Processor) isWithinTimeWindow() bool {
 		// Fall back to system time if timezone is invalid
 		now := time.Now()
 		currentTime := now.Format("15:04")
-		return currentTime >= p.cfg.TimeWindowStart && currentTime <= p.cfg.TimeWindowEnd
+		return currentTime >= settings.AppSendTimeStart && currentTime <= settings.AppSendTimeEnd
 	}
 
 	// Get current time in the configured timezone
@@ -659,12 +725,58 @@ func (p *Processor) isWithinTimeWindow() bool {
 	currentTime := now.Format("15:04")
 
 	// Simple string comparison works for HH:MM format
-	return currentTime >= p.cfg.TimeWindowStart && currentTime <= p.cfg.TimeWindowEnd
+	return currentTime >= settings.AppSendTimeStart && currentTime <= settings.AppSendTimeEnd
+}
+
+// hasBypassTimeWindowCampaigns checks if there are any running campaigns with bypass_time_window=true
+// that have queued emails waiting to be sent
+func (p *Processor) hasBypassTimeWindowCampaigns() (bool, error) {
+	var count int
+	err := p.db.Get(&count, `
+		SELECT COUNT(DISTINCT eq.campaign_id)
+		FROM email_queue eq
+		INNER JOIN campaigns c ON eq.campaign_id = c.id
+		WHERE eq.status = $1
+		  AND eq.scheduled_at <= NOW()
+		  AND c.bypass_time_window = true
+		  AND c.status = 'running'
+	`, StatusQueued)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // getNextBatch retrieves the next batch of emails to send from the queue
-func (p *Processor) getNextBatch() ([]EmailQueueItem, error) {
+// If bypassOnly is true, only returns emails from campaigns with bypass_time_window=true
+func (p *Processor) getNextBatch(bypassOnly bool) ([]EmailQueueItem, error) {
 	var emails []EmailQueueItem
+
+	// STUCK EMAIL RECOVERY: Reset emails that have been in "sending" status for too long
+	// This prevents emails from being permanently stuck if the send operation fails,
+	// times out, or the container crashes mid-send.
+	// Threshold: 5 minutes (adjust if needed based on typical send times)
+	recoveryResult, err := p.db.Exec(`
+		UPDATE email_queue
+		SET status = $1,
+		    updated_at = NOW(),
+		    last_error = CASE
+		        WHEN last_error IS NULL THEN 'Recovered from stuck sending state'
+		        ELSE last_error || ' | Recovered from stuck sending state'
+		    END
+		WHERE status = $2
+		  AND updated_at < NOW() - INTERVAL '5 minutes'
+	`, StatusQueued, StatusSending)
+
+	if err != nil {
+		// Log error but don't fail the batch - we can still process queued emails
+		p.log.Printf("warning: error recovering stuck emails: %v", err)
+	} else {
+		recoveredCount, _ := recoveryResult.RowsAffected()
+		if recoveredCount > 0 {
+			p.log.Printf("🔄 recovered %d email(s) stuck in 'sending' status for >5 minutes", recoveredCount)
+		}
+	}
 
 	// CRITICAL FIX: Do NOT apply Smart Sending filter here!
 	// Smart Sending should be enforced when emails are QUEUED, not when fetched.
@@ -675,17 +787,39 @@ func (p *Processor) getNextBatch() ([]EmailQueueItem, error) {
 	//   - Only 1-2 emails per batch instead of 100
 	//   - Send rate dropped from 2000/hour to 60/hour
 	//
-	// Fetch all queued emails that are ready to send
-	query := `
-		SELECT id, campaign_id, subscriber_id, status, priority,
-		       scheduled_at, sent_at, assigned_smtp_server_uuid,
-		       retry_count, last_error, created_at, updated_at
-		FROM email_queue
-		WHERE status = $1
-		  AND scheduled_at <= NOW()
-		ORDER BY priority DESC, scheduled_at ASC
-		LIMIT $2
-	`
+	// Fetch queued emails that are ready to send
+	// If bypassOnly=true, only get emails from campaigns with bypass_time_window=true
+	// JOIN with subscribers to get email address for domain-based SMTP routing
+	var query string
+	if bypassOnly {
+		query = `
+			SELECT eq.id, eq.campaign_id, eq.subscriber_id, s.email as subscriber_email,
+			       eq.status, eq.priority, eq.scheduled_at, eq.sent_at,
+			       eq.assigned_smtp_server_uuid, eq.retry_count, eq.last_error,
+			       eq.created_at, eq.updated_at
+			FROM email_queue eq
+			INNER JOIN campaigns c ON eq.campaign_id = c.id
+			INNER JOIN subscribers s ON eq.subscriber_id = s.id
+			WHERE eq.status = $1
+			  AND eq.scheduled_at <= NOW()
+			  AND c.bypass_time_window = true
+			ORDER BY eq.priority DESC, eq.scheduled_at ASC
+			LIMIT $2
+		`
+	} else {
+		query = `
+			SELECT eq.id, eq.campaign_id, eq.subscriber_id, s.email as subscriber_email,
+			       eq.status, eq.priority, eq.scheduled_at, eq.sent_at,
+			       eq.assigned_smtp_server_uuid, eq.retry_count, eq.last_error,
+			       eq.created_at, eq.updated_at
+			FROM email_queue eq
+			INNER JOIN subscribers s ON eq.subscriber_id = s.id
+			WHERE eq.status = $1
+			  AND eq.scheduled_at <= NOW()
+			ORDER BY eq.priority DESC, eq.scheduled_at ASC
+			LIMIT $2
+		`
+	}
 
 	if err := p.db.Select(&emails, query, StatusQueued, p.cfg.BatchSize); err != nil {
 		return nil, err
@@ -704,14 +838,25 @@ func (p *Processor) getServerCapacities() (map[string]*ServerCapacity, error) {
 
 	capacities := make(map[string]*ServerCapacity)
 
+	// Log how many SMTP servers are configured
+	enabledCount := 0
+	for _, smtp := range settings.SMTP {
+		if smtp.Enabled {
+			enabledCount++
+		}
+	}
+	p.log.Printf("📊 SMTP server config: %d total servers, %d enabled", len(settings.SMTP), enabledCount)
+
 	for _, smtp := range settings.SMTP {
 		if !smtp.Enabled {
+			p.log.Printf("⏭️  SMTP server '%s' (UUID: %s) is DISABLED, skipping", smtp.Name, smtp.UUID)
 			continue
 		}
 
 		capacity := &ServerCapacity{
 			UUID:       smtp.UUID,
 			Name:       smtp.Name,
+			Host:       smtp.Host,
 			DailyLimit: smtp.DailyLimit,
 		}
 
@@ -746,36 +891,116 @@ func (p *Processor) getServerCapacities() (map[string]*ServerCapacity, error) {
 			(capacity.SlidingWindowUsed < capacity.SlidingWindowLimit || capacity.SlidingWindowLimit == 0)
 
 		capacities[smtp.UUID] = capacity
+		p.log.Printf("✅ SMTP server '%s' (UUID: %s) added to capacities: DailyLimit=%d, DailyRemaining=%d, CanSendNow=%v",
+			smtp.Name, smtp.UUID, capacity.DailyLimit, capacity.DailyRemaining, capacity.CanSendNow)
 	}
 
+	p.log.Printf("📊 Final capacities map has %d servers available for sending", len(capacities))
 	return capacities, nil
 }
 
 // selectServer selects the best SMTP server to use for an email
-func (p *Processor) selectServer(capacities map[string]*ServerCapacity, email EmailQueueItem) string {
-	// If email already has a server assigned, try to use that
-	if email.AssignedSMTPServerUUID.Valid && email.AssignedSMTPServerUUID.String != "" {
-		if cap, exists := capacities[email.AssignedSMTPServerUUID.String]; exists && cap.CanSendNow {
-			return email.AssignedSMTPServerUUID.String
+// Uses dynamic domain-based routing from settings, then falls back to round-robin
+// Returns empty string with isDisabled=true if the domain is disabled (should not send)
+func (p *Processor) selectServer(capacities map[string]*ServerCapacity, email EmailQueueItem) (string, bool) {
+	// DOMAIN-BASED ROUTING FIRST - takes priority over pre-assigned servers
+	// This allows UI-configured domain routing to override any previous assignments
+	if email.SubscriberEmail != "" {
+		domain := extractDomain(email.SubscriberEmail)
+
+		// Get domain routing rules from settings
+		settings, err := p.getSettings()
+		if err == nil && settings.DomainRouting != nil && len(settings.DomainRouting) > 0 {
+			// Check for exact domain match
+			if routingType, exists := settings.DomainRouting[domain]; exists && routingType != "" {
+				// Handle "disabled" - domain is blocked from sending
+				if routingType == "disabled" {
+					p.log.Printf("🚫 domain routing: %s is DISABLED, skipping email to %s", domain, email.SubscriberEmail)
+					return "", true // Return empty with isDisabled=true
+				}
+
+				// Handle "azure" or "sendgrid" - select from matching servers
+				selectedUUID := p.selectFromServerType(capacities, routingType, domain, email.SubscriberEmail)
+				if selectedUUID != "" {
+					return selectedUUID, false
+				}
+				// All matching servers unavailable, fall through to round-robin
+				p.log.Printf("⚠️  domain routing: all %s servers unavailable for %s, using round-robin fallback", routingType, domain)
+			}
 		}
 	}
 
-	// Find the server with the most remaining capacity
-	var bestServer string
-	var bestCapacity *ServerCapacity
+	// If no domain routing matched, check if email has a pre-assigned server
+	if email.AssignedSMTPServerUUID.Valid && email.AssignedSMTPServerUUID.String != "" {
+		if cap, exists := capacities[email.AssignedSMTPServerUUID.String]; exists && cap.CanSendNow {
+			return email.AssignedSMTPServerUUID.String, false
+		}
+	}
 
+	// Collect all servers that can send and group by capacity
+	type serverEntry struct {
+		uuid     string
+		capacity *ServerCapacity
+	}
+
+	var availableServers []serverEntry
+	var bestCapacity int = -1
+
+	// First pass: find the best capacity and collect servers with that capacity
 	for uuid, cap := range capacities {
 		if !cap.CanSendNow {
 			continue
 		}
 
-		if bestCapacity == nil || cap.DailyRemaining > bestCapacity.DailyRemaining {
-			bestServer = uuid
-			bestCapacity = cap
+		if cap.DailyRemaining > bestCapacity {
+			// Found a better capacity, start fresh
+			bestCapacity = cap.DailyRemaining
+			availableServers = []serverEntry{{uuid: uuid, capacity: cap}}
+		} else if cap.DailyRemaining == bestCapacity {
+			// Same capacity, add to list for round-robin
+			availableServers = append(availableServers, serverEntry{uuid: uuid, capacity: cap})
 		}
 	}
 
-	return bestServer
+	if len(availableServers) == 0 {
+		return "", false
+	}
+
+	// If only one server, return it
+	if len(availableServers) == 1 {
+		return availableServers[0].uuid, false
+	}
+
+	// Multiple servers with equal capacity - use round-robin
+	// Sort by UUID to ensure consistent ordering across instances
+	for i := 0; i < len(availableServers)-1; i++ {
+		for j := i + 1; j < len(availableServers); j++ {
+			if availableServers[i].uuid > availableServers[j].uuid {
+				availableServers[i], availableServers[j] = availableServers[j], availableServers[i]
+			}
+		}
+	}
+
+	// Use atomic counter for round-robin selection
+	p.rrMutex.Lock()
+	index := p.rrCounter % uint64(len(availableServers))
+	p.rrCounter++
+	p.rrMutex.Unlock()
+
+	selected := availableServers[index]
+	p.log.Printf("🔄 round-robin selection: %d servers with equal capacity (%d), selected '%s' (index %d)",
+		len(availableServers), bestCapacity, selected.capacity.Name, index)
+
+	return selected.uuid, false
+}
+
+// extractDomain extracts the domain from an email address
+func extractDomain(email string) string {
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return ""
+	}
+	return strings.ToLower(parts[1])
 }
 
 // Database operations
@@ -819,6 +1044,68 @@ func (p *Processor) markFailed(emailID int64, errMsg string) error {
 		WHERE id = $3
 	`, StatusFailed, sql.NullString{String: errMsg, Valid: true}, emailID)
 	return err
+}
+
+// selectFromServerType selects a server based on routing type (azure or sendgrid) using round-robin
+// Returns empty string if no matching servers are available
+func (p *Processor) selectFromServerType(capacities map[string]*ServerCapacity, routingType, domain, email string) string {
+	// Filter capacities to only include servers matching the routing type
+	type serverEntry struct {
+		uuid     string
+		capacity *ServerCapacity
+	}
+	var availableServers []serverEntry
+
+	for uuid, cap := range capacities {
+		if !cap.CanSendNow {
+			continue // Server can't send right now
+		}
+
+		// Check if server matches the routing type based on host
+		isMatch := false
+		switch routingType {
+		case "azure":
+			isMatch = strings.Contains(strings.ToLower(cap.Host), "azurecomm")
+		case "sendgrid":
+			isMatch = strings.Contains(strings.ToLower(cap.Host), "sendgrid")
+		}
+
+		if isMatch {
+			availableServers = append(availableServers, serverEntry{uuid: uuid, capacity: cap})
+		}
+	}
+
+	if len(availableServers) == 0 {
+		return "" // No matching servers available
+	}
+
+	// If only one server, return it
+	if len(availableServers) == 1 {
+		p.log.Printf("🎯 domain routing: %s → %s (%s for %s)",
+			email, availableServers[0].capacity.Name, routingType, domain)
+		return availableServers[0].uuid
+	}
+
+	// Multiple servers - sort by UUID for consistent ordering, then round-robin
+	for i := 0; i < len(availableServers)-1; i++ {
+		for j := i + 1; j < len(availableServers); j++ {
+			if availableServers[i].uuid > availableServers[j].uuid {
+				availableServers[i], availableServers[j] = availableServers[j], availableServers[i]
+			}
+		}
+	}
+
+	// Use atomic counter for round-robin selection
+	p.rrMutex.Lock()
+	index := p.rrCounter % uint64(len(availableServers))
+	p.rrCounter++
+	p.rrMutex.Unlock()
+
+	selected := availableServers[index]
+	p.log.Printf("🎯 domain routing: %s → %s (%s for %s, %d servers available, index %d)",
+		email, selected.capacity.Name, routingType, domain, len(availableServers), index)
+
+	return selected.uuid
 }
 
 func (p *Processor) getDailyUsage(serverUUID string) (int, error) {
