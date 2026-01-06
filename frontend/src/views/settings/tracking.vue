@@ -108,7 +108,7 @@ export default Vue.extend({
     },
 
     embedCode() {
-      const rootURL = this.$root.serverConfig.rootURL || window.location.origin;
+      const rootURL = this.$root.serverConfig?.rootURL || window.location.origin;
       // eslint-disable-next-line no-useless-escape
       return `<script async src="${rootURL}/public/lm.js"><\/script>`;
     },
