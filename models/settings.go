@@ -43,6 +43,9 @@ type Settings struct {
 	AppSmartSendingEnabled     bool `json:"app.smart_sending_enabled"`
 	AppSmartSendingPeriodHours int  `json:"app.smart_sending_period_hours"`
 
+	// Test Email First - send to this email before all others when starting campaigns
+	AppTestEmailFirst string `json:"app.test_email_first"`
+
 	PrivacyIndividualTracking bool     `json:"privacy.individual_tracking"`
 	PrivacyUnsubHeader        bool     `json:"privacy.unsubscribe_header"`
 	PrivacyAllowBlocklist     bool     `json:"privacy.allow_blocklist"`

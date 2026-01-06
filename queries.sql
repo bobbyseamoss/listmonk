@@ -1533,15 +1533,18 @@ DELETE FROM roles WHERE id=$1;
 
 -- name: queue-campaign-emails
 -- Queue all emails for a campaign to be sent via the queue system.
--- $1 = campaign_id, $2 = smart_sending_enabled (boolean), $3 = smart_sending_period_hours (integer).
+-- $1 = campaign_id, $2 = smart_sending_enabled (boolean), $3 = smart_sending_period_hours (integer),
+-- $4 = test_email_first (string) - if set, this email gets priority 100 to be sent first.
 -- When Smart Sending is enabled, excludes subscribers who received ANY campaign email within the period.
+-- Also excludes any email in historical_blocklist (permanent blocklist).
+-- Uses DISTINCT to prevent duplicate queue entries when subscriber is in multiple lists.
 INSERT INTO email_queue (campaign_id, subscriber_id, status, priority, scheduled_at, created_at, updated_at)
-SELECT
+SELECT DISTINCT ON (sl.subscriber_id)
     $1 as campaign_id,
     sl.subscriber_id,
     'queued' as status,
-    0 as priority,
-    NOW() + INTERVAL '2 minutes' as scheduled_at,
+    CASE WHEN $4::TEXT != '' AND LOWER(s.email) = LOWER($4::TEXT) THEN 100 ELSE 0 END as priority,
+    CASE WHEN $4::TEXT != '' AND LOWER(s.email) = LOWER($4::TEXT) THEN NOW() ELSE NOW() + INTERVAL '2 minutes' END as scheduled_at,
     NOW() as created_at,
     NOW() as updated_at
 FROM campaign_lists cl
@@ -1553,6 +1556,10 @@ WHERE cl.campaign_id = $1
         WHERE sls.subscriber_id = sl.subscriber_id
         AND sls.last_campaign_send_at > NOW() - INTERVAL '1 hour' * $3::INTEGER
     ))
+    AND NOT EXISTS (
+        SELECT 1 FROM historical_blocklist hb
+        WHERE LOWER(hb.email) = LOWER(s.email)
+    )
 ON CONFLICT DO NOTHING;
 
 -- name: get-queued-email-count
@@ -1779,22 +1786,38 @@ SELECT * FROM subscribers WHERE LOWER(email) = LOWER($1) LIMIT 1;
 -- Get aggregate performance metrics for all campaigns in a specified timeframe
 -- $1: number of days to look back
 WITH delivery_stats AS (
-    -- Get actual delivery counts from Azure delivery events
-    SELECT
-        campaign_id,
-        COUNT(*) AS delivered
-    FROM azure_delivery_events
-    WHERE event_timestamp >= NOW() - ($1::TEXT || ' days')::INTERVAL
-        AND status = 'Delivered'
+    -- Combine delivery counts from both Azure and SendGrid
+    SELECT campaign_id, SUM(delivered) AS delivered FROM (
+        -- Azure delivery events
+        SELECT campaign_id, COUNT(*) AS delivered
+        FROM azure_delivery_events
+        WHERE event_timestamp >= NOW() - ($1::TEXT || ' days')::INTERVAL
+            AND status = 'Delivered'
+        GROUP BY campaign_id
+        UNION ALL
+        -- SendGrid delivery events
+        SELECT campaign_id, COUNT(*) AS delivered
+        FROM sendgrid_delivery_events
+        WHERE event_timestamp >= NOW() - ($1::TEXT || ' days')::INTERVAL
+            AND event_type = 'delivered'
+            AND campaign_id IS NOT NULL
+        GROUP BY campaign_id
+    ) combined
     GROUP BY campaign_id
 ),
 error_stats AS (
-    -- Get error counts from Azure delivery events
-    SELECT
-        COUNT(*) AS total_errors
-    FROM azure_delivery_events
-    WHERE event_timestamp >= NOW() - ($1::TEXT || ' days')::INTERVAL
-        AND status = 'Failed'
+    -- Combine error counts from both Azure and SendGrid
+    SELECT SUM(total_errors) AS total_errors FROM (
+        SELECT COUNT(*) AS total_errors
+        FROM azure_delivery_events
+        WHERE event_timestamp >= NOW() - ($1::TEXT || ' days')::INTERVAL
+            AND status = 'Failed'
+        UNION ALL
+        SELECT COUNT(*) AS total_errors
+        FROM sendgrid_delivery_events
+        WHERE event_timestamp >= NOW() - ($1::TEXT || ' days')::INTERVAL
+            AND event_type IN ('bounce', 'dropped', 'blocked')
+    ) combined
 ),
 recent_campaigns AS (
     SELECT
@@ -1826,8 +1849,8 @@ purchase_data AS (
     WHERE created_at >= NOW() - ($1::TEXT || ' days')::INTERVAL
 )
 SELECT
-    COALESCE(AVG(CASE WHEN sent > 0 THEN (views::FLOAT / sent::FLOAT) * 100 ELSE 0 END), 0) AS avg_open_rate,
-    COALESCE(AVG(CASE WHEN sent > 0 THEN (clicks::FLOAT / sent::FLOAT) * 100 ELSE 0 END), 0) AS avg_click_rate,
+    CASE WHEN COALESCE(SUM(sent), 0) > 0 THEN (SUM(views)::FLOAT / SUM(sent)::FLOAT) * 100 ELSE 0 END AS avg_open_rate,
+    CASE WHEN COALESCE(SUM(sent), 0) > 0 THEN (SUM(clicks)::FLOAT / SUM(sent)::FLOAT) * 100 ELSE 0 END AS avg_click_rate,
     COALESCE(SUM(sent), 0) AS total_sent,
     (SELECT COALESCE(MAX(total_orders), 0) FROM purchase_data) AS total_orders,
     (SELECT COALESCE(MAX(total_revenue), 0) FROM purchase_data) AS total_revenue,
@@ -1851,3 +1874,164 @@ SELECT
 FROM purchase_attributions
 WHERE campaign_id = ANY($1)
 GROUP BY campaign_id, currency;
+
+
+-- Onsite tracking queries
+
+-- name: record-site-event
+-- Record a site event for a known visitor
+INSERT INTO site_events (subscriber_id, session_id, event_type, event_name, page_url, page_title, referrer, properties, user_agent, ip_address)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id;
+
+-- name: identify-browser
+-- Link a browser ID to a subscriber
+INSERT INTO known_browsers (browser_id, subscriber_id, identified_via, campaign_id)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (browser_id) DO UPDATE SET
+    subscriber_id = EXCLUDED.subscriber_id,
+    identified_via = EXCLUDED.identified_via,
+    campaign_id = COALESCE(EXCLUDED.campaign_id, known_browsers.campaign_id),
+    last_seen_at = NOW()
+RETURNING id;
+
+-- name: get-browser-subscriber
+-- Look up subscriber by browser ID
+SELECT s.* FROM subscribers s
+INNER JOIN known_browsers kb ON kb.subscriber_id = s.id
+WHERE kb.browser_id = $1;
+
+-- name: update-browser-last-seen
+-- Update last_seen_at for a known browser
+UPDATE known_browsers SET last_seen_at = NOW() WHERE browser_id = $1;
+
+-- name: get-subscriber-site-activity
+-- Get site activity for a subscriber with pagination
+SELECT id, session_id, event_type, event_name, page_url, page_title, referrer, properties, user_agent, ip_address, created_at
+FROM site_events
+WHERE subscriber_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: get-subscriber-site-activity-count
+-- Get total site event count for a subscriber
+SELECT COUNT(*) FROM site_events WHERE subscriber_id = $1;
+
+-- name: get-subscriber-recent-products
+-- Get recently viewed products for a subscriber
+SELECT properties, created_at FROM site_events
+WHERE subscriber_id = $1 AND event_type = 'viewed_product'
+ORDER BY created_at DESC
+LIMIT $2;
+
+-- name: get-site-events-stats
+-- Get overall site tracking statistics
+SELECT
+    COUNT(*) AS total_events,
+    COUNT(DISTINCT subscriber_id) AS unique_visitors,
+    COUNT(DISTINCT session_id) AS total_sessions,
+    COUNT(*) FILTER (WHERE event_type = 'page_view') AS page_views,
+    COUNT(*) FILTER (WHERE event_type = 'viewed_product') AS product_views,
+    COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') AS events_24h
+FROM site_events;
+
+-- name: delete-old-site-events
+-- Delete site events older than specified days
+DELETE FROM site_events WHERE created_at < NOW() - ($1::TEXT || ' days')::INTERVAL;
+
+-- name: get-subscriber-by-uuid-for-tracking
+-- Get subscriber ID by UUID for tracking identification
+SELECT id FROM subscribers WHERE uuid = $1;
+
+-- name: get-activity-feed
+-- Get unified activity feed from multiple sources (email engagement, site events)
+-- $1: event_type filter (empty = all, 'email_open', 'email_click', 'site_activity')
+-- $2: limit, $3: offset
+WITH combined_events AS (
+    -- Email opens from Azure
+    SELECT
+        e.id,
+        'email_open' AS event_type,
+        e.subscriber_id,
+        s.email AS subscriber_email,
+        COALESCE(s.name, '') AS subscriber_name,
+        s.uuid::text AS subscriber_uuid,
+        CONCAT('Opened Email "', COALESCE(c.name, 'Unknown'), '"') AS event_description,
+        c.name AS campaign_name,
+        e.campaign_id,
+        NULL AS page_url,
+        '{}'::jsonb AS properties,
+        e.event_timestamp AS created_at
+    FROM azure_engagement_events e
+    LEFT JOIN subscribers s ON e.subscriber_id = s.id
+    LEFT JOIN campaigns c ON e.campaign_id = c.id
+    WHERE e.engagement_type = 'view'
+        AND ($1 = '' OR $1 = 'email_open')
+
+    UNION ALL
+
+    -- Email clicks from Azure
+    SELECT
+        e.id,
+        'email_click' AS event_type,
+        e.subscriber_id,
+        s.email AS subscriber_email,
+        COALESCE(s.name, '') AS subscriber_name,
+        s.uuid::text AS subscriber_uuid,
+        CONCAT('Clicked Link in "', COALESCE(c.name, 'Unknown'), '"') AS event_description,
+        c.name AS campaign_name,
+        e.campaign_id,
+        e.engagement_context AS page_url,
+        '{}'::jsonb AS properties,
+        e.event_timestamp AS created_at
+    FROM azure_engagement_events e
+    LEFT JOIN subscribers s ON e.subscriber_id = s.id
+    LEFT JOIN campaigns c ON e.campaign_id = c.id
+    WHERE e.engagement_type = 'click'
+        AND ($1 = '' OR $1 = 'email_click')
+
+    UNION ALL
+
+    -- Site events (page views, product views, etc.) - includes anonymous visitors
+    SELECT
+        se.id,
+        CASE
+            WHEN se.event_type = 'page_view' THEN 'page_view'
+            WHEN se.event_type = 'viewed_product' THEN 'product_view'
+            ELSE 'site_activity'
+        END AS event_type,
+        se.subscriber_id,
+        COALESCE(s.email, 'Anonymous Visitor') AS subscriber_email,
+        COALESCE(s.name, 'Anonymous') AS subscriber_name,
+        COALESCE(s.uuid::text, '') AS subscriber_uuid,
+        CASE
+            WHEN se.event_type = 'page_view' THEN CONCAT('Viewed Page: ', COALESCE(se.page_title, se.page_url))
+            WHEN se.event_type = 'viewed_product' THEN CONCAT('Viewed Product: ', COALESCE(se.properties->>'product_name', 'Unknown'))
+            ELSE CONCAT('Active on Site: ', COALESCE(se.page_title, se.page_url))
+        END AS event_description,
+        NULL AS campaign_name,
+        NULL AS campaign_id,
+        se.page_url,
+        COALESCE(se.properties, '{}'::jsonb) AS properties,
+        se.created_at
+    FROM site_events se
+    LEFT JOIN subscribers s ON se.subscriber_id = s.id
+    WHERE ($1 = '' OR $1 = 'site_activity' OR $1 = se.event_type)
+)
+SELECT
+    COUNT(*) OVER () AS total,
+    id,
+    event_type,
+    subscriber_id,
+    subscriber_email,
+    subscriber_name,
+    subscriber_uuid,
+    event_description,
+    campaign_name,
+    campaign_id,
+    page_url,
+    properties,
+    created_at
+FROM combined_events
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;

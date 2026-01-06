@@ -125,30 +125,38 @@ func (a *App) GetCampaigns(c echo.Context) error {
 		}
 	}
 
-	// Get Azure sent counts for all campaigns
-	type azureSentCount struct {
+	// Get delivery counts for all campaigns (combining Azure and SendGrid)
+	type deliverySentCount struct {
 		CampaignID int `db:"campaign_id"`
 		Count      int `db:"count"`
 	}
-	var azureSentCounts []azureSentCount
-	if err := a.db.Select(&azureSentCounts, `
-		SELECT campaign_id, COUNT(*) as count
-		FROM azure_delivery_events
-		WHERE campaign_id = ANY($1) AND status = 'Delivered'
+	var deliverySentCounts []deliverySentCount
+	if err := a.db.Select(&deliverySentCounts, `
+		SELECT campaign_id, SUM(count) as count FROM (
+			SELECT campaign_id, COUNT(*) as count
+			FROM azure_delivery_events
+			WHERE campaign_id = ANY($1) AND status = 'Delivered'
+			GROUP BY campaign_id
+			UNION ALL
+			SELECT campaign_id, COUNT(*) as count
+			FROM sendgrid_delivery_events
+			WHERE campaign_id = ANY($1) AND event_type = 'delivered' AND campaign_id IS NOT NULL
+			GROUP BY campaign_id
+		) combined
 		GROUP BY campaign_id
 	`, pq.Array(campaignIDs)); err != nil {
-		a.log.Printf("error fetching azure sent counts for campaigns: %v", err)
+		a.log.Printf("error fetching delivery sent counts for campaigns: %v", err)
 	}
 
-	// Map azure sent counts to campaigns
-	azureSentMap := make(map[int]int)
-	for _, count := range azureSentCounts {
-		azureSentMap[count.CampaignID] = count.Count
+	// Map delivery sent counts to campaigns
+	deliverySentMap := make(map[int]int)
+	for _, count := range deliverySentCounts {
+		deliverySentMap[count.CampaignID] = count.Count
 	}
 
-	// Populate azure sent fields in campaign results
+	// Populate azure sent fields in campaign results (now includes SendGrid too)
 	for i := range res {
-		if count, ok := azureSentMap[res[i].ID]; ok {
+		if count, ok := deliverySentMap[res[i].ID]; ok {
 			res[i].AzureSent = count
 		}
 	}
@@ -415,6 +423,28 @@ func (a *App) UpdateCampaignStatus(c echo.Context) error {
 
 	// Email queueing for automatic messenger is handled inside core.UpdateCampaignStatus
 	// (in internal/core/campaigns.go:324-330), which calls QueueCampaignEmails and the scheduler
+
+	// For direct (non-automatic) campaigns starting, send test email first if configured
+	if req.Status == models.CampaignStatusRunning && out.Messenger != "automatic" {
+		settings, err := a.core.GetSettings()
+		if err == nil && settings.AppTestEmailFirst != "" {
+			// Get the test subscriber
+			subs, err := a.core.GetSubscribersByEmail([]string{settings.AppTestEmailFirst})
+			if err == nil && len(subs) > 0 {
+				// Get the campaign for preview/sending
+				camp, err := a.core.GetCampaignForPreview(id, 0)
+				if err == nil {
+					if err := a.sendTestMessage(subs[0], &camp); err != nil {
+						a.log.Printf("error sending test email first to %s: %v", settings.AppTestEmailFirst, err)
+					} else {
+						a.log.Printf("test email first: sent campaign %d to %s before main send", id, settings.AppTestEmailFirst)
+					}
+				}
+			} else {
+				a.log.Printf("test email first: subscriber %s not found, skipping", settings.AppTestEmailFirst)
+			}
+		}
+	}
 
 	// If the campaign is being stopped, send the signal to the manager to stop it in flight.
 	if req.Status == models.CampaignStatusPaused || req.Status == models.CampaignStatusCancelled {

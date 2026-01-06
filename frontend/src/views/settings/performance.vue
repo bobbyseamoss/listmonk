@@ -130,7 +130,7 @@
           <b-field label="Emails Per Minute (Account-Wide)" label-position="on-border"
             message="Maximum total emails across ALL servers per minute. Azure default: 30">
             <b-numberinput v-model="data['app.account_rate_limit_per_minute']" name="app.account_rate_limit_per_minute"
-              type="is-light" placeholder="30" min="1" max="1000" />
+              type="is-light" placeholder="30" min="1" max="100000" />
           </b-field>
         </div>
         <div class="column is-6">
@@ -157,6 +157,12 @@
       <b-notification v-if="data['app.testing_mode']" type="is-warning" :closable="false" class="mt-3">
         <strong>Testing Mode is Active!</strong> No emails will be sent to actual recipients. All sends will be simulated.
       </b-notification>
+
+      <b-field label="Test Email First" label-position="on-border" class="mt-4"
+        message="If set, this email address will receive every campaign first (before all other subscribers). Must be a valid subscriber email. Useful for testing campaigns before they go out to your full list.">
+        <b-input v-model="data['app.test_email_first']" name="app.test_email_first"
+          type="email" placeholder="your-test-email@example.com" />
+      </b-field>
     </div><!-- testing mode -->
 
     <div>

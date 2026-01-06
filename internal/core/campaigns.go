@@ -38,6 +38,7 @@ func (c *Core) NewScheduler(settings models.Settings) *queue.Scheduler {
 		BatchSize:             100,
 		TimeWindowStart:       settings.AppSendTimeStart,
 		TimeWindowEnd:         settings.AppSendTimeEnd,
+		Timezone:              settings.AppTimezone,
 		SlidingWindowDuration: slidingDuration,
 		SlidingWindowLimit:    settings.AppMessageSlidingWindowRate,
 	}
@@ -616,8 +617,8 @@ func (c *Core) QueueCampaignEmails(campID int) (int, error) {
 	}
 
 	// Queue all campaign emails with Smart Sending filter applied
-	// $1 = campaign_id, $2 = smart_sending_enabled, $3 = smart_sending_period_hours
-	if _, err := c.q.QueueCampaignEmails.Exec(campID, settings.AppSmartSendingEnabled, settings.AppSmartSendingPeriodHours); err != nil {
+	// $1 = campaign_id, $2 = smart_sending_enabled, $3 = smart_sending_period_hours, $4 = test_email_first
+	if _, err := c.q.QueueCampaignEmails.Exec(campID, settings.AppSmartSendingEnabled, settings.AppSmartSendingPeriodHours, settings.AppTestEmailFirst); err != nil {
 		c.log.Printf("error queuing campaign emails: %v", err)
 		return 0, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
@@ -626,6 +627,11 @@ func (c *Core) QueueCampaignEmails(campID int) (int, error) {
 	// Log Smart Sending status
 	if settings.AppSmartSendingEnabled {
 		c.log.Printf("Smart Sending enabled: excluding subscribers who received email in last %d hours", settings.AppSmartSendingPeriodHours)
+	}
+
+	// Log test email first status
+	if settings.AppTestEmailFirst != "" {
+		c.log.Printf("Test email first enabled: %s will be sent first (priority 100)", settings.AppTestEmailFirst)
 	}
 
 	// Get the count of queued emails
