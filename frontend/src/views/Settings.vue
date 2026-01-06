@@ -62,6 +62,10 @@
             <spintax-settings :form="form" :key="key" />
           </b-tab-item><!-- spintax -->
 
+          <b-tab-item label="Site Tracking">
+            <tracking-settings :form="form" :key="key" />
+          </b-tab-item><!-- site tracking -->
+
           <b-tab-item label="Campaigns">
             <campaign-settings :form="form" :key="key" />
           </b-tab-item><!-- campaigns -->
@@ -95,6 +99,7 @@ import SecuritySettings from './settings/security.vue';
 import ShopifySettings from './settings/shopify.vue';
 import SmtpSettings from './settings/smtp.vue';
 import SpintaxSettings from './settings/spintax.vue';
+import TrackingSettings from './settings/tracking.vue';
 
 export default Vue.extend({
   components: {
@@ -110,6 +115,7 @@ export default Vue.extend({
     MessengerSettings,
     ShopifySettings,
     SpintaxSettings,
+    TrackingSettings,
     AppearanceSettings,
   },
 

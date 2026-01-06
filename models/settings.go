@@ -173,6 +173,19 @@ type Settings struct {
 		AccessToken           string `json:"access_token,omitempty"`
 	} `json:"shopify"`
 
+	// Onsite tracking configuration (Klaviyo-like website visitor tracking)
+	OnsiteTracking struct {
+		Enabled          bool     `json:"enabled"`
+		TrackPageViews   bool     `json:"track_page_views"`
+		TrackProducts    bool     `json:"track_products"`
+		AllowedDomains   []string `json:"allowed_domains"`
+		IdentityParam    string   `json:"identity_param"`
+		CookieName       string   `json:"cookie_name"`
+		CookieExpiryDays int      `json:"cookie_expiry_days"`
+		RecordIPAddress  bool     `json:"record_ip_address"`
+		RetentionDays    int      `json:"retention_days"`
+	} `json:"onsite_tracking"`
+
 	// Spintax configuration
 	Spintax struct {
 		Enabled bool `json:"enabled"`
