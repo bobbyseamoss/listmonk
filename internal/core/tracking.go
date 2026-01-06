@@ -10,7 +10,7 @@ import (
 	"gopkg.in/volatiletech/null.v6"
 )
 
-// RecordSiteEvent stores a site event for a known visitor.
+// RecordSiteEvent stores a site event for a visitor (identified or anonymous).
 func (c *Core) RecordSiteEvent(subscriberID int, sessionID string, event *models.TrackingEvent, ipAddress string) (int64, error) {
 	// Parse session UUID
 	sessUUID, err := uuid.Parse(sessionID)
@@ -24,9 +24,15 @@ func (c *Core) RecordSiteEvent(subscriberID int, sessionID string, event *models
 		props = types.JSONText(event.Properties)
 	}
 
+	// Use null.Int for subscriber ID to allow anonymous tracking
+	subID := null.Int{}
+	if subscriberID > 0 {
+		subID = null.IntFrom(subscriberID)
+	}
+
 	var id int64
 	if err := c.q.RecordSiteEvent.Get(&id,
-		subscriberID,
+		subID,
 		sessUUID,
 		event.EventType,
 		null.NewString(event.EventName, event.EventName != ""),

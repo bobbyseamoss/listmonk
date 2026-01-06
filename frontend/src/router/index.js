@@ -54,6 +54,12 @@ const routes = [
     component: () => import('../views/Bounces.vue'),
   },
   {
+    path: '/subscribers/activity',
+    name: 'activity',
+    meta: { title: 'Activity Feed', group: 'subscribers' },
+    component: () => import('../views/ActivityFeed.vue'),
+  },
+  {
     path: '/subscribers/lists/:listID',
     name: 'subscribers_list',
     meta: { title: 'globals.terms.subscribers', group: 'subscribers' },

@@ -83,3 +83,74 @@ func (s *Shopify) ProcessOrder(body []byte) (*ShopifyOrder, error) {
 
 	return &order, nil
 }
+
+// ShopifyCustomer represents a customer from Shopify webhook.
+type ShopifyCustomer struct {
+	ID                    int64                       `json:"id"`
+	Email                 string                      `json:"email"`
+	FirstName             string                      `json:"first_name"`
+	LastName              string                      `json:"last_name"`
+	Phone                 string                      `json:"phone"`
+	Tags                  string                      `json:"tags"`
+	Note                  string                      `json:"note"`
+	OrdersCount           int                         `json:"orders_count"`
+	TotalSpent            string                      `json:"total_spent"`
+	Currency              string                      `json:"currency"`
+	State                 string                      `json:"state"`
+	VerifiedEmail         bool                        `json:"verified_email"`
+	CreatedAt             string                      `json:"created_at"`
+	UpdatedAt             string                      `json:"updated_at"`
+	AcceptsMarketing      bool                        `json:"accepts_marketing"`
+	EmailMarketingConsent ShopifyMarketingConsent     `json:"email_marketing_consent"`
+	DefaultAddress        *ShopifyAddress             `json:"default_address"`
+	Addresses             []ShopifyAddress            `json:"addresses"`
+	RawJSON               []byte                      `json:"-"`
+}
+
+// ShopifyMarketingConsent represents email marketing consent from Shopify.
+type ShopifyMarketingConsent struct {
+	State            string `json:"state"`
+	OptInLevel       string `json:"opt_in_level"`
+	ConsentUpdatedAt string `json:"consent_updated_at"`
+}
+
+// ShopifyAddress represents a customer address from Shopify.
+type ShopifyAddress struct {
+	ID           int64  `json:"id"`
+	CustomerID   int64  `json:"customer_id"`
+	FirstName    string `json:"first_name"`
+	LastName     string `json:"last_name"`
+	Company      string `json:"company"`
+	Address1     string `json:"address1"`
+	Address2     string `json:"address2"`
+	City         string `json:"city"`
+	Province     string `json:"province"`
+	ProvinceCode string `json:"province_code"`
+	Country      string `json:"country"`
+	CountryCode  string `json:"country_code"`
+	Zip          string `json:"zip"`
+	Phone        string `json:"phone"`
+	Default      bool   `json:"default"`
+}
+
+// ProcessCustomer parses a Shopify customer webhook payload.
+func (s *Shopify) ProcessCustomer(body []byte) (*ShopifyCustomer, error) {
+	var customer ShopifyCustomer
+	if err := json.Unmarshal(body, &customer); err != nil {
+		return nil, fmt.Errorf("error parsing customer JSON: %v", err)
+	}
+
+	// Store the raw JSON for later reference
+	customer.RawJSON = body
+
+	// Validate required fields
+	if customer.Email == "" {
+		return nil, errors.New("customer missing email address")
+	}
+
+	if customer.ID == 0 {
+		return nil, errors.New("customer missing ID")
+	}
+
+	return &customer, nil
+}

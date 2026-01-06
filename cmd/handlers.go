@@ -104,6 +104,7 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/lang/:lang", a.GetI18nLang)
 		g.GET("/api/dashboard/charts", a.GetDashboardCharts)
 		g.GET("/api/dashboard/counts", a.GetDashboardCounts)
+		g.GET("/api/site-tracking/stats", a.handleGetSiteTrackingStats)
 
 		g.GET("/api/settings", pm(a.GetSettings, "settings:get"))
 		g.PUT("/api/settings", pm(a.UpdateSettings, "settings:manage"))
@@ -120,6 +121,7 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.DELETE("/api/subscribers/:id/bounces", pm(hasID(a.DeleteSubscriberBounces), "bounces:manage"))
 		g.GET("/api/subscribers/:id/azure-delivery-events", pm(hasID(a.GetSubscriberAzureDeliveryEvents), "subscribers:get_all", "subscribers:get"))
 		g.GET("/api/subscribers/:id/azure-engagement-events", pm(hasID(a.GetSubscriberAzureEngagementEvents), "subscribers:get_all", "subscribers:get"))
+		g.GET("/api/subscribers/:id/site-activity", pm(hasID(a.handleGetSubscriberActivity), "subscribers:get_all", "subscribers:get"))
 		g.POST("/api/subscribers", pm(a.CreateSubscriber, "subscribers:manage"))
 		g.PUT("/api/subscribers/:id", pm(hasID(a.UpdateSubscriber), "subscribers:manage"))
 		g.POST("/api/subscribers/:id/optin", pm(hasID(a.SubscriberSendOptin), "subscribers:manage"))
@@ -139,6 +141,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/webhook-logs", pm(a.GetWebhookLogs, "settings:get"))
 		g.GET("/api/webhook-logs/export", pm(a.ExportWebhookLogs, "settings:get"))
 		g.DELETE("/api/webhook-logs", pm(a.DeleteWebhookLogs, "settings:manage"))
+
+		// Activity feed
+		g.GET("/api/activity-feed", pm(a.GetActivityFeed, "subscribers:get"))
 
 		// Subscriber operations based on arbitrary SQL queries.
 		// These aren't very REST-like.
@@ -221,6 +226,10 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// Shopify Order Tally API endpoint
 		g.GET("/api/shopify/order-tally", pm(handleGetShopifyOrderTally, "settings:get"))
 
+		// Shopify Customer Sync API endpoints
+		g.POST("/api/shopify/customers/sync", pm(a.StartShopifyCustomerSync, "settings:manage"))
+		g.GET("/api/shopify/customers/sync/status", pm(a.GetShopifyCustomerSyncStatus, "settings:get"))
+
 		g.DELETE("/api/maintenance/subscribers/:type", pm(a.GCSubscribers, "settings:maintain"))
 		g.DELETE("/api/maintenance/analytics/:type", pm(a.GCCampaignAnalytics, "settings:maintain"))
 		g.DELETE("/api/maintenance/subscriptions/unconfirmed", pm(a.GCSubscriptions, "settings:maintain"))
@@ -257,20 +266,24 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		// Public unauthenticated endpoints.
 		g := e.Group("")
 
-		a.log.Printf("DEBUG: Checking if bounce webhooks should be registered: BounceWebhooksEnabled=%v", a.cfg.BounceWebhooksEnabled)
 		if a.cfg.BounceWebhooksEnabled {
 			// Public bounce endpoints for webservices like SES.
 			g.POST("/webhooks/service/:service", a.BounceWebhook)
-			a.log.Printf("DEBUG: Registered webhook route: POST /webhooks/service/:service")
-		} else {
-			a.log.Printf("DEBUG: Webhook routes NOT registered - BounceWebhooksEnabled is false")
 		}
 
-		// Shopify webhook endpoint (always enabled if configured)
+		// Shopify webhook endpoints (always enabled if configured)
 		if a.cfg.ShopifyEnabled {
 			g.POST("/webhooks/shopify/orders", a.ShopifyWebhook)
-			a.log.Printf("Registered Shopify webhook route: POST /webhooks/shopify/orders")
+			g.POST("/webhooks/shopify/customers", a.ShopifyCustomerWebhook)
+			a.log.Printf("Registered Shopify webhook routes: POST /webhooks/shopify/orders, /webhooks/shopify/customers")
 		}
+
+		// Onsite tracking endpoints (always registered, but handlers check if enabled)
+		g.GET("/public/lm.js", a.handleServeTrackingJS)
+		g.POST("/public/track", a.handleTrackEvent)
+		g.OPTIONS("/public/track", a.handleTrackEventOptions)
+		g.POST("/public/identify", a.handleIdentifyVisitor)
+		g.OPTIONS("/public/identify", a.handleTrackEventOptions)
 
 		// Landing page.
 		g.GET("/", func(c echo.Context) error {

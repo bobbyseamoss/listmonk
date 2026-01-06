@@ -92,18 +92,17 @@ func (a *App) handleTrackEvent(c echo.Context) error {
 			continue
 		}
 
-		// Look up subscriber by browser ID
+		// Look up subscriber by browser ID (may be nil for anonymous visitors)
+		subscriberID := 0
 		sub, err := a.core.GetBrowserSubscriber(event.BrowserID)
-		if err != nil || sub == nil {
-			// Not an identified browser, skip
-			continue
+		if err == nil && sub != nil {
+			subscriberID = sub.ID
+			// Update last seen for identified browsers
+			_ = a.core.UpdateBrowserLastSeen(event.BrowserID)
 		}
 
-		// Record the event
-		_, _ = a.core.RecordSiteEvent(sub.ID, event.SessionID, &event, clientIP)
-
-		// Update last seen
-		_ = a.core.UpdateBrowserLastSeen(event.BrowserID)
+		// Record the event (subscriber_id will be NULL for anonymous visitors)
+		_, _ = a.core.RecordSiteEvent(subscriberID, event.SessionID, &event, clientIP)
 	}
 
 	return c.JSON(http.StatusOK, okResp{true})

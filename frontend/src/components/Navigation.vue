@@ -22,6 +22,8 @@
         :active="activeItem.import" data-cy="import" icon="file-upload-outline" :label="$t('menu.import')" />
       <b-menu-item v-if="$can('bounces:get')" :to="{ name: 'bounces' }" tag="router-link" :active="activeItem.bounces"
         data-cy="bounces" icon="email-bounce" :label="$t('globals.terms.bounces')" />
+      <b-menu-item v-if="$can('subscribers:get')" :to="{ name: 'activity' }" tag="router-link" :active="activeItem.activity"
+        data-cy="activity" icon="chart-timeline-variant" label="Activity Feed" />
     </b-menu-item><!-- subscribers -->
 
     <b-menu-item v-if="$can('campaigns:*')" :expanded="activeGroup.campaigns" :active="activeGroup.campaigns"

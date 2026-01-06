@@ -184,6 +184,11 @@ export const deleteSubscriberBounces = async (id) => http.delete(
   { loading: models.bounces },
 );
 
+export const getSubscriberSiteActivity = async (id, params) => http.get(
+  `/api/subscribers/${id}/site-activity`,
+  { params },
+);
+
 export const deleteBounce = async (id) => http.delete(
   `/api/bounces/${id}`,
   { loading: models.bounces },
@@ -682,3 +687,10 @@ export const generateSpintax = (data) => http.post('/api/spintax/generate', data
 
 // Shopify Order Tally API
 export const getShopifyOrderTally = (params) => http.get('/api/shopify/order-tally', { params });
+
+// Shopify Customer Sync API
+export const startShopifyCustomerSync = () => http.post('/api/shopify/customers/sync');
+export const getShopifyCustomerSyncStatus = () => http.get('/api/shopify/customers/sync/status');
+
+// Activity Feed API
+export const getActivityFeed = (params) => http.get('/api/activity-feed', { params });

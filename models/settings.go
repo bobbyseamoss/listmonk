@@ -171,6 +171,11 @@ type Settings struct {
 		AttributionWindowDays int    `json:"attribution_window_days"`
 		StoreURL              string `json:"store_url"`
 		AccessToken           string `json:"access_token,omitempty"`
+		// Customer sync settings
+		CustomerSyncEnabled    bool      `json:"customer_sync_enabled"`
+		CustomerSyncListID     int       `json:"customer_sync_list_id"`
+		LastCustomerSync       null.Time `json:"last_customer_sync"`
+		CustomerSyncInProgress bool      `json:"customer_sync_in_progress"`
 	} `json:"shopify"`
 
 	// Onsite tracking configuration (Klaviyo-like website visitor tracking)
