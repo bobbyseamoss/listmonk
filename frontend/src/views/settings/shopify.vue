@@ -219,11 +219,14 @@
             <li>Default Address (Street, City, Province, Country, ZIP)</li>
             <li>Tags (from Shopify customer tags)</li>
             <li>Order Count &amp; Total Spent</li>
-            <li>Email Marketing Consent</li>
             <li>Birthday (if stored in metafield)</li>
           </ul>
           <p class="mt-3 has-text-grey is-size-7">
             Data is stored in subscriber attributes under <code>shopify.*</code>
+          </p>
+          <p class="mt-2 has-text-grey is-size-7">
+            <strong>Note:</strong> Email marketing consent is NOT synced from Shopify.
+            listmonk is the authority on email subscriptions.
           </p>
         </div>
       </div>

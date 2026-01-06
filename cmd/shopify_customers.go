@@ -256,14 +256,8 @@ func buildShopifyAttribs(customer *webhooks.ShopifyCustomer) map[string]interfac
 		attribs["tags"] = tags
 	}
 
-	// Marketing consent
-	if customer.EmailMarketingConsent.State != "" {
-		attribs["marketing_consent"] = map[string]interface{}{
-			"state":      customer.EmailMarketingConsent.State,
-			"opt_in":     customer.EmailMarketingConsent.OptInLevel,
-			"updated_at": customer.EmailMarketingConsent.ConsentUpdatedAt,
-		}
-	}
+	// NOTE: We intentionally do NOT sync marketing_consent from Shopify.
+	// listmonk is the authority on email marketing consent.
 
 	// Address from default address
 	if customer.DefaultAddress != nil {
@@ -504,14 +498,8 @@ func (app *App) syncCustomerFromGraphQL(customer *graphQLCustomer, listID int) e
 		attribs["tags"] = customer.Tags
 	}
 
-	// Marketing consent
-	if customer.EmailMarketingConsent != nil {
-		attribs["marketing_consent"] = map[string]interface{}{
-			"state":      customer.EmailMarketingConsent.MarketingState,
-			"opt_in":     customer.EmailMarketingConsent.MarketingOptInLevel,
-			"updated_at": customer.EmailMarketingConsent.ConsentUpdatedAt,
-		}
-	}
+	// NOTE: We intentionally do NOT sync marketing_consent from Shopify.
+	// listmonk is the authority on email marketing consent.
 
 	// Address
 	if customer.DefaultAddress != nil {
