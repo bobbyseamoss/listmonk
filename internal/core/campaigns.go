@@ -780,18 +780,20 @@ func (c *Core) queueCampaignEmailsBySegments(campID int, settings models.Setting
 
 	// Build the dynamic INSERT query
 	// Similar to queue-campaign-emails but using segment conditions instead of list joins
+	// Note: Use full table name "subscribers" (not alias "s") because segment conditions generate
+	// SQL like "subscribers.id IN (...)" that expects the full table name.
 	query := `
 		INSERT INTO email_queue (campaign_id, subscriber_id, status, priority, scheduled_at, created_at, updated_at)
-		SELECT DISTINCT ON (s.id)
+		SELECT DISTINCT ON (subscribers.id)
 			$1 as campaign_id,
-			s.id as subscriber_id,
+			subscribers.id as subscriber_id,
 			'queued' as status,
-			CASE WHEN $2::TEXT != '' AND LOWER(s.email) = LOWER($2::TEXT) THEN 100 ELSE 0 END as priority,
-			CASE WHEN $2::TEXT != '' AND LOWER(s.email) = LOWER($2::TEXT) THEN NOW() ELSE NOW() + INTERVAL '2 minutes' END as scheduled_at,
+			CASE WHEN $2::TEXT != '' AND LOWER(subscribers.email) = LOWER($2::TEXT) THEN 100 ELSE 0 END as priority,
+			CASE WHEN $2::TEXT != '' AND LOWER(subscribers.email) = LOWER($2::TEXT) THEN NOW() ELSE NOW() + INTERVAL '2 minutes' END as scheduled_at,
 			NOW() as created_at,
 			NOW() as updated_at
-		FROM subscribers s
-		WHERE s.status = 'enabled'
+		FROM subscribers
+		WHERE subscribers.status = 'enabled'
 			AND (` + segmentWhere + `)
 	`
 
@@ -800,7 +802,7 @@ func (c *Core) queueCampaignEmailsBySegments(campID int, settings models.Setting
 		query += `
 			AND NOT EXISTS (
 				SELECT 1 FROM subscriber_last_send sls
-				WHERE sls.subscriber_id = s.id
+				WHERE sls.subscriber_id = subscribers.id
 				AND sls.last_campaign_send_at > NOW() - INTERVAL '1 hour' * $3::INTEGER
 			)
 		`
@@ -810,7 +812,7 @@ func (c *Core) queueCampaignEmailsBySegments(campID int, settings models.Setting
 	query += `
 			AND NOT EXISTS (
 				SELECT 1 FROM historical_blocklist hb
-				WHERE LOWER(hb.email) = LOWER(s.email)
+				WHERE LOWER(hb.email) = LOWER(subscribers.email)
 			)
 		ON CONFLICT DO NOTHING
 	`
