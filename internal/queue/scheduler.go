@@ -29,6 +29,15 @@ func NewScheduler(db *sqlx.DB, cfg Config, log *log.Logger) *Scheduler {
 func (s *Scheduler) ScheduleCampaign(campaignID int, settings models.Settings) error {
 	s.log.Printf("scheduling campaign %d emails across SMTP servers", campaignID)
 
+	// Check if campaign has bypass_time_window enabled
+	var bypassTimeWindow bool
+	if err := s.db.Get(&bypassTimeWindow, `
+		SELECT bypass_time_window FROM campaigns WHERE id = $1
+	`, campaignID); err != nil {
+		s.log.Printf("warning: could not fetch bypass_time_window for campaign %d: %v", campaignID, err)
+		bypassTimeWindow = false
+	}
+
 	// Get all queued emails for this campaign (they all have scheduled_at = NOW() initially)
 	var emails []struct {
 		ID           int64 `db:"id"`
@@ -136,12 +145,38 @@ func (s *Scheduler) ScheduleCampaign(campaignID int, settings models.Settings) e
 	sendRatePerMinute := s.calculateSendRate(totalCapacity, sendingHoursPerDay, settings)
 
 	// Check if we should schedule for immediate sending
-	// This happens when: no time window is configured AND we're not severely capacity constrained
-	immediateMode := (s.cfg.TimeWindowStart == "" || s.cfg.TimeWindowEnd == "") &&
-	                  totalCapacity >= len(emails)
+	// This happens when:
+	// 1. Campaign has bypass_time_window=true (always immediate), OR
+	// 2. No time window is configured AND we're not severely capacity constrained, OR
+	// 3. Servers have unlimited capacity (DailyLimit=0) AND account rate limits are set
+	//    (processor will handle rate limiting in real-time, no need to pre-spread)
+	//
+	// The key insight: don't pre-spread emails over time when the processor can rate-limit
+	// in real-time. Pre-spreading only makes sense when daily limits require multi-day sending.
+	serversHaveUnlimitedCapacity := true
+	for _, srv := range servers {
+		if srv.DailyLimit > 0 {
+			serversHaveUnlimitedCapacity = false
+			break
+		}
+	}
+	accountRateLimitsSet := settings.AppAccountRateLimitPerHour > 0 || settings.AppAccountRateLimitPerMinute > 0
+
+	immediateMode := bypassTimeWindow ||
+		((s.cfg.TimeWindowStart == "" || s.cfg.TimeWindowEnd == "") && totalCapacity >= len(emails)) ||
+		(serversHaveUnlimitedCapacity && accountRateLimitsSet)
 
 	if immediateMode {
-		s.log.Printf("immediate mode: scheduling all %d emails for NOW (processor will handle rate limiting)", len(emails))
+		if bypassTimeWindow {
+			s.log.Printf("bypass mode: campaign %d has bypass_time_window=true, scheduling all %d emails for NOW", campaignID, len(emails))
+		} else if serversHaveUnlimitedCapacity && accountRateLimitsSet {
+			s.log.Printf("immediate mode (unlimited servers): campaign %d scheduling all %d emails for NOW - processor will enforce rate limits (%d/hour, %d/min)",
+				campaignID, len(emails), settings.AppAccountRateLimitPerHour, settings.AppAccountRateLimitPerMinute)
+		} else {
+			s.log.Printf("immediate mode: scheduling all %d emails for NOW (processor will handle rate limiting)", len(emails))
+		}
+		// For bypass/immediate mode, start from now
+		startTime = time.Now()
 	} else {
 		s.log.Printf("scheduled mode: send rate %d emails/min, starting at %s", sendRatePerMinute, startTime.Format("2006-01-02 15:04:05"))
 	}
@@ -329,16 +364,14 @@ func (s *Scheduler) calculateSendingHours() int {
 		return 24
 	}
 
-	// Calculate duration
+	// Calculate duration - handles midnight-spanning windows
 	duration := endTime.Sub(startTime)
 	hours := int(duration.Hours())
 
-	if hours < 0 {
-		hours += 24 // Handle overnight windows
-	}
-
-	if hours == 0 {
-		hours = 24 // Default to 24 hours if calculation fails
+	// If end <= start (window spans midnight), add 24 hours
+	// Example: 07:00 to 00:00 = -7 hours → -7 + 24 = 17 hours
+	if hours <= 0 {
+		hours += 24
 	}
 
 	return hours
@@ -346,7 +379,18 @@ func (s *Scheduler) calculateSendingHours() int {
 
 // getNextSendingWindow returns the next time when sending can start
 func (s *Scheduler) getNextSendingWindow() time.Time {
-	now := time.Now()
+	// Load configured timezone, fallback to UTC
+	loc := time.UTC
+	if s.cfg.Timezone != "" {
+		l, err := time.LoadLocation(s.cfg.Timezone)
+		if err == nil {
+			loc = l
+		} else {
+			s.log.Printf("warning: invalid timezone '%s', using UTC", s.cfg.Timezone)
+		}
+	}
+
+	now := time.Now().In(loc)
 
 	// If no time window configured, can start immediately
 	if s.cfg.TimeWindowStart == "" {
@@ -359,9 +403,9 @@ func (s *Scheduler) getNextSendingWindow() time.Time {
 		return now
 	}
 
-	// Create a time for today at the window start
+	// Create a time for today at the window start in the configured timezone
 	windowStart := time.Date(now.Year(), now.Month(), now.Day(),
-		startTime.Hour(), startTime.Minute(), 0, 0, now.Location())
+		startTime.Hour(), startTime.Minute(), 0, 0, loc)
 
 	// If window has already started today and we're still within it, start now
 	if now.After(windowStart) && s.isWithinSendingWindow(now) {
@@ -383,10 +427,30 @@ func (s *Scheduler) isWithinSendingWindow(t time.Time) bool {
 		return true
 	}
 
-	currentTime := t.Format("15:04")
+	// Load configured timezone, fallback to UTC
+	loc := time.UTC
+	if s.cfg.Timezone != "" {
+		l, err := time.LoadLocation(s.cfg.Timezone)
+		if err == nil {
+			loc = l
+		}
+	}
 
-	// Simple string comparison works for HH:MM format
-	return currentTime >= s.cfg.TimeWindowStart && currentTime <= s.cfg.TimeWindowEnd
+	// Convert time to configured timezone before comparing
+	currentTime := t.In(loc).Format("15:04")
+
+	start := s.cfg.TimeWindowStart
+	end := s.cfg.TimeWindowEnd
+
+	// Handle time windows that span midnight (e.g., 07:00 to 00:00 or 22:00 to 06:00)
+	// When end <= start, the window crosses midnight
+	if end <= start {
+		// Window spans midnight: valid if time >= start OR time <= end
+		return currentTime >= start || currentTime <= end
+	}
+
+	// Normal window (e.g., 08:00 to 17:00): valid if time >= start AND time <= end
+	return currentTime >= start && currentTime <= end
 }
 
 // calculateSendRate calculates how many emails can be sent per minute

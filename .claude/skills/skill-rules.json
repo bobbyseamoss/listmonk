@@ -568,6 +568,44 @@
                 "envOverride": "SKIP_MIGRATION_GUIDELINES"
             }
         },
+        "azure-database": {
+            "type": "domain",
+            "enforcement": "suggest",
+            "priority": "high",
+            "description": "Azure PostgreSQL database connection credentials and commands for listmonk420 deployment",
+            "promptTriggers": {
+                "keywords": [
+                    "database",
+                    "psql",
+                    "PostgreSQL",
+                    "Azure DB",
+                    "Azure database",
+                    "query",
+                    "SQL",
+                    "check database",
+                    "connect database",
+                    "database credentials",
+                    "listmonk420-db",
+                    "run query",
+                    "execute SQL",
+                    "email_queue",
+                    "campaigns table",
+                    "subscribers table",
+                    "bounces table",
+                    "smtp_daily_usage",
+                    "queue status",
+                    "campaign status"
+                ],
+                "intentPatterns": [
+                    "(check|query|view|get|show|see).*?(database|queue|campaign|subscriber|bounce)",
+                    "(connect|access).*?(database|PostgreSQL|Azure.*?DB)",
+                    "(run|execute).*?(query|SQL)",
+                    "(what|how many).*?(queued|sent|failed|subscribers|campaigns)",
+                    "database.*?(credentials|connection|status)"
+                ]
+            },
+            "suggestMessage": "🗄️ Azure Database Connection\n\n📍 CONNECTION DETAILS:\nHost: listmonk420-db.postgres.database.azure.com\nPort: 5432\nDatabase: listmonk\nUsername: listmonkadmin\nPassword: T@intshr3dd3r\nSSL Mode: require\n\n🔧 QUICK CONNECTION:\nPGPASSWORD='T@intshr3dd3r' psql \"host=listmonk420-db.postgres.database.azure.com port=5432 dbname=listmonk user=listmonkadmin sslmode=require\" -c \"YOUR SQL\"\n\n📚 Use Skill tool: 'azure-database' for common queries"
+        },
         "browser-testing": {
             "type": "domain",
             "enforcement": "suggest",

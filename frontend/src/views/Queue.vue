@@ -159,8 +159,7 @@
     <b-table :data="queueItems.results" :loading="loading.queue" paginated backend-pagination
       pagination-position="both" @page-change="onPageChange" :current-page="queryParams.page"
       :per-page="queueItems.perPage" :total="queueItems.total" hoverable>
-
-      <b-table-column v-slot="props" field="id" label="ID" width="5%">
+<b-table-column v-slot="props" field="id" label="ID" width="5%">
         {{ props.row.id }}
       </b-table-column>
 

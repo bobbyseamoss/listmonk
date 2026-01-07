@@ -1,0 +1,331 @@
+; ========================================================================
+; DNS Zone File for Google Workspace Subdomain Verification
+; Domain: bobbyseamoss.com
+; Subdomains: mail1-mail30.bobbyseamoss.com
+; ========================================================================
+;
+; INSTRUCTIONS:
+; 1. Add these records to your DNS provider
+; 2. Google will provide specific verification tokens when you add each domain
+; 3. Replace "google-site-verification=XXXXXX" with actual tokens from Google Admin
+;
+; ========================================================================
+; MX RECORDS (Required for each subdomain to receive email)
+; ========================================================================
+
+; --- mail1.bobbyseamoss.com ---
+mail1    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail1    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail1    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail1    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail1    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail2.bobbyseamoss.com ---
+mail2    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail2    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail2    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail2    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail2    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail3.bobbyseamoss.com ---
+mail3    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail3    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail3    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail3    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail3    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail4.bobbyseamoss.com ---
+mail4    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail4    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail4    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail4    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail4    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail5.bobbyseamoss.com ---
+mail5    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail5    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail5    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail5    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail5    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail6.bobbyseamoss.com ---
+mail6    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail6    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail6    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail6    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail6    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail7.bobbyseamoss.com ---
+mail7    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail7    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail7    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail7    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail7    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail8.bobbyseamoss.com ---
+mail8    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail8    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail8    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail8    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail8    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail9.bobbyseamoss.com ---
+mail9    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail9    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail9    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail9    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail9    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail10.bobbyseamoss.com ---
+mail10    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail10    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail10    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail10    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail10    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail11.bobbyseamoss.com ---
+mail11    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail11    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail11    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail11    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail11    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail12.bobbyseamoss.com ---
+mail12    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail12    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail12    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail12    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail12    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail13.bobbyseamoss.com ---
+mail13    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail13    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail13    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail13    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail13    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail14.bobbyseamoss.com ---
+mail14    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail14    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail14    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail14    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail14    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail15.bobbyseamoss.com ---
+mail15    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail15    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail15    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail15    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail15    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail16.bobbyseamoss.com ---
+mail16    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail16    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail16    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail16    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail16    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail17.bobbyseamoss.com ---
+mail17    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail17    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail17    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail17    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail17    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail18.bobbyseamoss.com ---
+mail18    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail18    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail18    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail18    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail18    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail19.bobbyseamoss.com ---
+mail19    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail19    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail19    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail19    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail19    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail20.bobbyseamoss.com ---
+mail20    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail20    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail20    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail20    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail20    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail21.bobbyseamoss.com ---
+mail21    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail21    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail21    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail21    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail21    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail22.bobbyseamoss.com ---
+mail22    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail22    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail22    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail22    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail22    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail23.bobbyseamoss.com ---
+mail23    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail23    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail23    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail23    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail23    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail24.bobbyseamoss.com ---
+mail24    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail24    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail24    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail24    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail24    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail25.bobbyseamoss.com ---
+mail25    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail25    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail25    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail25    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail25    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail26.bobbyseamoss.com ---
+mail26    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail26    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail26    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail26    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail26    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail27.bobbyseamoss.com ---
+mail27    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail27    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail27    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail27    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail27    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail28.bobbyseamoss.com ---
+mail28    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail28    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail28    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail28    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail28    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail29.bobbyseamoss.com ---
+mail29    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail29    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail29    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail29    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail29    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; --- mail30.bobbyseamoss.com ---
+mail30    IN    MX    1    ASPMX.L.GOOGLE.COM.
+mail30    IN    MX    5    ALT1.ASPMX.L.GOOGLE.COM.
+mail30    IN    MX    5    ALT2.ASPMX.L.GOOGLE.COM.
+mail30    IN    MX    10   ALT3.ASPMX.L.GOOGLE.COM.
+mail30    IN    MX    10   ALT4.ASPMX.L.GOOGLE.COM.
+
+; ========================================================================
+; SPF RECORDS (Required for sending email)
+; ========================================================================
+
+mail1    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail2    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail3    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail4    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail5    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail6    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail7    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail8    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail9    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail10    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail11    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail12    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail13    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail14    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail15    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail16    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail17    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail18    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail19    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail20    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail21    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail22    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail23    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail24    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail25    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail26    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail27    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail28    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail29    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail30    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+
+; ========================================================================
+; DKIM RECORDS (Will be provided by Google Admin for each domain)
+; Format: google._domainkey.mail{N}
+; Replace with actual DKIM values from Google Admin Console
+; ========================================================================
+
+google._domainkey.mail1    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail2    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail3    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail4    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail5    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail6    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail7    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail8    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail9    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail10    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail11    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail12    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail13    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail14    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail15    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail16    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail17    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail18    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail19    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail20    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail21    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail22    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail23    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail24    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail25    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail26    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail27    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail28    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail29    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+google._domainkey.mail30    IN    TXT    "v=DKIM1; k=rsa; p=YOUR_DKIM_KEY_HERE"
+
+; ========================================================================
+; DMARC RECORDS (Recommended)
+; ========================================================================
+
+_dmarc.mail1    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail2    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail3    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail4    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail5    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail6    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail7    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail8    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail9    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail10    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail11    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail12    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail13    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail14    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail15    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail16    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail17    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail18    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail19    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail20    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail21    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail22    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail23    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail24    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail25    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail26    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail27    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail28    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail29    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"
+_dmarc.mail30    IN    TXT    "v=DMARC1; p=none; rua=mailto:dmarc@bobbyseamoss.com"

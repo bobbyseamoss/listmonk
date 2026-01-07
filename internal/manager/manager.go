@@ -15,6 +15,7 @@ import (
 	"github.com/Masterminds/sprig/v3"
 	"github.com/knadh/listmonk/internal/i18n"
 	"github.com/knadh/listmonk/internal/notifs"
+	"github.com/knadh/listmonk/internal/tracking"
 	"github.com/knadh/listmonk/models"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -154,6 +155,11 @@ type Config struct {
 	UnsubHeader           bool
 	AbuseEmail            string
 	FeedbackSenderId      string
+
+	// Onsite tracking configuration
+	OnsiteTrackingEnabled       bool
+	OnsiteTrackingIdentityParam string
+	OnsiteTrackingEncryptionKey []byte
 
 	// Interval to scan the DB for active campaign checkpoints.
 	ScanInterval time.Duration
@@ -770,7 +776,8 @@ func (m *Manager) trackLink(url, campUUID, subUUID string) string {
 	m.linksMut.RLock()
 	if uu, ok := m.links[url]; ok {
 		m.linksMut.RUnlock()
-		return fmt.Sprintf(m.cfg.LinkTrackURL, uu, campUUID, subUUID)
+		trackURL := fmt.Sprintf(m.cfg.LinkTrackURL, uu, campUUID, subUUID)
+		return m.appendIdentityToken(trackURL, subUUID, campUUID)
 	}
 	m.linksMut.RUnlock()
 
@@ -787,7 +794,30 @@ func (m *Manager) trackLink(url, campUUID, subUUID string) string {
 	m.links[url] = uu
 	m.linksMut.Unlock()
 
-	return fmt.Sprintf(m.cfg.LinkTrackURL, uu, campUUID, subUUID)
+	trackURL := fmt.Sprintf(m.cfg.LinkTrackURL, uu, campUUID, subUUID)
+	return m.appendIdentityToken(trackURL, subUUID, campUUID)
+}
+
+// appendIdentityToken appends an encrypted identity token to a URL for onsite tracking.
+func (m *Manager) appendIdentityToken(url, subUUID, campUUID string) string {
+	// Skip if onsite tracking is disabled or if using dummy UUID (no individual tracking)
+	if !m.cfg.OnsiteTrackingEnabled || subUUID == dummyUUID {
+		return url
+	}
+
+	// Generate encrypted identity token
+	token, err := tracking.GenerateToken(subUUID, campUUID, m.cfg.OnsiteTrackingEncryptionKey)
+	if err != nil {
+		m.log.Printf("error generating identity token: %v", err)
+		return url
+	}
+
+	// Append token to URL
+	sep := "&"
+	if !strings.Contains(url, "?") {
+		sep = "?"
+	}
+	return url + sep + m.cfg.OnsiteTrackingIdentityParam + "=" + token
 }
 
 // sendNotif sends a notification to registered admin e-mails.

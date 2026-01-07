@@ -140,9 +140,6 @@ func (a *App) BounceWebhook(c echo.Context) error {
 		webhookType = "native"
 	}
 
-	// Debug: Log incoming webhook
-	a.log.Printf("DEBUG: BounceWebhook received service='%s', BounceSendgridEnabled=%v", service, a.cfg.BounceSendgridEnabled)
-
 	// Defer logging the webhook after processing
 	defer func() {
 		a.logWebhook(webhookType, eventType, c.Request().Header, rawReq, responseStatus, "", processed, errorMsg)
@@ -461,11 +458,6 @@ func (a *App) BounceWebhook(c echo.Context) error {
 					continue
 				}
 
-				// Debug: Log the entire event data to understand what Azure sends
-				if eventDataJSON, err := json.Marshal(event.Data); err == nil {
-					a.log.Printf("DEBUG: Azure delivery event data: %s", string(eventDataJSON))
-				}
-
 				// Extract delivery event data for storage
 				messageID, _ := event.Data["messageId"].(string)
 				internetMessageID, _ := event.Data["internetMessageId"].(string)
@@ -625,10 +617,6 @@ func (a *App) BounceWebhook(c echo.Context) error {
 					continue
 				}
 
-				// Debug: Log the entire event data
-				if eventDataJSON, err := json.Marshal(event.Data); err == nil {
-					a.log.Printf("DEBUG: Azure engagement event data: %s", string(eventDataJSON))
-				}
 
 				var campaignID, subscriberID int
 				recipient, _ := event.Data["recipient"].(string)

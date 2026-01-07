@@ -1,0 +1,126 @@
+; ========================================================================
+; DNS Zone File for bobbyseamoss.com
+; Google Workspace Subdomain Verification and Email
+; Generated: 2025-12-06
+; ========================================================================
+;
+; INSTRUCTIONS FOR GODADDY:
+; 1. Go to GoDaddy DNS Management for bobbyseamoss.com
+; 2. Add each record below manually, OR
+; 3. Use "Import Zone File" if available
+;
+; For each subdomain you need:
+;   - 1 TXT record for verification (google-site-verification)
+;   - 1 MX record pointing to smtp.google.com
+;   - 1 TXT record for SPF
+;
+; ========================================================================
+
+$ORIGIN bobbyseamoss.com.
+$TTL 300
+
+; ========================================================================
+; TXT Records for Google Domain Verification
+; These MUST be added first, then verify domains in Google Admin
+; ========================================================================
+
+mail1    IN    TXT    "google-site-verification=S_NFBF16qNy0MBS6zH2I0lrFYLNwWNrZ_dZmtjengFw"
+mail2    IN    TXT    "google-site-verification=kDmj8pzReyBgeo_SxlOwy-q-yWDaNudGeN99u9s3UyA"
+mail3    IN    TXT    "google-site-verification=vVPMC0RbqVyMbJGSmGGEtISIQ5R5crqx-FTQQgzQxWQ"
+mail4    IN    TXT    "google-site-verification=oVUh7_DQS5kyfxwKYx-iqdROGSKDjagK46uszEBaKvY"
+mail5    IN    TXT    "google-site-verification=z2HTVcoIGX-JdwKQU49j_GUuZkb9aCf7e-tmQKHboC4"
+mail6    IN    TXT    "google-site-verification=3Qhc3-CyXddpkaNzNal7D8aRYBNMcelQYF2M-PwrWoc"
+mail7    IN    TXT    "google-site-verification=lEcb51n7zlP_jufw6XAzpc9y99lMByi6r0oScd1Nx8E"
+mail8    IN    TXT    "google-site-verification=WWpCs7RHH1-K85NusiDh9qaNf80U6r_3EEjQ7foTtyQ"
+mail9    IN    TXT    "google-site-verification=ng5E-NMCz9Zh-r1EhPARNebkpkrBywOAcaHg5li5JPo"
+mail10   IN    TXT    "google-site-verification=6alst3vkEx3erUDkUEoO0_xYyGkA3SYLKaB3O8AGEaI"
+mail11   IN    TXT    "google-site-verification=GBNEUQMhXWMoa3XkOJ-F89XTvpdtXJmqjQj0fqwbliw"
+mail12   IN    TXT    "google-site-verification=R_OSWJFuKJtRzBEfs9hbrJrBfn-dExy_j5ZKw2v5Mqg"
+mail13   IN    TXT    "google-site-verification=qa6VJVw8xd6ULF6Ay3P_iGUvLGCpHs4oTorjPU2bXyw"
+mail14   IN    TXT    "google-site-verification=dmNu6YRReVqQ0oZSAoSiJz9jkwhL9mKkHRY7DCDC8dA"
+mail15   IN    TXT    "google-site-verification=baZ5yT_TKIFVfuj75AHJhc6fOFM4NOk2Gz2niCr_oKE"
+mail16   IN    TXT    "google-site-verification=1S5PDAfpJPMO3bjz1wI8Z9XBUQ8SjroJ9tjbkBBziuQ"
+mail17   IN    TXT    "google-site-verification=-18g7wgtuLvatlu1eF3DXiGkJQVTHJramCey9T7eqlA"
+mail18   IN    TXT    "google-site-verification=TSJq2qrbHCdWpuWuhmyTrgDaoI7hBtZ6wx-qtYFyvIg"
+mail19   IN    TXT    "google-site-verification=f6e0JhTHElJ_D3HaQrpcKVKRW2GZ9YKJW5qp1wnDY0U"
+mail20   IN    TXT    "google-site-verification=HFgLt5aIHhvFKA7nT2qnscp__rAZBULo9tg1YXAeMMY"
+mail21   IN    TXT    "google-site-verification=LrA37nSj7_vCtWOyAKWXmgoMMRzMMrnPaHUJSwu02MQ"
+mail22   IN    TXT    "google-site-verification=qPfv8rXmqc6vHh1fbJJfAke0hELa_glJZxCDjx8Cv1o"
+mail23   IN    TXT    "google-site-verification=iTLiIy_vxkbrCjgb1V83whSDzryxazX5140KKtVB5es"
+mail24   IN    TXT    "google-site-verification=A6-0jUEinl4EcTSGhZjNllQiVy69sTKVADy-ay3-Xcs"
+mail25   IN    TXT    "google-site-verification=XveOZMolUw6YBpcsqomTgkmjVKcIfM_WeIU04aKAihk"
+mail26   IN    TXT    "google-site-verification=-6LPbqG4OXGvV7ypa3az5oOf9saKHJoHIqgAyK-rxik"
+mail27   IN    TXT    "google-site-verification=41wj5HExa6-nvo_vQUVbbeehjmL3NvZ5h1g9ZNIR_kc"
+mail28   IN    TXT    "google-site-verification=3X3SKcW2PJbqRsNc2-C63OPEZPpLaI6tLvE9wfHgGoo"
+mail29   IN    TXT    "google-site-verification=RrZgzijuqZ3n8r76rEwOGnrbSpCNfe4rXa_UUZnwJ6k"
+mail30   IN    TXT    "google-site-verification=j1xCMWD9ojyIZaxkqA0Z4PNauVBtjSRX7t-nYNHTcUo"
+
+; ========================================================================
+; MX Records for Google Workspace Email (New Format)
+; ========================================================================
+
+mail1    IN    MX    1    smtp.google.com.
+mail2    IN    MX    1    smtp.google.com.
+mail3    IN    MX    1    smtp.google.com.
+mail4    IN    MX    1    smtp.google.com.
+mail5    IN    MX    1    smtp.google.com.
+mail6    IN    MX    1    smtp.google.com.
+mail7    IN    MX    1    smtp.google.com.
+mail8    IN    MX    1    smtp.google.com.
+mail9    IN    MX    1    smtp.google.com.
+mail10   IN    MX    1    smtp.google.com.
+mail11   IN    MX    1    smtp.google.com.
+mail12   IN    MX    1    smtp.google.com.
+mail13   IN    MX    1    smtp.google.com.
+mail14   IN    MX    1    smtp.google.com.
+mail15   IN    MX    1    smtp.google.com.
+mail16   IN    MX    1    smtp.google.com.
+mail17   IN    MX    1    smtp.google.com.
+mail18   IN    MX    1    smtp.google.com.
+mail19   IN    MX    1    smtp.google.com.
+mail20   IN    MX    1    smtp.google.com.
+mail21   IN    MX    1    smtp.google.com.
+mail22   IN    MX    1    smtp.google.com.
+mail23   IN    MX    1    smtp.google.com.
+mail24   IN    MX    1    smtp.google.com.
+mail25   IN    MX    1    smtp.google.com.
+mail26   IN    MX    1    smtp.google.com.
+mail27   IN    MX    1    smtp.google.com.
+mail28   IN    MX    1    smtp.google.com.
+mail29   IN    MX    1    smtp.google.com.
+mail30   IN    MX    1    smtp.google.com.
+
+; ========================================================================
+; SPF Records (TXT)
+; ========================================================================
+
+mail1    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail2    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail3    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail4    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail5    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail6    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail7    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail8    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail9    IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail10   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail11   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail12   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail13   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail14   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail15   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail16   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail17   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail18   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail19   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail20   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail21   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail22   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail23   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail24   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail25   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail26   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail27   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail28   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail29   IN    TXT    "v=spf1 include:_spf.google.com ~all"
+mail30   IN    TXT    "v=spf1 include:_spf.google.com ~all"

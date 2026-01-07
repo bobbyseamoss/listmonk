@@ -8,6 +8,7 @@ export const models = Object.freeze({
   // This is used only on the lists page where lists are loaded with full
   // context (subscriber counts), which can be slow and expensive.
   listsFull: 'listsFull',
+  segments: 'segments',
   subscribers: 'subscribers',
   campaigns: 'campaigns',
   queue: 'queue',

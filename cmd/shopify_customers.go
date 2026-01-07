@@ -941,8 +941,8 @@ func (app *App) syncCustomerOrdersToDB(storeURL, accessToken, customerID string,
 					fmt.Sscanf(lineItem.TotalDiscountSet.ShopMoney.Amount, "%f", &totalDiscount)
 				}
 
-				// Convert custom attributes to JSON
-				var propertiesJSON []byte
+				// Convert custom attributes to JSON (default to empty object for JSONB column)
+				var propertiesJSON []byte = []byte("{}")
 				if len(lineItem.CustomAttributes) > 0 {
 					props := make(map[string]string)
 					for _, attr := range lineItem.CustomAttributes {
@@ -1021,4 +1021,448 @@ func (app *App) getSubscriberByEmail(email string) (models.Subscriber, error) {
 		return sub, fmt.Errorf("error finding subscriber: %v", err)
 	}
 	return sub, nil
+}
+
+// REST API response structures for orders
+type restOrdersResponse struct {
+	Orders []restOrder `json:"orders"`
+}
+
+type restOrder struct {
+	ID                int64           `json:"id"`
+	Name              string          `json:"name"`
+	Email             string          `json:"email"`
+	CreatedAt         string          `json:"created_at"`
+	ProcessedAt       string          `json:"processed_at"`
+	TotalPrice        string          `json:"total_price"`
+	SubtotalPrice     string          `json:"subtotal_price"`
+	TotalTax          string          `json:"total_tax"`
+	TotalDiscounts    string          `json:"total_discounts"`
+	Currency          string          `json:"currency"`
+	FinancialStatus   string          `json:"financial_status"`
+	FulfillmentStatus string          `json:"fulfillment_status"`
+	Tags              string          `json:"tags"`
+	Note              string          `json:"note"`
+	Customer          *restCustomer   `json:"customer"`
+	LineItems         []restLineItem  `json:"line_items"`
+}
+
+type restCustomer struct {
+	ID    int64  `json:"id"`
+	Email string `json:"email"`
+}
+
+type restLineItem struct {
+	ID            int64                    `json:"id"`
+	ProductID     int64                    `json:"product_id"`
+	Title         string                   `json:"title"`
+	VariantID     int64                    `json:"variant_id"`
+	VariantTitle  string                   `json:"variant_title"`
+	Quantity      int                      `json:"quantity"`
+	Price         string                   `json:"price"`
+	SKU           string                   `json:"sku"`
+	Vendor        string                   `json:"vendor"`
+	ProductExists bool                     `json:"product_exists"`
+	Properties    []map[string]interface{} `json:"properties"`
+}
+
+// orderSyncState tracks the state of bulk order sync operations
+type orderSyncState struct {
+	sync.RWMutex
+	InProgress   bool      `json:"in_progress"`
+	StartedAt    time.Time `json:"started_at,omitempty"`
+	TotalOrders  int       `json:"total_orders"`
+	SyncedOrders int       `json:"synced_orders"`
+	MatchedSubs  int       `json:"matched_subscribers"`
+	SkippedCount int       `json:"skipped_count"`
+	ErrorCount   int       `json:"error_count"`
+	LastError    string    `json:"last_error,omitempty"`
+	CompletedAt  time.Time `json:"completed_at,omitempty"`
+}
+
+var orderSyncStateGlobal = &orderSyncState{}
+
+// GetOrderSyncStatus returns the current status of order sync
+func (app *App) GetOrderSyncStatus(c echo.Context) error {
+	orderSyncStateGlobal.RLock()
+	defer orderSyncStateGlobal.RUnlock()
+
+	return c.JSON(http.StatusOK, orderSyncStateGlobal)
+}
+
+// TriggerOrderSync starts a bulk order sync via REST API
+func (app *App) TriggerOrderSync(c echo.Context) error {
+	orderSyncStateGlobal.Lock()
+	if orderSyncStateGlobal.InProgress {
+		orderSyncStateGlobal.Unlock()
+		return c.JSON(http.StatusConflict, map[string]string{
+			"error": "Order sync already in progress",
+		})
+	}
+	orderSyncStateGlobal.InProgress = true
+	orderSyncStateGlobal.StartedAt = time.Now()
+	orderSyncStateGlobal.TotalOrders = 0
+	orderSyncStateGlobal.SyncedOrders = 0
+	orderSyncStateGlobal.MatchedSubs = 0
+	orderSyncStateGlobal.SkippedCount = 0
+	orderSyncStateGlobal.ErrorCount = 0
+	orderSyncStateGlobal.LastError = ""
+	orderSyncStateGlobal.CompletedAt = time.Time{}
+	orderSyncStateGlobal.Unlock()
+
+	// Get Shopify settings
+	settings, err := app.core.GetSettings()
+	if err != nil {
+		orderSyncStateGlobal.Lock()
+		orderSyncStateGlobal.InProgress = false
+		orderSyncStateGlobal.LastError = fmt.Sprintf("error getting settings: %v", err)
+		orderSyncStateGlobal.Unlock()
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if !settings.Shopify.Enabled {
+		orderSyncStateGlobal.Lock()
+		orderSyncStateGlobal.InProgress = false
+		orderSyncStateGlobal.LastError = "Shopify integration is not enabled"
+		orderSyncStateGlobal.Unlock()
+		return echo.NewHTTPError(http.StatusBadRequest, "Shopify integration is not enabled")
+	}
+
+	storeURL := settings.Shopify.StoreURL
+	accessToken := settings.Shopify.AccessToken
+
+	if storeURL == "" || accessToken == "" {
+		orderSyncStateGlobal.Lock()
+		orderSyncStateGlobal.InProgress = false
+		orderSyncStateGlobal.LastError = "Shopify credentials not configured"
+		orderSyncStateGlobal.Unlock()
+		return echo.NewHTTPError(http.StatusBadRequest, "Shopify Store URL and Access Token must be configured")
+	}
+
+	// Start sync in background
+	go app.syncAllOrdersViaREST(storeURL, accessToken)
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "Order sync started",
+	})
+}
+
+// syncAllOrdersViaREST fetches ALL orders from Shopify via REST API and syncs them to the database.
+// This bypasses the 60-day GraphQL limitation.
+func (app *App) syncAllOrdersViaREST(storeURL, accessToken string) {
+	defer func() {
+		orderSyncStateGlobal.Lock()
+		orderSyncStateGlobal.InProgress = false
+		orderSyncStateGlobal.CompletedAt = time.Now()
+		orderSyncStateGlobal.Unlock()
+	}()
+
+	app.log.Printf("syncAllOrdersViaREST: starting bulk order sync from %s", storeURL)
+
+	// Build email to subscriber ID map for quick lookups
+	emailToSubID := make(map[string]int)
+	var subscribers []struct {
+		ID    int    `db:"id"`
+		Email string `db:"email"`
+	}
+	err := app.db.Select(&subscribers, `SELECT id, email FROM subscribers WHERE email IS NOT NULL AND email != ''`)
+	if err != nil {
+		app.log.Printf("syncAllOrdersViaREST: error fetching subscribers: %v", err)
+		orderSyncStateGlobal.Lock()
+		orderSyncStateGlobal.LastError = fmt.Sprintf("error fetching subscribers: %v", err)
+		orderSyncStateGlobal.Unlock()
+		return
+	}
+
+	for _, sub := range subscribers {
+		emailToSubID[strings.ToLower(sub.Email)] = sub.ID
+	}
+	app.log.Printf("syncAllOrdersViaREST: loaded %d subscribers for matching", len(emailToSubID))
+
+	// Track effects per subscriber for later update
+	subscriberEffects := make(map[int]map[string]bool)
+
+	// Fetch all orders from REST API with pagination
+	client := &http.Client{Timeout: 60 * time.Second}
+	baseURL := fmt.Sprintf("https://%s/admin/api/2024-10/orders.json", storeURL)
+
+	var pageInfo string
+	hasNextPage := true
+	totalOrders := 0
+	syncedOrders := 0
+	matchedSubs := 0
+	skippedCount := 0
+	errorCount := 0
+
+	for hasNextPage {
+		// Build URL with pagination
+		// Note: Shopify cursor-based pagination - page_info CANNOT be combined with other params
+		var reqURL string
+		if pageInfo != "" {
+			// Use only page_info for subsequent pages
+			reqURL = baseURL + "?page_info=" + pageInfo
+		} else {
+			// First page uses status and limit
+			reqURL = baseURL + "?status=any&limit=250"
+		}
+
+		req, err := http.NewRequest("GET", reqURL, nil)
+		if err != nil {
+			app.log.Printf("syncAllOrdersViaREST: error creating request: %v", err)
+			orderSyncStateGlobal.Lock()
+			orderSyncStateGlobal.LastError = fmt.Sprintf("error creating request: %v", err)
+			orderSyncStateGlobal.Unlock()
+			return
+		}
+
+		req.Header.Set("X-Shopify-Access-Token", accessToken)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			app.log.Printf("syncAllOrdersViaREST: error making request: %v", err)
+			orderSyncStateGlobal.Lock()
+			orderSyncStateGlobal.LastError = fmt.Sprintf("error making request: %v", err)
+			orderSyncStateGlobal.Unlock()
+			return
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			app.log.Printf("syncAllOrdersViaREST: error reading response: %v", err)
+			orderSyncStateGlobal.Lock()
+			orderSyncStateGlobal.LastError = fmt.Sprintf("error reading response: %v", err)
+			orderSyncStateGlobal.Unlock()
+			return
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			app.log.Printf("syncAllOrdersViaREST: API error (status %d): %s", resp.StatusCode, string(body))
+			orderSyncStateGlobal.Lock()
+			orderSyncStateGlobal.LastError = fmt.Sprintf("API error (status %d)", resp.StatusCode)
+			orderSyncStateGlobal.Unlock()
+			return
+		}
+
+		var ordersResp restOrdersResponse
+		if err := json.Unmarshal(body, &ordersResp); err != nil {
+			app.log.Printf("syncAllOrdersViaREST: error parsing response: %v", err)
+			orderSyncStateGlobal.Lock()
+			orderSyncStateGlobal.LastError = fmt.Sprintf("error parsing response: %v", err)
+			orderSyncStateGlobal.Unlock()
+			return
+		}
+
+		totalOrders += len(ordersResp.Orders)
+
+		// Process each order
+		for _, order := range ordersResp.Orders {
+			// Get customer email - try order email first, then customer email
+			email := strings.ToLower(order.Email)
+			if email == "" && order.Customer != nil {
+				email = strings.ToLower(order.Customer.Email)
+			}
+
+			if email == "" {
+				skippedCount++
+				continue
+			}
+
+			// Find subscriber by email
+			subscriberID, found := emailToSubID[email]
+			if !found {
+				skippedCount++
+				continue
+			}
+			matchedSubs++
+
+			// Parse order data
+			createdAt, _ := time.Parse(time.RFC3339, order.CreatedAt)
+			var processedAt *time.Time
+			if order.ProcessedAt != "" {
+				t, err := time.Parse(time.RFC3339, order.ProcessedAt)
+				if err == nil {
+					processedAt = &t
+				}
+			}
+
+			var totalPrice, subtotalPrice, totalTax, totalDiscounts float64
+			fmt.Sscanf(order.TotalPrice, "%f", &totalPrice)
+			fmt.Sscanf(order.SubtotalPrice, "%f", &subtotalPrice)
+			fmt.Sscanf(order.TotalTax, "%f", &totalTax)
+			fmt.Sscanf(order.TotalDiscounts, "%f", &totalDiscounts)
+
+			// Convert tags string to array
+			var tags []string
+			if order.Tags != "" {
+				for _, tag := range strings.Split(order.Tags, ",") {
+					tags = append(tags, strings.TrimSpace(tag))
+				}
+			}
+
+			// Map financial status
+			financialStatus := strings.ToUpper(order.FinancialStatus)
+			fulfillmentStatus := strings.ToUpper(order.FulfillmentStatus)
+			if fulfillmentStatus == "" {
+				fulfillmentStatus = "UNFULFILLED"
+			}
+
+			// Create Shopify GID format for order ID
+			shopifyOrderID := fmt.Sprintf("gid://shopify/Order/%d", order.ID)
+
+			// Upsert order
+			var orderID int
+			err := app.queries.UpsertShopifyOrder.Get(&orderID,
+				subscriberID,
+				shopifyOrderID,
+				order.Name, // order_number
+				order.Name, // order_name
+				createdAt,
+				processedAt,
+				totalPrice,
+				subtotalPrice,
+				totalTax,
+				totalDiscounts,
+				order.Currency,
+				financialStatus,
+				fulfillmentStatus,
+				pq.Array(tags),
+				order.Note,
+			)
+			if err != nil {
+				app.log.Printf("syncAllOrdersViaREST: error upserting order %d: %v", order.ID, err)
+				errorCount++
+				continue
+			}
+			syncedOrders++
+
+			// Delete existing line items and re-insert
+			_, _ = app.queries.DeleteShopifyOrderLineItems.Exec(orderID)
+
+			// Insert line items and extract effects
+			for _, lineItem := range order.LineItems {
+				// Create Shopify GID formats
+				lineItemID := fmt.Sprintf("gid://shopify/LineItem/%d", lineItem.ID)
+				productID := ""
+				if lineItem.ProductID > 0 {
+					productID = fmt.Sprintf("gid://shopify/Product/%d", lineItem.ProductID)
+				}
+				variantID := ""
+				if lineItem.VariantID > 0 {
+					variantID = fmt.Sprintf("gid://shopify/ProductVariant/%d", lineItem.VariantID)
+				}
+
+				var price float64
+				fmt.Sscanf(lineItem.Price, "%f", &price)
+
+				// Convert properties to JSON
+				var propertiesJSON []byte = []byte("{}")
+				if len(lineItem.Properties) > 0 {
+					propertiesJSON, _ = json.Marshal(lineItem.Properties)
+				}
+
+				_, err := app.queries.InsertShopifyLineItem.Exec(
+					orderID,
+					lineItemID,
+					productID,
+					lineItem.Title,
+					variantID,
+					lineItem.VariantTitle,
+					lineItem.SKU,
+					lineItem.Quantity,
+					price,
+					0.0, // total_discount not available per-item in REST API
+					"",  // product_type not available in REST line items
+					lineItem.Vendor,
+					propertiesJSON,
+				)
+				if err != nil {
+					app.log.Printf("syncAllOrdersViaREST: error inserting line item %d: %v", lineItem.ID, err)
+				}
+
+				// Extract effect from product title
+				effect := extractEffectFromProductTitle(lineItem.Title)
+				if effect != "" {
+					if subscriberEffects[subscriberID] == nil {
+						subscriberEffects[subscriberID] = make(map[string]bool)
+					}
+					subscriberEffects[subscriberID][effect] = true
+				}
+			}
+		}
+
+		// Update progress
+		orderSyncStateGlobal.Lock()
+		orderSyncStateGlobal.TotalOrders = totalOrders
+		orderSyncStateGlobal.SyncedOrders = syncedOrders
+		orderSyncStateGlobal.MatchedSubs = matchedSubs
+		orderSyncStateGlobal.SkippedCount = skippedCount
+		orderSyncStateGlobal.ErrorCount = errorCount
+		orderSyncStateGlobal.Unlock()
+
+		// Check for pagination via Link header
+		linkHeader := resp.Header.Get("Link")
+		hasNextPage = false
+		if linkHeader != "" {
+			// Parse Link header for next page
+			// Format: <url?page_info=xyz>; rel="next", <url?page_info=abc>; rel="previous"
+			for _, link := range strings.Split(linkHeader, ",") {
+				if strings.Contains(link, `rel="next"`) {
+					// Extract page_info from URL
+					start := strings.Index(link, "page_info=")
+					if start != -1 {
+						end := strings.Index(link[start:], ">")
+						if end != -1 {
+							pageInfo = link[start+10 : start+end]
+							hasNextPage = true
+						}
+					}
+					break
+				}
+			}
+		}
+
+		app.log.Printf("syncAllOrdersViaREST: processed %d orders so far, synced %d, matched %d subscribers",
+			totalOrders, syncedOrders, matchedSubs)
+
+		// Rate limit protection - small delay between pages
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// Update purchased_effects for all subscribers with orders
+	app.log.Printf("syncAllOrdersViaREST: updating purchased_effects for %d subscribers", len(subscriberEffects))
+	for subID, effects := range subscriberEffects {
+		effectsList := make([]string, 0, len(effects))
+		for effect := range effects {
+			effectsList = append(effectsList, effect)
+		}
+
+		// Convert to JSON array for JSONB column
+		effectsJSON, err := json.Marshal(effectsList)
+		if err != nil {
+			app.log.Printf("syncAllOrdersViaREST: error marshalling effects for subscriber %d: %v", subID, err)
+			continue
+		}
+
+		// Update subscriber attribs with purchased_effects
+		_, err = app.db.Exec(`
+			UPDATE subscribers
+			SET attribs = jsonb_set(
+				COALESCE(attribs, '{}'::jsonb),
+				'{purchased_effects}',
+				$1::jsonb
+			)
+			WHERE id = $2
+		`, string(effectsJSON), subID)
+		if err != nil {
+			app.log.Printf("syncAllOrdersViaREST: error updating purchased_effects for subscriber %d: %v", subID, err)
+		}
+	}
+
+	// Clear segment caches since data changed
+	_, _ = app.db.Exec(`UPDATE segments SET cached_count = NULL, cached_at = NULL`)
+
+	app.log.Printf("syncAllOrdersViaREST: completed. Total: %d, Synced: %d, Matched: %d, Skipped: %d, Errors: %d",
+		totalOrders, syncedOrders, matchedSubs, skippedCount, errorCount)
 }

@@ -138,6 +138,43 @@
               </b-table-column>
             </b-table>
           </b-tab-item>
+
+          <b-tab-item :label="`Site Activity (${siteActivity.total || 0})`" class="site-activity"
+            :disabled="!siteActivity.results || siteActivity.results.length === 0">
+            <div v-if="siteActivity.results && siteActivity.results.length > 0">
+              <b-table :data="siteActivity.results" hoverable default-sort="createdAt">
+                <b-table-column field="eventType" label="Event" v-slot="props">
+                  <b-tag :class="getEventTypeClass(props.row.eventType)">
+                    {{ formatEventType(props.row.eventType) }}
+                  </b-tag>
+                  <span v-if="props.row.eventName" class="is-size-7 has-text-grey ml-2">
+                    {{ props.row.eventName }}
+                  </span>
+                </b-table-column>
+
+                <b-table-column field="pageUrl" label="Page" v-slot="props">
+                  <span class="is-size-7" :title="props.row.pageUrl">
+                    {{ truncateUrl(props.row.pageUrl) }}
+                  </span>
+                </b-table-column>
+
+                <b-table-column field="createdAt" :label="$t('globals.fields.createdAt')" v-slot="props">
+                  {{ $utils.niceDate(props.row.createdAt, true) }}
+                </b-table-column>
+
+                <b-table-column field="properties" label="Details" v-slot="props">
+                  <span v-if="props.row.properties && hasProductData(props.row.properties)">
+                    <a href="#" @click.prevent="toggleActivityMeta(props.row.id)" class="is-size-7">
+                      {{ props.row.properties.product_name || 'View Details' }}
+                      <b-icon :icon="visibleActivityMeta[props.row.id] ? 'arrow-up' : 'arrow-down'" size="is-small" />
+                    </a>
+                    <pre v-if="visibleActivityMeta[props.row.id]" class="is-size-7">{{ formatProperties(props.row.properties) }}</pre>
+                  </span>
+                </b-table-column>
+              </b-table>
+            </div>
+            <p v-else class="has-text-grey is-size-7">No site activity recorded for this subscriber.</p>
+          </b-tab-item>
         </b-tabs>
 
         <b-field :message="$t('subscribers.attribsHelp') + ' ' + egAttribs" class="mt-6">
@@ -196,6 +233,8 @@ export default Vue.extend({
       isBounceVisible: false,
       bounces: [],
       visibleMeta: {},
+      siteActivity: { results: [], total: 0 },
+      visibleActivityMeta: {},
 
       egAttribs: '{"job": "developer", "location": "Mars", "has_rocket": true}',
     };
@@ -230,6 +269,61 @@ export default Vue.extend({
       this.$api.getSubscriberBounces(this.form.id).then((data) => {
         this.bounces = data;
       });
+    },
+
+    getSiteActivity() {
+      this.$api.getSubscriberSiteActivity(this.form.id, { per_page: 50 }).then((data) => {
+        this.siteActivity = data || { results: [], total: 0 };
+      }).catch(() => {
+        this.siteActivity = { results: [], total: 0 };
+      });
+    },
+
+    toggleActivityMeta(id) {
+      let v = false;
+      if (!this.visibleActivityMeta[id]) {
+        v = true;
+      }
+      Vue.set(this.visibleActivityMeta, id, v);
+    },
+
+    formatEventType(type) {
+      const types = {
+        page_view: 'Page View',
+        viewed_product: 'Viewed Product',
+        custom: 'Custom',
+        identify: 'Identified',
+      };
+      return types[type] || type;
+    },
+
+    getEventTypeClass(type) {
+      const classes = {
+        page_view: 'is-info is-light',
+        viewed_product: 'is-success is-light',
+        custom: 'is-warning is-light',
+        identify: 'is-primary is-light',
+      };
+      return classes[type] || 'is-light';
+    },
+
+    truncateUrl(url) {
+      if (!url) return '';
+      try {
+        const parsed = new URL(url);
+        const path = parsed.pathname + parsed.search;
+        return path.length > 50 ? `${path.substring(0, 50)}...` : path;
+      } catch {
+        return url.length > 50 ? `${url.substring(0, 50)}...` : url;
+      }
+    },
+
+    hasProductData(props) {
+      return props && (props.product_name || props.product_id || Object.keys(props).length > 0);
+    },
+
+    formatProperties(props) {
+      return JSON.stringify(props, null, 2);
     },
 
     onSubmit() {
@@ -345,6 +439,7 @@ export default Vue.extend({
 
     if (this.form.id) {
       this.getBounces();
+      this.getSiteActivity();
     }
 
     this.$nextTick(() => {

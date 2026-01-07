@@ -1,0 +1,1 @@
+frontend:build:cd /media/adam/35b30754-edb9-4a73-9e0b-d32576a42fa8/Projects/listmonk/frontend && npm run build

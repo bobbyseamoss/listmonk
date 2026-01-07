@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PGPASSWORD='T@intshr3dd3r' psql:*)",
+      "Bash(az containerapp logs show:*)",
+      "Bash(PGPASSWORD='T@intshr3dd3r' psql -h localhost -U listmonk -d listmonk -c \"SELECT id, uuid, name, subject, messenger, status, to_send, sent, use_queue, queued_at, started_at, lists FROM campaigns WHERE id = 64;\")",
+      "Bash(PGPASSWORD='listmonk' psql:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

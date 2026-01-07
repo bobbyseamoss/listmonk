@@ -324,6 +324,35 @@ func main() {
 		needsUserSetup: !hasUsers,
 	}
 
+	// Handle --sync-shopify-orders flag: run order sync and exit
+	if ko.Bool("sync-shopify-orders") {
+		settings, err := app.core.GetSettings()
+		if err != nil {
+			lo.Fatalf("error getting settings: %v", err)
+		}
+		if !settings.Shopify.Enabled {
+			lo.Fatal("Shopify integration is not enabled")
+		}
+		if settings.Shopify.StoreURL == "" || settings.Shopify.AccessToken == "" {
+			lo.Fatal("Shopify Store URL and Access Token must be configured")
+		}
+
+		lo.Printf("Starting Shopify order sync via REST API...")
+		app.syncAllOrdersViaREST(settings.Shopify.StoreURL, settings.Shopify.AccessToken)
+
+		// Print final stats
+		orderSyncStateGlobal.RLock()
+		lo.Printf("Order sync completed:")
+		lo.Printf("  Total Orders: %d", orderSyncStateGlobal.TotalOrders)
+		lo.Printf("  Synced Orders: %d", orderSyncStateGlobal.SyncedOrders)
+		lo.Printf("  Matched Subscribers: %d", orderSyncStateGlobal.MatchedSubs)
+		lo.Printf("  Skipped: %d", orderSyncStateGlobal.SkippedCount)
+		lo.Printf("  Errors: %d", orderSyncStateGlobal.ErrorCount)
+		orderSyncStateGlobal.RUnlock()
+
+		os.Exit(0)
+	}
+
 	// Star the update checker.
 	if ko.Bool("app.check_updates") {
 		go app.checkUpdates(versionString, time.Hour*24)

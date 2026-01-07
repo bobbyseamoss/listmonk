@@ -1,0 +1,46 @@
+# FOCUS & ENERGY Gummy Email Subject Lines
+# Format: Template Name | Subject Line with Spintax
+
+================================================================================
+FOCUS GUMMIES
+================================================================================
+
+## focus_01_procrastination_buster.html
+{That task you've been avoiding|The thing you keep putting off|Still avoiding that task?}
+
+## focus_02_deep_work_mode.html
+{Enter deep work mode|Unlock your flow state|Hours feel like minutes}
+
+## focus_03_brain_fog.html
+{Brain fog is not normal|That foggy feeling isn't you|Clear the mental haze}
+
+================================================================================
+ENERGY GUMMIES
+================================================================================
+
+## energy_01_3pm_slump.html
+{Skip the 3pm slump|Beat the afternoon crash|The 3pm slump is optional}
+
+## energy_02_coffee_replacement.html
+{Your {4th|third|next} coffee isn't helping|Coffee #4 is just anxiety|Put down the coffee}
+
+## energy_03_monday_fuel.html
+{Monday doesn't have to hurt|Mondays don't have to suck|Start your week right}
+
+================================================================================
+ALTERNATIVE SUBJECT LINES (ADDITIONAL OPTIONS)
+================================================================================
+
+## FOCUS Alternatives:
+- {Finally|Actually} finish that project
+- {Your brain|You} deserve clarity
+- Stop staring at a blank screen
+- {What if|Imagine if} you could just... focus?
+- The antidote to distraction
+
+## ENERGY Alternatives:
+- {Clean energy|Real energy}, no crash
+- {Ditch|Skip|Replace} the afternoon coffee
+- Energy that lasts {all day|past 3pm}
+- {Wake up|Feel} alive again
+- {Natural|Clean} fuel for {busy|real} people

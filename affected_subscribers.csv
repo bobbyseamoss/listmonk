@@ -1,0 +1,2 @@
+subscriber_id,uuid,email,name,subscriber_status,created_at,updated_at,campaign_id,campaign_name,missing_list_id,missing_list_name,views,clicks
+452,bc5657ac-84ac-4b83-933f-0fb499c9c2d2,info@bobbyseamoss.com,Info,enabled,2025-10-28 18:18:05.622559+00,2025-11-01 11:34:34.489914+00,64,"Copy of Copy of Gummies New",7,"Kali - ALL Gummies",2,0

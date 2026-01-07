@@ -242,6 +242,10 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.POST("/api/shopify/customers/sync", pm(a.StartShopifyCustomerSync, "settings:manage"))
 		g.GET("/api/shopify/customers/sync/status", pm(a.GetShopifyCustomerSyncStatus, "settings:get"))
 
+		// Shopify Order Sync API endpoints (REST API-based, bypasses 60-day GraphQL limitation)
+		g.POST("/api/shopify/orders/sync", pm(a.TriggerOrderSync, "settings:manage"))
+		g.GET("/api/shopify/orders/sync/status", pm(a.GetOrderSyncStatus, "settings:get"))
+
 		g.DELETE("/api/maintenance/subscribers/:type", pm(a.GCSubscribers, "settings:maintain"))
 		g.DELETE("/api/maintenance/analytics/:type", pm(a.GCCampaignAnalytics, "settings:maintain"))
 		g.DELETE("/api/maintenance/subscriptions/unconfirmed", pm(a.GCSubscriptions, "settings:maintain"))

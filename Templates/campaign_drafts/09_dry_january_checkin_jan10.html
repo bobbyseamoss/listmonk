@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dry January Check-In</title>
+    <!--[if mso]>
+    <style type="text/css">
+        body, table, td {font-family: Arial, Helvetica, sans-serif !important;}
+    </style>
+    <![endif]-->
+    <style type="text/css">
+        @media only screen and (max-width: 600px) {
+            .email-container { width: 100% !important; }
+            .fluid { width: 100% !important; max-width: 100% !important; height: auto !important; }
+            .stack-column { display: block !important; width: 100% !important; max-width: 100% !important; }
+            .padding-mobile { padding-left: 20px !important; padding-right: 20px !important; }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f3f3f3; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;">
+
+    <!-- Preview Text -->
+    <div style="display: none; max-height: 0; overflow: hidden;">
+        10 days down, 21 to go! How are you feeling? Here's what to expect in week 2.
+    </div>
+
+    <!-- Email Container -->
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f3f3f3;">
+        <tr>
+            <td align="center" style="padding: 20px 10px;">
+
+                <!-- Email Content -->
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" class="email-container" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; max-width: 600px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+
+                    <!-- Header -->
+                    <tr>
+                        <td align="center" style="padding: 25px 40px; background-color: #121212;">
+                            <a href="https://shop.bobbyseamoss.com">
+                                <img src="https://shop.bobbyseamoss.com/cdn/shop/files/Logo_Clean_Drop_Shadow.webp?v=1756858523&width=600" alt="Bobby Seamoss" width="180" style="display: block; max-width: 180px; height: auto;">
+                            </a>
+                        </td>
+                    </tr>
+
+                    <!-- Progress Banner -->
+                    <tr>
+                        <td style="padding: 0;">
+                            <div style="background: linear-gradient(135deg, #e03d96 0%, #242833 100%); padding: 40px; text-align: center;">
+                                <p style="margin: 0 0 10px 0; color: rgba(255,255,255,0.8); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Dry January Progress</p>
+
+                                <!-- Progress Bar -->
+                                <div style="background-color: rgba(255,255,255,0.3); border-radius: 10px; height: 20px; width: 100%; max-width: 400px; margin: 0 auto 15px auto; overflow: hidden;">
+                                    <div style="background-color: #ffffff; height: 100%; width: 32%; border-radius: 10px;"></div>
+                                </div>
+
+                                <h1 style="margin: 0 0 5px 0; color: #ffffff; font-size: 42px; font-weight: bold;">10</h1>
+                                <p style="margin: 0; color: #ffffff; font-size: 16px;">Days Down • 21 to Go</p>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Main Content -->
+                    <tr>
+                        <td align="center">
+
+                            <!-- Text Block -->
+                            <div style="padding: 40px;">
+                                <p style="margin: 0 0 20px 0; color: #121212; font-size: 16px; line-height: 1.6;">
+                                    Hey {{ first_name|default:'friend' }},
+                                </p>
+                                <p style="margin: 0 0 20px 0; color: #121212; font-size: 16px; line-height: 1.6;">
+                                    Look at you! <strong>10 days into Dry January.</strong>
+                                </p>
+                                <p style="margin: 0 0 20px 0; color: #121212; font-size: 16px; line-height: 1.6;">
+                                    Whether it's been a breeze or a challenge, we wanted to check in and remind you: <strong>you're doing amazing.</strong>
+                                </p>
+                                <p style="margin: 0 0 30px 0; color: #121212; font-size: 16px; line-height: 1.6;">
+                                    By now, you might already be noticing some changes...
+                                </p>
+                            </div>
+
+                            <!-- What You Might Be Feeling -->
+                            <div style="padding: 0 40px 40px 40px;">
+                                <h2 style="margin: 0 0 20px 0; color: #e03d96; font-size: 18px; text-align: center;">What You Might Be Experiencing</h2>
+
+                                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                                    <tr>
+                                        <td width="50%" valign="top" style="padding-right: 10px;">
+                                            <div style="background-color: #fef3f8; border-radius: 8px; padding: 20px; text-align: center; height: 100%;">
+                                                <p style="margin: 0 0 10px 0; font-size: 30px;">😴</p>
+                                                <h4 style="margin: 0 0 5px 0; color: #121212; font-size: 14px;">Better Sleep</h4>
+                                                <p style="margin: 0; color: #666; font-size: 12px;">Deeper, more restful nights</p>
+                                            </div>
+                                        </td>
+                                        <td width="50%" valign="top" style="padding-left: 10px;">
+                                            <div style="background-color: #fef3f8; border-radius: 8px; padding: 20px; text-align: center; height: 100%;">
+                                                <p style="margin: 0 0 10px 0; font-size: 30px;">🌅</p>
+                                                <h4 style="margin: 0 0 5px 0; color: #121212; font-size: 14px;">Easier Mornings</h4>
+                                                <p style="margin: 0; color: #666; font-size: 12px;">No more groggy wake-ups</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr><td colspan="2" style="height: 15px;"></td></tr>
+                                    <tr>
+                                        <td width="50%" valign="top" style="padding-right: 10px;">
+                                            <div style="background-color: #fef3f8; border-radius: 8px; padding: 20px; text-align: center; height: 100%;">
+                                                <p style="margin: 0 0 10px 0; font-size: 30px;">✨</p>
+                                                <h4 style="margin: 0 0 5px 0; color: #121212; font-size: 14px;">Clearer Skin</h4>
+                                                <p style="margin: 0; color: #666; font-size: 12px;">That healthy glow is real</p>
+                                            </div>
+                                        </td>
+                                        <td width="50%" valign="top" style="padding-left: 10px;">
+                                            <div style="background-color: #fef3f8; border-radius: 8px; padding: 20px; text-align: center; height: 100%;">
+                                                <p style="margin: 0 0 10px 0; font-size: 30px;">💪</p>
+                                                <h4 style="margin: 0 0 5px 0; color: #121212; font-size: 14px;">More Energy</h4>
+                                                <p style="margin: 0; color: #666; font-size: 12px;">Ready to take on the day</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- Encouragement -->
+                            <div style="padding: 0 40px 40px 40px;">
+                                <div style="background-color: #f3f3f3; border-left: 4px solid #e03d96; padding: 20px; border-radius: 0 8px 8px 0;">
+                                    <p style="margin: 0 0 10px 0; color: #121212; font-size: 15px; font-weight: bold;">
+                                        Feeling tempted? That's normal.
+                                    </p>
+                                    <p style="margin: 0; color: #666; font-size: 14px; line-height: 1.6;">
+                                        Week 2 can be tricky – the novelty has worn off but the habit isn't fully formed yet. This is the moment to dig in. You're past the hardest part. Keep going!
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Restock Reminder -->
+                            <div style="padding: 0 40px 40px 40px;">
+                                <div style="background: linear-gradient(135deg, #e03d96 0%, #242833 100%); border-radius: 8px; padding: 30px; text-align: center;">
+                                    <p style="margin: 0 0 10px 0; color: rgba(255,255,255,0.9); font-size: 14px;">Running low? Keep the momentum going.</p>
+                                    <h3 style="margin: 0 0 15px 0; color: #ffffff; font-size: 20px;">Restock Your Supply</h3>
+                                    <img src="https://cdn.shopify.com/s/files/1/0906/4346/4470/files/CALM_Render.webp?v=1748866510" alt="CALM Gummies" width="80" style="display: block; margin: 0 auto 15px auto; max-width: 80px; height: auto; border-radius: 8px;">
+                                    <p style="margin: 0 0 15px 0; color: #ffffff; font-size: 16px; font-weight: bold;">$18.00</p>
+                                    <a href="https://shop.bobbyseamoss.com/products/calm-10mg-thc-gummies" style="display: inline-block; background-color: #ffffff; color: #e03d96; text-decoration: none; padding: 14px 35px; border-radius: 4px; font-size: 16px; font-weight: bold;">Shop Now</a>
+                                </div>
+                            </div>
+
+                            <!-- Milestone Counter -->
+                            <div style="padding: 0 40px 40px 40px; text-align: center;">
+                                <p style="margin: 0 0 15px 0; color: #121212; font-size: 15px;">Your next milestones:</p>
+                                <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 auto;">
+                                    <tr>
+                                        <td style="padding: 0 15px; text-align: center;">
+                                            <div style="background-color: #fef3f8; border-radius: 50%; width: 50px; height: 50px; display: table; margin: 0 auto 5px auto;">
+                                                <span style="display: table-cell; vertical-align: middle; color: #e03d96; font-weight: bold;">14</span>
+                                            </div>
+                                            <p style="margin: 0; color: #666; font-size: 11px;">2 Weeks</p>
+                                        </td>
+                                        <td style="padding: 0 15px; text-align: center;">
+                                            <div style="background-color: #fef3f8; border-radius: 50%; width: 50px; height: 50px; display: table; margin: 0 auto 5px auto;">
+                                                <span style="display: table-cell; vertical-align: middle; color: #e03d96; font-weight: bold;">21</span>
+                                            </div>
+                                            <p style="margin: 0; color: #666; font-size: 11px;">3 Weeks</p>
+                                        </td>
+                                        <td style="padding: 0 15px; text-align: center;">
+                                            <div style="background-color: #fef3f8; border-radius: 50%; width: 50px; height: 50px; display: table; margin: 0 auto 5px auto;">
+                                                <span style="display: table-cell; vertical-align: middle; color: #e03d96; font-weight: bold;">31</span>
+                                            </div>
+                                            <p style="margin: 0; color: #666; font-size: 11px;">FINISH!</p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- Closing -->
+                            <div style="padding: 0 40px 40px 40px; text-align: center;">
+                                <p style="margin: 0; color: #e03d96; font-size: 16px; font-weight: bold;">
+                                    21 days to go. You've totally got this!
+                                </p>
+                            </div>
+
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 30px 40px; background-color: #121212; text-align: center;">
+                            <p style="margin: 0 0 20px 0; color: #999; font-size: 12px;">
+                                Bobby Seamoss | 2855 E 130th St Unit 20007, Cleveland, Ohio 44120
+                            </p>
+                            <p style="margin: 0; color: #999; font-size: 12px;">
+                                <a href="{% unsubscribe_link %}" style="color: #e03d96;">Unsubscribe</a> |
+                                <a href="{% manage_preferences_link %}" style="color: #e03d96;">Update Preferences</a>
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>

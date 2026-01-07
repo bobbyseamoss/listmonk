@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"image"
@@ -566,7 +568,60 @@ func (a *App) LinkRedirect(c echo.Context) error {
 		return c.Render(e.Code, tplMessage, makeMsgTpl(a.i18n.T("public.errorTitle"), "", e.Error()))
 	}
 
+	// Handle onsite tracking identity token
+	if a.cfg.OnsiteTrackingEnabled {
+		identityToken := c.QueryParam(a.cfg.OnsiteTrackingIdentityParam)
+		if identityToken != "" {
+			// Get or create browser ID from cookie
+			browserID := getBrowserIDFromCookie(c, a.cfg.OnsiteTrackingCookieName)
+			if browserID == "" {
+				browserID = generateBrowserID()
+			}
+
+			// Validate token and link browser to subscriber
+			if err := a.handleIdentifyFromToken(browserID, identityToken); err == nil {
+				// Set the browser ID cookie
+				setBrowserIDCookie(c, a.cfg.OnsiteTrackingCookieName, browserID, a.cfg.OnsiteTrackingCookieExpiryDays)
+			}
+
+			// Remove the identity token from the redirect URL to keep it clean
+			// (the browser is now identified via cookie)
+		}
+	}
+
 	return c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+// getBrowserIDFromCookie retrieves the browser ID from the cookie.
+func getBrowserIDFromCookie(c echo.Context, cookieName string) string {
+	cookie, err := c.Cookie(cookieName)
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+// setBrowserIDCookie sets the browser ID cookie.
+func setBrowserIDCookie(c echo.Context, cookieName, browserID string, expiryDays int) {
+	cookie := &http.Cookie{
+		Name:     cookieName,
+		Value:    browserID,
+		Path:     "/",
+		MaxAge:   expiryDays * 24 * 60 * 60,
+		HttpOnly: false, // Needs to be accessible by JS
+		SameSite: http.SameSiteLaxMode,
+	}
+	c.SetCookie(cookie)
+}
+
+// generateBrowserID creates a random browser ID.
+func generateBrowserID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to a simple random string
+		return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%d", rand.Int)))
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 // RegisterCampaignView registers a campaign view which comes in

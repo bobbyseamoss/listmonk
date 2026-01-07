@@ -159,7 +159,7 @@
       </b-notification>
 
       <b-field label="Test Email First" label-position="on-border" class="mt-4"
-        message="If set, this email address will receive every campaign first (before all other subscribers). Must be a valid subscriber email. Useful for testing campaigns before they go out to your full list.">
+        message="If set, this email will receive every campaign first. Must be a valid subscriber.">
         <b-input v-model="data['app.test_email_first']" name="app.test_email_first"
           type="email" placeholder="your-test-email@example.com" />
       </b-field>

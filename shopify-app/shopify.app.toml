@@ -1,0 +1,33 @@
+# Listmonk Shopify Integration App
+# This app syncs customer and order data to listmonk for email marketing
+
+name = "Listmonk Email Integration"
+client_id = ""  # Will be populated after app creation
+application_url = "https://list.bobbyseamoss.com"
+
+[build]
+include_config_on_deploy = true
+
+[access_scopes]
+# Customer data for subscriber sync
+scopes = "read_customers,read_orders,read_products"
+
+# Use offline access tokens (long-lived, don't expire)
+[auth]
+redirect_urls = ["https://list.bobbyseamoss.com/webhooks/shopify/auth/callback"]
+
+[webhooks]
+# API version for webhooks
+api_version = "2024-10"
+
+# Webhook subscriptions
+[[webhooks.subscriptions]]
+topics = ["orders/create"]
+uri = "https://list.bobbyseamoss.com/webhooks/shopify/orders"
+
+[[webhooks.subscriptions]]
+topics = ["customers/create", "customers/update"]
+uri = "https://list.bobbyseamoss.com/webhooks/shopify/customers"
+
+[pos]
+embedded = false

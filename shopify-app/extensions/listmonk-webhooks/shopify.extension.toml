@@ -1,0 +1,18 @@
+# Listmonk Webhooks Extension
+# This extension registers webhooks for order and customer sync
+
+api_version = "2024-10"
+
+[[extensions]]
+type = "webhooks"
+name = "listmonk-webhooks"
+handle = "listmonk-webhooks"
+
+[[extensions.targeting]]
+target = "orders/create"
+
+[[extensions.targeting]]
+target = "customers/create"
+
+[[extensions.targeting]]
+target = "customers/update"

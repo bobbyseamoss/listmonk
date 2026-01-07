@@ -156,6 +156,18 @@ type Config struct {
 	SpintaxAIAPIKey       string
 	SpintaxVariationLevel int
 
+	// Onsite tracking configuration (Klaviyo-like website visitor tracking)
+	OnsiteTrackingEnabled          bool
+	OnsiteTrackingTrackPageViews   bool
+	OnsiteTrackingTrackProducts    bool
+	OnsiteTrackingAllowedDomains   []string
+	OnsiteTrackingIdentityParam    string
+	OnsiteTrackingCookieName       string
+	OnsiteTrackingCookieExpiryDays int
+	OnsiteTrackingRecordIPAddress  bool
+	OnsiteTrackingRetentionDays    int
+	OnsiteTrackingEncryptionKey    []byte
+
 	// Azure suppression list configuration (via environment variables)
 	AzureSuppressionEnabled          bool   `koanf:"azure.suppression.enabled"`
 	AzureSuppressionSubscriptionID   string `koanf:"azure.suppression.subscription_id"`
@@ -189,6 +201,7 @@ func initFlags(ko *koanf.Koanf) {
 	f.String("i18n-dir", "", "(optional) path to directory with i18n language files")
 	f.Bool("yes", false, "assume 'yes' to prompts during --install/upgrade")
 	f.Bool("passive", false, "run in passive mode where campaigns are not processed")
+	f.Bool("sync-shopify-orders", false, "sync all Shopify orders via REST API and exit")
 	if err := f.Parse(os.Args[1:]); err != nil {
 		lo.Fatalf("error loading flags: %v", err)
 	}
@@ -481,22 +494,12 @@ func initConstConfig(ko *koanf.Koanf) *Config {
 	c.Privacy.DomainBlocklist = ko.Strings("privacy.domain_blocklist")
 	c.Privacy.DomainAllowlist = ko.Strings("privacy.domain_allowlist")
 
-	// Debug: Check if key exists and what its raw value is
-	if ko.Exists("bounce.webhooks_enabled") {
-		rawVal := ko.Get("bounce.webhooks_enabled")
-		lo.Printf("DEBUG: bounce.webhooks_enabled EXISTS, raw value = %#v (type: %T)", rawVal, rawVal)
-	} else {
-		lo.Printf("DEBUG: bounce.webhooks_enabled does NOT exist in config")
-	}
 	c.BounceWebhooksEnabled = ko.Bool("bounce.webhooks_enabled")
-	lo.Printf("DEBUG: BounceWebhooksEnabled = %v (from config key 'bounce.webhooks_enabled')", c.BounceWebhooksEnabled)
 	c.BounceSESEnabled = ko.Bool("bounce.ses_enabled")
 	c.BounceSendgridEnabled = ko.Bool("bounce.sendgrid_enabled")
-	lo.Printf("DEBUG: BounceSendgridEnabled = %v (from config key 'bounce.sendgrid_enabled')", c.BounceSendgridEnabled)
 	c.BouncePostmarkEnabled = ko.Bool("bounce.postmark.enabled")
 	c.BounceForwardemailEnabled = ko.Bool("bounce.forwardemail.enabled")
 	c.BounceAzureEnabled = ko.Bool("bounce.azure.enabled")
-	lo.Printf("DEBUG: BounceAzureEnabled = %v (from config key 'bounce.azure.enabled')", c.BounceAzureEnabled)
 
 	// Load Shopify settings
 	c.ShopifyEnabled = ko.Bool("shopify.enabled")
@@ -513,6 +516,37 @@ func initConstConfig(ko *koanf.Koanf) *Config {
 	c.SpintaxVariationLevel = ko.Int("spintax.ai.variation_level")
 	if c.SpintaxVariationLevel == 0 {
 		c.SpintaxVariationLevel = 3 // Default to level 3 (medium)
+	}
+
+	// Load Onsite Tracking settings
+	c.OnsiteTrackingEnabled = ko.Bool("onsite_tracking.enabled")
+	c.OnsiteTrackingTrackPageViews = ko.Bool("onsite_tracking.track_page_views")
+	c.OnsiteTrackingTrackProducts = ko.Bool("onsite_tracking.track_products")
+	c.OnsiteTrackingAllowedDomains = ko.Strings("onsite_tracking.allowed_domains")
+	c.OnsiteTrackingIdentityParam = ko.String("onsite_tracking.identity_param")
+	if c.OnsiteTrackingIdentityParam == "" {
+		c.OnsiteTrackingIdentityParam = "_lmx" // Default identity parameter
+	}
+	c.OnsiteTrackingCookieName = ko.String("onsite_tracking.cookie_name")
+	if c.OnsiteTrackingCookieName == "" {
+		c.OnsiteTrackingCookieName = "lm_browser" // Default cookie name
+	}
+	c.OnsiteTrackingCookieExpiryDays = ko.Int("onsite_tracking.cookie_expiry_days")
+	if c.OnsiteTrackingCookieExpiryDays == 0 {
+		c.OnsiteTrackingCookieExpiryDays = 365 // Default 1 year
+	}
+	c.OnsiteTrackingRecordIPAddress = ko.Bool("onsite_tracking.record_ip_address")
+	c.OnsiteTrackingRetentionDays = ko.Int("onsite_tracking.retention_days")
+	if c.OnsiteTrackingRetentionDays == 0 {
+		c.OnsiteTrackingRetentionDays = 90 // Default 90 days
+	}
+	// Generate or load encryption key for identity tokens
+	encKey := ko.String("onsite_tracking.encryption_key")
+	if encKey != "" {
+		c.OnsiteTrackingEncryptionKey = []byte(encKey)
+	} else {
+		// Use app's secret key or generate deterministic key from root URL
+		c.OnsiteTrackingEncryptionKey = []byte(fmt.Sprintf("%032s", ko.String("app.root_url"))[:32])
 	}
 
 	c.HasLegacyUser = ko.Exists("app.admin_username") || ko.Exists("app.admin_password")
@@ -591,6 +625,22 @@ func initCampaignManager(msgrs []manager.Messenger, q *models.Queries, u *UrlCon
 		lo.Println("running in passive mode. won't process campaigns.")
 	}
 
+	// Build encryption key for onsite tracking
+	var onsiteTrackingKey []byte
+	encKey := ko.String("onsite_tracking.encryption_key")
+	if encKey != "" {
+		onsiteTrackingKey = []byte(encKey)
+	} else {
+		// Use app's root URL padded to 32 bytes
+		onsiteTrackingKey = []byte(fmt.Sprintf("%032s", ko.String("app.root_url"))[:32])
+	}
+
+	// Default identity param if not set
+	identityParam := ko.String("onsite_tracking.identity_param")
+	if identityParam == "" {
+		identityParam = "_lmx"
+	}
+
 	mgr := manager.New(manager.Config{
 		BatchSize:             ko.Int("app.batch_size"),
 		Concurrency:           ko.Int("app.concurrency"),
@@ -614,6 +664,10 @@ func initCampaignManager(msgrs []manager.Messenger, q *models.Queries, u *UrlCon
 		ScanInterval:          time.Second * 5,
 		ScanCampaigns:         !ko.Bool("passive"),
 		SpintaxEnabled:        ko.Bool("spintax.enabled"),
+		// Onsite tracking configuration
+		OnsiteTrackingEnabled:       ko.Bool("onsite_tracking.enabled"),
+		OnsiteTrackingIdentityParam: identityParam,
+		OnsiteTrackingEncryptionKey: onsiteTrackingKey,
 	}, newManagerStore(q, co, md), i, lo)
 
 	// Attach all messengers to the campaign manager.
