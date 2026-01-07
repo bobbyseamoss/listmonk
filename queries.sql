@@ -1659,8 +1659,16 @@ ON CONFLICT DO NOTHING;
 -- Explicitly queue the test email first subscriber regardless of list membership.
 -- This ensures the test email receives EVERY campaign, not just ones they're subscribed to.
 -- $1 = campaign_id, $2 = test_email (string)
--- Uses the partial unique index on (campaign_id, subscriber_id) WHERE status IN ('queued', 'sending')
--- to update priority to 100 if already queued.
+-- Uses upsert pattern: first tries UPDATE, then INSERT if no row exists.
+-- The partial unique index prevents duplicate queued/sending entries for same campaign/subscriber.
+WITH update_existing AS (
+    UPDATE email_queue
+    SET priority = 100, scheduled_at = NOW(), updated_at = NOW()
+    WHERE campaign_id = $1
+      AND subscriber_id = (SELECT id FROM subscribers WHERE LOWER(email) = LOWER($2::TEXT) AND status = 'enabled')
+      AND status IN ('queued', 'sending')
+    RETURNING id
+)
 INSERT INTO email_queue (campaign_id, subscriber_id, status, priority, scheduled_at, created_at, updated_at)
 SELECT
     $1 as campaign_id,
@@ -1673,8 +1681,7 @@ SELECT
 FROM subscribers s
 WHERE LOWER(s.email) = LOWER($2::TEXT)
   AND s.status = 'enabled'
-ON CONFLICT ON CONSTRAINT idx_email_queue_campaign_subscriber_active
-DO UPDATE SET priority = 100, scheduled_at = NOW(), updated_at = NOW();
+  AND NOT EXISTS (SELECT 1 FROM update_existing);
 
 -- name: get-queued-email-count
 -- Get the count of emails queued for a campaign
