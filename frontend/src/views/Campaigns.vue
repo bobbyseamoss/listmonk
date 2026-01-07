@@ -140,11 +140,16 @@
           </b-taglist>
         </div>
       </b-table-column>
-      <b-table-column v-slot="props" cell-class="lists" field="lists" :label="$t('globals.terms.lists')" width="15%">
+      <b-table-column v-slot="props" cell-class="lists" field="lists" :label="$t('campaigns.targets')" width="15%">
         <ul>
-          <li v-for="l in props.row.lists" :key="l.id">
+          <li v-for="l in props.row.lists" :key="`list-${l.id}`">
             <router-link :to="{ name: 'subscribers_list', params: { listID: l.id } }">
               {{ l.name }}
+            </router-link>
+          </li>
+          <li v-for="s in props.row.segments" :key="`seg-${s.id}`" class="segment-item">
+            <router-link :to="{ name: 'segment', params: { id: s.id } }">
+              <b-icon icon="filter-outline" size="is-small" /> {{ s.name }}
             </router-link>
           </li>
         </ul>
