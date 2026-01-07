@@ -2,15 +2,18 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/knadh/listmonk/internal/bounce/webhooks"
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
+	"github.com/lib/pq"
 )
 
 // ShopifyWebhook handles incoming Shopify order webhooks for purchase attribution.
@@ -65,10 +68,120 @@ func (app *App) ShopifyWebhook(c echo.Context) error {
 		processed = true
 	}
 
+	// Store the order in real-time for segmentation
+	if err := app.storeOrderFromWebhook(rawReq); err != nil {
+		app.log.Printf("error storing order from webhook (order %d): %v", order.ID, err)
+		// Don't fail the webhook, just log the error
+	}
+
 	// Log the webhook
 	app.logWebhook(service, eventType, c.Request().Header, rawReq, responseCode, "", processed, errorMsg)
 
 	return c.JSON(http.StatusOK, okResp{true})
+}
+
+// storeOrderFromWebhook stores a Shopify order from webhook data in the database.
+func (app *App) storeOrderFromWebhook(rawJSON []byte) error {
+	shopifyHandler := webhooks.NewShopify(app.cfg.ShopifyWebhookSecret)
+
+	// Parse the full order data
+	order, err := shopifyHandler.ProcessOrderFull(rawJSON)
+	if err != nil {
+		return fmt.Errorf("error parsing order: %v", err)
+	}
+
+	// Find subscriber by email
+	var sub models.Subscriber
+	err = app.queries.GetSubscriberByEmail.Get(&sub, order.Email)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// No subscriber found, skip storing order
+			app.log.Printf("storeOrderFromWebhook: no subscriber found for email %s, skipping order storage", order.Email)
+			return nil
+		}
+		return fmt.Errorf("error finding subscriber: %v", err)
+	}
+
+	// Parse order timestamps
+	createdAt, _ := time.Parse(time.RFC3339, order.CreatedAt)
+	processedAt, _ := time.Parse(time.RFC3339, order.ProcessedAt)
+
+	// Parse price fields
+	totalPrice, _ := strconv.ParseFloat(order.TotalPrice, 64)
+	subtotalPrice, _ := strconv.ParseFloat(order.SubtotalPrice, 64)
+	totalTax, _ := strconv.ParseFloat(order.TotalTax, 64)
+	totalDiscounts, _ := strconv.ParseFloat(order.TotalDiscounts, 64)
+
+	// Parse tags into array
+	var tags []string
+	if order.Tags != "" {
+		for _, tag := range strings.Split(order.Tags, ",") {
+			tags = append(tags, strings.TrimSpace(tag))
+		}
+	}
+
+	// Upsert the order
+	var orderID int
+	err = app.queries.UpsertShopifyOrder.QueryRow(
+		sub.ID,
+		fmt.Sprintf("gid://shopify/Order/%d", order.ID), // Convert to global ID format
+		fmt.Sprintf("%d", order.OrderNumber),
+		order.Name,
+		createdAt,
+		processedAt,
+		totalPrice,
+		subtotalPrice,
+		totalTax,
+		totalDiscounts,
+		order.Currency,
+		order.FinancialStatus,
+		order.FulfillmentStatus,
+		pq.Array(tags),
+		order.Note,
+	).Scan(&orderID)
+
+	if err != nil {
+		return fmt.Errorf("error upserting order: %v", err)
+	}
+
+	// Delete existing line items and insert new ones
+	_, err = app.queries.DeleteShopifyOrderLineItems.Exec(orderID)
+	if err != nil {
+		return fmt.Errorf("error deleting line items: %v", err)
+	}
+
+	// Insert line items
+	for _, item := range order.LineItems {
+		price, _ := strconv.ParseFloat(item.Price, 64)
+		discount, _ := strconv.ParseFloat(item.TotalDiscount, 64)
+
+		// Convert properties to JSON
+		propsJSON, _ := json.Marshal(item.Properties)
+
+		_, err = app.queries.InsertShopifyLineItem.Exec(
+			orderID,
+			fmt.Sprintf("gid://shopify/LineItem/%d", item.ID),
+			fmt.Sprintf("gid://shopify/Product/%d", item.ProductID),
+			item.Title,
+			fmt.Sprintf("gid://shopify/ProductVariant/%d", item.VariantID),
+			item.VariantTitle,
+			item.SKU,
+			item.Quantity,
+			price,
+			discount,
+			item.ProductType,
+			item.Vendor,
+			propsJSON,
+		)
+		if err != nil {
+			app.log.Printf("storeOrderFromWebhook: error inserting line item %d: %v", item.ID, err)
+		}
+	}
+
+	app.log.Printf("storeOrderFromWebhook: stored order %s with %d line items for subscriber %d",
+		order.Name, len(order.LineItems), sub.ID)
+
+	return nil
 }
 
 // attributePurchase attempts to attribute a purchase to the most recent campaign sent to the subscriber.

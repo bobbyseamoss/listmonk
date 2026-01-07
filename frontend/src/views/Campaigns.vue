@@ -601,14 +601,14 @@ export default Vue.extend({
           denominator = queueTotal;
         }
       } else {
-        // Regular campaign: Use Azure delivery count if available
-        const azureSent = stats.azure_sent || stats.azureSent || 0;
+        // Regular campaign: Use delivered count (Azure + SendGrid) if available
+        const delivered = stats.delivered || 0;
         const sent = stats.sent || 0;
         const toSend = stats.toSend || 0;
 
-        // Use Azure sent count if available, otherwise use sent/toSend logic
-        if (azureSent > 0) {
-          denominator = azureSent;
+        // Use delivered count if available, otherwise fallback to sent/toSend
+        if (delivered > 0) {
+          denominator = delivered;
         } else if (stats.status === 'running' && sent > 0) {
           denominator = sent;
         } else {
@@ -642,14 +642,14 @@ export default Vue.extend({
           denominator = queueTotal;
         }
       } else {
-        // Regular campaign: Use Azure delivery count if available
-        const azureSent = stats.azure_sent || stats.azureSent || 0;
+        // Regular campaign: Use delivered count (Azure + SendGrid) if available
+        const delivered = stats.delivered || 0;
         const sent = stats.sent || 0;
         const toSend = stats.toSend || 0;
 
-        // Use Azure sent count if available, otherwise use sent/toSend logic
-        if (azureSent > 0) {
-          denominator = azureSent;
+        // Use delivered count if available, otherwise fallback to sent/toSend
+        if (delivered > 0) {
+          denominator = delivered;
         } else if (stats.status === 'running' && sent > 0) {
           denominator = sent;
         } else {

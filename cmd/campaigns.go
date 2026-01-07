@@ -32,6 +32,10 @@ type campReq struct {
 	// to the outside world.
 	ListIDs []int `json:"lists"`
 
+	// SegmentIDs is a list of segment IDs for segment-targeted campaigns.
+	// Used when target_type='segments'.
+	SegmentIDs []int `json:"segments"`
+
 	MediaIDs []int `json:"media"`
 
 	// This is only relevant to campaign test requests.
@@ -170,6 +174,18 @@ func (a *App) GetCampaigns(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// GetCampaignsMinimal returns minimal campaign info for dropdowns (segment builder, etc.)
+func (a *App) GetCampaignsMinimal(c echo.Context) error {
+	var campaigns []models.CampaignMinimal
+	if err := a.queries.GetCampaignsMinimal.Select(&campaigns); err != nil {
+		a.log.Printf("error fetching minimal campaigns: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			a.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaigns}", "error", err.Error()))
+	}
+
+	return c.JSON(http.StatusOK, okResp{campaigns})
 }
 
 // GetCampaign handles retrieval of campaigns.
@@ -347,7 +363,7 @@ func (a *App) CreateCampaign(c echo.Context) error {
 		o.ArchiveTemplateID = o.TemplateID
 	}
 
-	out, err := a.core.CreateCampaign(o.Campaign, o.ListIDs, o.MediaIDs)
+	out, err := a.core.CreateCampaign(o.Campaign, o.ListIDs, o.MediaIDs, o.SegmentIDs)
 	if err != nil {
 		return err
 	}
@@ -390,7 +406,7 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 		o = c
 	}
 
-	out, err := a.core.UpdateCampaign(id, o.Campaign, o.ListIDs, o.MediaIDs)
+	out, err := a.core.UpdateCampaign(id, o.Campaign, o.ListIDs, o.MediaIDs, o.SegmentIDs)
 	if err != nil {
 		return err
 	}
@@ -710,6 +726,60 @@ func (a *App) GetCampaignUnsubscribers(c echo.Context) error {
 	out, err := a.core.GetCampaignUnsubscribers(id)
 	if err != nil {
 		return err
+	}
+
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// GetCampaignsPerformanceDetail returns paginated performance data for all finished campaigns.
+func (a *App) GetCampaignsPerformanceDetail(c echo.Context) error {
+	var (
+		pg      = a.pg.NewFromURL(c.Request().URL.Query())
+		orderBy = c.FormValue("order_by")
+		order   = c.FormValue("order")
+	)
+
+	// Default values
+	if orderBy == "" {
+		orderBy = "sent_at"
+	}
+	if order == "" {
+		order = "desc"
+	}
+
+	// Validate orderBy column
+	validColumns := map[string]bool{
+		"name": true, "sent_at": true, "recipients": true,
+		"delivered": true, "unique_opens": true, "unique_clicks": true,
+		"open_rate": true, "click_rate": true,
+	}
+	if !validColumns[orderBy] {
+		orderBy = "sent_at"
+	}
+
+	// Validate order direction
+	if order != "asc" && order != "desc" {
+		order = "desc"
+	}
+
+	var campaigns []models.CampaignPerformance
+	if err := a.queries.GetCampaignsPerformanceDetail.Select(&campaigns, orderBy, order, pg.Offset, pg.Limit); err != nil {
+		a.log.Printf("error fetching campaign performance: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			a.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.campaigns}", "error", err.Error()))
+	}
+
+	// Get total from first result
+	total := 0
+	if len(campaigns) > 0 {
+		total = campaigns[0].Total
+	}
+
+	out := models.PageResults{
+		Results: campaigns,
+		Total:   total,
+		Page:    pg.Page,
+		PerPage: pg.PerPage,
 	}
 
 	return c.JSON(http.StatusOK, okResp{out})

@@ -5,6 +5,75 @@
     </h1>
     <hr />
 
+    <!-- Campaign Performance Table -->
+    <section class="performance-table mb-6">
+      <h2 class="title is-5">Campaign message performance detail</h2>
+      <b-table
+        :data="performanceData"
+        :loading="performanceLoading"
+        paginated
+        backend-pagination
+        :total="performanceTotal"
+        :per-page="performancePerPage"
+        :current-page.sync="performancePage"
+        @page-change="onPerformancePageChange"
+        backend-sorting
+        :default-sort="[performanceSortField, performanceSortOrder]"
+        @sort="onPerformanceSort"
+        hoverable
+        striped
+      >
+        <b-table-column field="name" label="Name" sortable v-slot="props">
+          <div>
+            <router-link :to="`/campaigns/${props.row.id}`" class="has-text-link">
+              {{ props.row.name }}
+            </router-link>
+            <br />
+            <small class="has-text-grey">{{ props.row.name }}</small>
+          </div>
+        </b-table-column>
+
+        <b-table-column field="sent_at" label="Sent date" sortable v-slot="props">
+          <div>
+            {{ formatDate(props.row.sentAt) }}
+            <br />
+            <small class="has-text-grey">{{ formatTime(props.row.sentAt) }}</small>
+          </div>
+        </b-table-column>
+
+        <b-table-column field="recipients" label="Recipients" sortable numeric v-slot="props">
+          {{ $utils.niceNumber(props.row.recipients) }}
+        </b-table-column>
+
+        <b-table-column field="delivered" label="Delivered" sortable numeric v-slot="props">
+          {{ $utils.niceNumber(props.row.delivered) }}
+        </b-table-column>
+
+        <b-table-column field="unique_opens" label="Unique Opens" sortable numeric v-slot="props">
+          {{ $utils.niceNumber(props.row.uniqueOpens) }}
+        </b-table-column>
+
+        <b-table-column field="open_rate" label="Open %" sortable numeric v-slot="props">
+          {{ props.row.openRate.toFixed(2) }}%
+        </b-table-column>
+
+        <b-table-column field="unique_clicks" label="Unique Clicks" sortable numeric v-slot="props">
+          {{ $utils.niceNumber(props.row.uniqueClicks) }}
+        </b-table-column>
+
+        <b-table-column field="click_rate" label="Click %" sortable numeric v-slot="props">
+          {{ props.row.clickRate.toFixed(2) }}%
+        </b-table-column>
+
+        <template #empty>
+          <div class="has-text-centered">No campaigns found</div>
+        </template>
+      </b-table>
+    </section>
+
+    <hr />
+
+    <h2 class="title is-5">Campaign-specific analytics</h2>
     <form @submit.prevent="onSubmit">
       <div class="columns">
         <div class="column is-6">
@@ -188,6 +257,15 @@ export default Vue.extend({
       isSearchLoading: false,
       queriedCampaigns: [],
 
+      // Performance table data
+      performanceData: [],
+      performanceLoading: false,
+      performanceTotal: 0,
+      performancePage: 1,
+      performancePerPage: 10,
+      performanceSortField: 'sent_at',
+      performanceSortOrder: 'desc',
+
       // Data for each view.
       counts: {
         views: 0,
@@ -266,6 +344,43 @@ export default Vue.extend({
 
     formatDateTime(s) {
       return dayjs(s).format('YYYY-MM-DD HH:mm');
+    },
+
+    formatDate(s) {
+      return dayjs(s).format('MMM D, YYYY');
+    },
+
+    formatTime(s) {
+      return dayjs(s).format('h:mm A');
+    },
+
+    async loadPerformanceData() {
+      this.performanceLoading = true;
+      try {
+        const data = await this.$api.getCampaignsPerformance({
+          page: this.performancePage,
+          per_page: this.performancePerPage,
+          order_by: this.performanceSortField,
+          order: this.performanceSortOrder,
+        });
+        this.performanceData = data.results || [];
+        this.performanceTotal = data.total || 0;
+      } catch (e) {
+        this.$utils.toast(e.message, 'is-danger');
+      } finally {
+        this.performanceLoading = false;
+      }
+    },
+
+    onPerformancePageChange(page) {
+      this.performancePage = page;
+      this.loadPerformanceData();
+    },
+
+    onPerformanceSort(field, order) {
+      this.performanceSortField = field;
+      this.performanceSortOrder = order;
+      this.loadPerformanceData();
     },
 
     isCampaignSelected(camp) {
@@ -524,6 +639,9 @@ export default Vue.extend({
   },
 
   mounted() {
+    // Load performance table data
+    this.loadPerformanceData();
+
     // Fetch one or more campaigns if there are ?id params, wait for the fetches
     // to finish, add them to the campaign selector and submit the form.
     const ids = this.$utils.parseQueryIDs(this.$route.query.id);

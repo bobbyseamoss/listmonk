@@ -14,6 +14,7 @@ import (
 	"github.com/knadh/listmonk/internal/bounce/webhooks"
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
+	"github.com/lib/pq"
 )
 
 // customerSyncState tracks the state of bulk customer sync operations.
@@ -30,6 +31,86 @@ type customerSyncState struct {
 }
 
 var syncState = &customerSyncState{}
+
+// GraphQL query for fetching a customer's orders by customer ID (complete data)
+const customerOrdersQuery = `
+query GetCustomerOrders($customerId: ID!, $cursor: String) {
+    customer(id: $customerId) {
+        orders(first: 50, after: $cursor) {
+            pageInfo {
+                hasNextPage
+                endCursor
+            }
+            edges {
+                node {
+                    id
+                    name
+                    createdAt
+                    processedAt
+                    totalPriceSet {
+                        shopMoney {
+                            amount
+                            currencyCode
+                        }
+                    }
+                    subtotalPriceSet {
+                        shopMoney {
+                            amount
+                        }
+                    }
+                    totalTaxSet {
+                        shopMoney {
+                            amount
+                        }
+                    }
+                    totalDiscountsSet {
+                        shopMoney {
+                            amount
+                        }
+                    }
+                    displayFinancialStatus
+                    displayFulfillmentStatus
+                    tags
+                    note
+                    lineItems(first: 100) {
+                        edges {
+                            node {
+                                id
+                                quantity
+                                originalUnitPriceSet {
+                                    shopMoney {
+                                        amount
+                                    }
+                                }
+                                totalDiscountSet {
+                                    shopMoney {
+                                        amount
+                                    }
+                                }
+                                sku
+                                variant {
+                                    id
+                                    title
+                                    product {
+                                        id
+                                        title
+                                        productType
+                                        vendor
+                                    }
+                                }
+                                customAttributes {
+                                    key
+                                    value
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+`
 
 // GraphQL query for fetching customers
 const customersQuery = `
@@ -48,8 +129,11 @@ query GetCustomers($cursor: String) {
                 phone
                 tags
                 note
-                ordersCount
-                totalSpent
+                numberOfOrders
+                amountSpent {
+                    amount
+                    currencyCode
+                }
                 emailMarketingConsent {
                     marketingState
                     marketingOptInLevel
@@ -91,15 +175,18 @@ type customersResponse struct {
 }
 
 type graphQLCustomer struct {
-	ID                    string `json:"id"`
-	Email                 string `json:"email"`
-	FirstName             string `json:"firstName"`
-	LastName              string `json:"lastName"`
-	Phone                 string `json:"phone"`
-	Tags                  []string `json:"tags"`
-	Note                  string `json:"note"`
-	OrdersCount           string `json:"ordersCount"` // GraphQL returns this as string
-	TotalSpent            string `json:"totalSpent"`
+	ID             string   `json:"id"`
+	Email          string   `json:"email"`
+	FirstName      string   `json:"firstName"`
+	LastName       string   `json:"lastName"`
+	Phone          string   `json:"phone"`
+	Tags           []string `json:"tags"`
+	Note           string   `json:"note"`
+	NumberOfOrders string   `json:"numberOfOrders"`
+	AmountSpent    *struct {
+		Amount       string `json:"amount"`
+		CurrencyCode string `json:"currencyCode"`
+	} `json:"amountSpent"`
 	EmailMarketingConsent *struct {
 		MarketingState      string `json:"marketingState"`
 		MarketingOptInLevel string `json:"marketingOptInLevel"`
@@ -121,6 +208,88 @@ type graphQLCustomer struct {
 	} `json:"metafield"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
+}
+
+// customerOrdersResponse is the GraphQL response for customer orders query
+type customerOrdersResponse struct {
+	Customer struct {
+		Orders struct {
+			PageInfo struct {
+				HasNextPage bool   `json:"hasNextPage"`
+				EndCursor   string `json:"endCursor"`
+			} `json:"pageInfo"`
+			Edges []struct {
+				Node customerOrderNode `json:"node"`
+			} `json:"edges"`
+		} `json:"orders"`
+	} `json:"customer"`
+}
+
+type customerOrderNode struct {
+	ID                       string   `json:"id"`
+	Name                     string   `json:"name"`
+	CreatedAt                string   `json:"createdAt"`
+	ProcessedAt              string   `json:"processedAt"`
+	DisplayFinancialStatus   string   `json:"displayFinancialStatus"`
+	DisplayFulfillmentStatus string   `json:"displayFulfillmentStatus"`
+	Tags                     []string `json:"tags"`
+	Note                     string   `json:"note"`
+	TotalPriceSet            *struct {
+		ShopMoney struct {
+			Amount       string `json:"amount"`
+			CurrencyCode string `json:"currencyCode"`
+		} `json:"shopMoney"`
+	} `json:"totalPriceSet"`
+	SubtotalPriceSet *struct {
+		ShopMoney struct {
+			Amount string `json:"amount"`
+		} `json:"shopMoney"`
+	} `json:"subtotalPriceSet"`
+	TotalTaxSet *struct {
+		ShopMoney struct {
+			Amount string `json:"amount"`
+		} `json:"shopMoney"`
+	} `json:"totalTaxSet"`
+	TotalDiscountsSet *struct {
+		ShopMoney struct {
+			Amount string `json:"amount"`
+		} `json:"shopMoney"`
+	} `json:"totalDiscountsSet"`
+	LineItems struct {
+		Edges []struct {
+			Node customerLineItemNode `json:"node"`
+		} `json:"edges"`
+	} `json:"lineItems"`
+}
+
+type customerLineItemNode struct {
+	ID       string `json:"id"`
+	Quantity int    `json:"quantity"`
+	SKU      string `json:"sku"`
+	Variant  *struct {
+		ID      string `json:"id"`
+		Title   string `json:"title"`
+		Product *struct {
+			ID          string `json:"id"`
+			Title       string `json:"title"`
+			ProductType string `json:"productType"`
+			Vendor      string `json:"vendor"`
+		} `json:"product"`
+	} `json:"variant"`
+	OriginalUnitPriceSet *struct {
+		ShopMoney struct {
+			Amount string `json:"amount"`
+		} `json:"shopMoney"`
+	} `json:"originalUnitPriceSet"`
+	TotalDiscountSet *struct {
+		ShopMoney struct {
+			Amount string `json:"amount"`
+		} `json:"shopMoney"`
+	} `json:"totalDiscountSet"`
+	CustomAttributes []struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	} `json:"customAttributes"`
 }
 
 // ShopifyCustomerWebhook handles incoming Shopify customer webhooks (create/update).
@@ -278,10 +447,13 @@ func buildShopifyAttribs(customer *webhooks.ShopifyCustomer) map[string]interfac
 
 // StartShopifyCustomerSync starts a bulk sync of Shopify customers.
 func (app *App) StartShopifyCustomerSync(c echo.Context) error {
+	app.log.Printf("StartShopifyCustomerSync: API endpoint called")
+
 	// Check if sync is already in progress
 	syncState.RLock()
 	if syncState.InProgress {
 		syncState.RUnlock()
+		app.log.Printf("StartShopifyCustomerSync: sync already in progress, rejecting")
 		return echo.NewHTTPError(http.StatusConflict, "Customer sync already in progress")
 	}
 	syncState.RUnlock()
@@ -289,13 +461,17 @@ func (app *App) StartShopifyCustomerSync(c echo.Context) error {
 	// Get settings
 	settings, err := app.core.GetSettings()
 	if err != nil {
+		app.log.Printf("StartShopifyCustomerSync: error fetching settings: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error fetching settings")
 	}
 
 	storeURL := settings.Shopify.StoreURL
 	accessToken := settings.Shopify.AccessToken
 
+	app.log.Printf("StartShopifyCustomerSync: store_url='%s', access_token_length=%d", storeURL, len(accessToken))
+
 	if storeURL == "" || accessToken == "" {
+		app.log.Printf("StartShopifyCustomerSync: missing credentials - store_url empty: %t, access_token empty: %t", storeURL == "", accessToken == "")
 		return echo.NewHTTPError(http.StatusBadRequest, "Shopify store URL and access token must be configured in Settings")
 	}
 
@@ -314,8 +490,12 @@ func (app *App) StartShopifyCustomerSync(c echo.Context) error {
 	// Update database to mark sync in progress
 	app.updateSyncInProgress(true)
 
+	app.log.Printf("StartShopifyCustomerSync: sync state initialized, starting background goroutine")
+
 	// Start bulk sync in background
 	go app.runBulkCustomerSync(storeURL, accessToken, settings.Shopify.CustomerSyncListID)
+
+	app.log.Printf("StartShopifyCustomerSync: returning success response to client")
 
 	return c.JSON(http.StatusOK, okResp{map[string]interface{}{
 		"message": "Customer sync started",
@@ -333,7 +513,12 @@ func (app *App) GetShopifyCustomerSyncStatus(c echo.Context) error {
 
 // runBulkCustomerSync fetches all customers from Shopify and syncs them.
 func (app *App) runBulkCustomerSync(storeURL, accessToken string, listID int) {
+	app.log.Printf("runBulkCustomerSync: STARTING bulk sync for store %s", storeURL)
+
 	defer func() {
+		app.log.Printf("runBulkCustomerSync: COMPLETED - total=%d, synced=%d, skipped=%d, errors=%d",
+			syncState.TotalCount, syncState.SyncedCount, syncState.SkippedCount, syncState.ErrorCount)
+
 		syncState.Lock()
 		syncState.InProgress = false
 		syncState.CompletedAt = time.Now()
@@ -348,6 +533,7 @@ func (app *App) runBulkCustomerSync(storeURL, accessToken string, listID int) {
 	hasNextPage := true
 
 	url := fmt.Sprintf("https://%s/admin/api/2024-10/graphql.json", storeURL)
+	app.log.Printf("runBulkCustomerSync: Shopify GraphQL URL = %s", url)
 
 	for hasNextPage {
 		variables := map[string]interface{}{}
@@ -401,6 +587,8 @@ func (app *App) runBulkCustomerSync(storeURL, accessToken string, listID int) {
 			return
 		}
 
+		app.log.Printf("runBulkCustomerSync: Shopify API response status=%d, body_length=%d", resp.StatusCode, len(respBody))
+
 		if resp.StatusCode != http.StatusOK {
 			syncState.Lock()
 			syncState.LastError = fmt.Sprintf("Shopify API error (status %d): %s", resp.StatusCode, string(respBody))
@@ -408,6 +596,13 @@ func (app *App) runBulkCustomerSync(storeURL, accessToken string, listID int) {
 			app.log.Printf("bulk sync error: %s", syncState.LastError)
 			return
 		}
+
+		// Log first 500 chars of response for debugging
+		respPreview := string(respBody)
+		if len(respPreview) > 500 {
+			respPreview = respPreview[:500] + "..."
+		}
+		app.log.Printf("runBulkCustomerSync: API response preview: %s", respPreview)
 
 		var gqlResp graphQLResponse
 		if err := json.Unmarshal(respBody, &gqlResp); err != nil {
@@ -419,10 +614,15 @@ func (app *App) runBulkCustomerSync(storeURL, accessToken string, listID int) {
 		}
 
 		if len(gqlResp.Errors) > 0 {
+			errMsg := gqlResp.Errors[0].Message
+			// Provide more helpful error message for common issues
+			if strings.Contains(errMsg, "Access denied") {
+				errMsg = "Shopify API access denied: Your access token needs the 'read_customers' scope. Go to Shopify Admin > Settings > Apps > Develop apps > [Your App] > Configure Admin API scopes, add 'read_customers', save, and regenerate the access token."
+			}
 			syncState.Lock()
-			syncState.LastError = fmt.Sprintf("GraphQL errors: %s", gqlResp.Errors[0].Message)
+			syncState.LastError = errMsg
 			syncState.Unlock()
-			app.log.Printf("bulk sync error: %s", syncState.LastError)
+			app.log.Printf("bulk sync error: %s", errMsg)
 			return
 		}
 
@@ -435,13 +635,17 @@ func (app *App) runBulkCustomerSync(storeURL, accessToken string, listID int) {
 			return
 		}
 
+		app.log.Printf("runBulkCustomerSync: fetched %d customers in this batch (hasNextPage=%v)",
+			len(customersResp.Customers.Edges), customersResp.Customers.PageInfo.HasNextPage)
+
 		// Process each customer
 		for _, edge := range customersResp.Customers.Edges {
+			app.log.Printf("runBulkCustomerSync: processing customer email='%s' id='%s'", edge.Node.Email, edge.Node.ID)
 			syncState.Lock()
 			syncState.TotalCount++
 			syncState.Unlock()
 
-			if err := app.syncCustomerFromGraphQL(&edge.Node, listID); err != nil {
+			if err := app.syncCustomerFromGraphQL(&edge.Node, listID, storeURL, accessToken); err != nil {
 				syncState.Lock()
 				if strings.Contains(err.Error(), "subscriber not found") {
 					syncState.SkippedCount++
@@ -471,16 +675,20 @@ func (app *App) runBulkCustomerSync(storeURL, accessToken string, listID int) {
 }
 
 // syncCustomerFromGraphQL syncs a customer from GraphQL response to subscriber.
-func (app *App) syncCustomerFromGraphQL(customer *graphQLCustomer, listID int) error {
+func (app *App) syncCustomerFromGraphQL(customer *graphQLCustomer, listID int, storeURL, accessToken string) error {
 	if customer.Email == "" {
+		app.log.Printf("syncCustomerFromGraphQL: skipping customer with empty email (ID=%s)", customer.ID)
 		return fmt.Errorf("customer missing email")
 	}
 
 	// Find subscriber by email
+	app.log.Printf("syncCustomerFromGraphQL: looking up subscriber with email='%s'", customer.Email)
 	sub, err := app.core.GetSubscriber(0, "", customer.Email)
 	if err != nil {
+		app.log.Printf("syncCustomerFromGraphQL: subscriber NOT FOUND for email='%s': %v", customer.Email, err)
 		return fmt.Errorf("subscriber not found: %s", customer.Email)
 	}
+	app.log.Printf("syncCustomerFromGraphQL: FOUND subscriber id=%d for email='%s'", sub.ID, customer.Email)
 
 	// Build Shopify attribs from GraphQL customer
 	attribs := map[string]interface{}{
@@ -488,9 +696,14 @@ func (app *App) syncCustomerFromGraphQL(customer *graphQLCustomer, listID int) e
 		"first_name":   customer.FirstName,
 		"last_name":    customer.LastName,
 		"phone":        customer.Phone,
-		"orders_count": customer.OrdersCount,
-		"total_spent":  customer.TotalSpent,
+		"orders_count": customer.NumberOfOrders,
 		"synced_at":    time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Add amount spent if available
+	if customer.AmountSpent != nil {
+		attribs["total_spent"] = customer.AmountSpent.Amount
+		attribs["currency"] = customer.AmountSpent.CurrencyCode
 	}
 
 	// Tags
@@ -518,6 +731,18 @@ func (app *App) syncCustomerFromGraphQL(customer *graphQLCustomer, listID int) e
 	// Birthday from metafield
 	if customer.Metafield != nil && customer.Metafield.Value != "" {
 		attribs["birthday"] = customer.Metafield.Value
+	}
+
+	// Sync order history to database and extract purchased effects
+	if storeURL != "" && accessToken != "" {
+		effects, err := app.syncCustomerOrdersToDB(storeURL, accessToken, customer.ID, sub.ID)
+		if err != nil {
+			app.log.Printf("syncCustomerFromGraphQL: error syncing orders for customer %s: %v", customer.Email, err)
+			// Continue without effects - not fatal
+		} else if len(effects) > 0 {
+			attribs["purchased_effects"] = effects
+			app.log.Printf("syncCustomerFromGraphQL: synced orders and found %d effects for customer %s: %v", len(effects), customer.Email, effects)
+		}
 	}
 
 	// Merge with existing attribs
@@ -557,6 +782,231 @@ func (app *App) updateLastSyncTime() {
 	if err != nil {
 		app.log.Printf("error updating last sync time: %v", err)
 	}
+}
+
+// syncCustomerOrdersToDB fetches all orders for a customer, stores them in the database,
+// and returns unique effects from product titles
+func (app *App) syncCustomerOrdersToDB(storeURL, accessToken, customerID string, subscriberID int) ([]string, error) {
+	effectsMap := make(map[string]bool)
+	var cursor *string
+	hasNextPage := true
+	ordersStored := 0
+
+	url := fmt.Sprintf("https://%s/admin/api/2024-10/graphql.json", storeURL)
+
+	for hasNextPage {
+		variables := map[string]interface{}{
+			"customerId": customerID,
+		}
+		if cursor != nil {
+			variables["cursor"] = *cursor
+		}
+
+		reqBody := struct {
+			Query     string                 `json:"query"`
+			Variables map[string]interface{} `json:"variables,omitempty"`
+		}{
+			Query:     customerOrdersQuery,
+			Variables: variables,
+		}
+
+		bodyBytes, err := json.Marshal(reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("error marshalling request: %v", err)
+		}
+
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
+		if err != nil {
+			return nil, fmt.Errorf("error creating request: %v", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Shopify-Access-Token", accessToken)
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("error making request: %v", err)
+		}
+
+		respBody, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("error reading response: %v", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("Shopify API error (status %d): %s", resp.StatusCode, string(respBody))
+		}
+
+		var gqlResp struct {
+			Data   json.RawMessage `json:"data"`
+			Errors []struct {
+				Message string `json:"message"`
+			} `json:"errors,omitempty"`
+		}
+		if err := json.Unmarshal(respBody, &gqlResp); err != nil {
+			return nil, fmt.Errorf("error parsing response: %v", err)
+		}
+
+		if len(gqlResp.Errors) > 0 {
+			return nil, fmt.Errorf("GraphQL errors: %s", gqlResp.Errors[0].Message)
+		}
+
+		var ordersResp customerOrdersResponse
+		if err := json.Unmarshal(gqlResp.Data, &ordersResp); err != nil {
+			return nil, fmt.Errorf("error parsing orders data: %v", err)
+		}
+
+		// Store each order and its line items, extract effects
+		for _, orderEdge := range ordersResp.Customer.Orders.Edges {
+			order := orderEdge.Node
+
+			// Parse order timestamps
+			createdAt, _ := time.Parse(time.RFC3339, order.CreatedAt)
+			var processedAt *time.Time
+			if order.ProcessedAt != "" {
+				t, err := time.Parse(time.RFC3339, order.ProcessedAt)
+				if err == nil {
+					processedAt = &t
+				}
+			}
+
+			// Parse price fields
+			var totalPrice, subtotalPrice, totalTax, totalDiscounts float64
+			var currency string
+			if order.TotalPriceSet != nil {
+				fmt.Sscanf(order.TotalPriceSet.ShopMoney.Amount, "%f", &totalPrice)
+				currency = order.TotalPriceSet.ShopMoney.CurrencyCode
+			}
+			if order.SubtotalPriceSet != nil {
+				fmt.Sscanf(order.SubtotalPriceSet.ShopMoney.Amount, "%f", &subtotalPrice)
+			}
+			if order.TotalTaxSet != nil {
+				fmt.Sscanf(order.TotalTaxSet.ShopMoney.Amount, "%f", &totalTax)
+			}
+			if order.TotalDiscountsSet != nil {
+				fmt.Sscanf(order.TotalDiscountsSet.ShopMoney.Amount, "%f", &totalDiscounts)
+			}
+
+			// Upsert order
+			var orderID int
+			err := app.queries.UpsertShopifyOrder.Get(&orderID,
+				subscriberID,
+				order.ID,
+				order.Name, // order_number - Name contains "#1234" format
+				order.Name, // order_name
+				createdAt,
+				processedAt,
+				totalPrice,
+				subtotalPrice,
+				totalTax,
+				totalDiscounts,
+				currency,
+				order.DisplayFinancialStatus,
+				order.DisplayFulfillmentStatus,
+				pq.Array(order.Tags),
+				order.Note,
+			)
+			if err != nil {
+				app.log.Printf("syncCustomerOrdersToDB: error upserting order %s: %v", order.ID, err)
+				continue
+			}
+			ordersStored++
+
+			// Delete existing line items and re-insert
+			_, _ = app.queries.DeleteShopifyOrderLineItems.Exec(orderID)
+
+			// Insert line items
+			for _, lineEdge := range order.LineItems.Edges {
+				lineItem := lineEdge.Node
+
+				var productID, productTitle, variantID, variantTitle, productType, vendor string
+				if lineItem.Variant != nil {
+					variantID = lineItem.Variant.ID
+					variantTitle = lineItem.Variant.Title
+					if lineItem.Variant.Product != nil {
+						productID = lineItem.Variant.Product.ID
+						productTitle = lineItem.Variant.Product.Title
+						productType = lineItem.Variant.Product.ProductType
+						vendor = lineItem.Variant.Product.Vendor
+					}
+				}
+
+				var price, totalDiscount float64
+				if lineItem.OriginalUnitPriceSet != nil {
+					fmt.Sscanf(lineItem.OriginalUnitPriceSet.ShopMoney.Amount, "%f", &price)
+				}
+				if lineItem.TotalDiscountSet != nil {
+					fmt.Sscanf(lineItem.TotalDiscountSet.ShopMoney.Amount, "%f", &totalDiscount)
+				}
+
+				// Convert custom attributes to JSON
+				var propertiesJSON []byte
+				if len(lineItem.CustomAttributes) > 0 {
+					props := make(map[string]string)
+					for _, attr := range lineItem.CustomAttributes {
+						props[attr.Key] = attr.Value
+					}
+					propertiesJSON, _ = json.Marshal(props)
+				}
+
+				_, err := app.queries.InsertShopifyLineItem.Exec(
+					orderID,
+					lineItem.ID,
+					productID,
+					productTitle,
+					variantID,
+					variantTitle,
+					lineItem.SKU,
+					lineItem.Quantity,
+					price,
+					totalDiscount,
+					productType,
+					vendor,
+					propertiesJSON,
+				)
+				if err != nil {
+					app.log.Printf("syncCustomerOrdersToDB: error inserting line item %s: %v", lineItem.ID, err)
+				}
+
+				// Extract effects
+				if productTitle != "" {
+					effect := extractEffectFromProductTitle(productTitle)
+					if effect != "" {
+						effectsMap[effect] = true
+					}
+				}
+			}
+		}
+
+		hasNextPage = ordersResp.Customer.Orders.PageInfo.HasNextPage
+		if hasNextPage {
+			cursor = &ordersResp.Customer.Orders.PageInfo.EndCursor
+		}
+	}
+
+	app.log.Printf("syncCustomerOrdersToDB: stored %d orders for subscriber %d", ordersStored, subscriberID)
+
+	// Convert map to slice
+	effects := make([]string, 0, len(effectsMap))
+	for effect := range effectsMap {
+		effects = append(effects, effect)
+	}
+
+	return effects, nil
+}
+
+// extractEffectFromProductTitle extracts the effect (CALM, SLEEP, FOCUS, ENERGY) from product title
+func extractEffectFromProductTitle(title string) string {
+	titleUpper := strings.ToUpper(title)
+	effects := []string{"CALM", "SLEEP", "FOCUS", "ENERGY"}
+	for _, effect := range effects {
+		if strings.Contains(titleUpper, effect) {
+			return effect
+		}
+	}
+	return ""
 }
 
 // GetSubscriberByEmail is a helper query used by shopify webhook handler

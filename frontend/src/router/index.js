@@ -36,6 +36,18 @@ const routes = [
     component: () => import('../views/Lists.vue'),
   },
   {
+    path: '/segments',
+    name: 'segments',
+    meta: { title: 'globals.terms.segments', group: 'lists' },
+    component: () => import('../views/Segments.vue'),
+  },
+  {
+    path: '/segments/:id',
+    name: 'segment',
+    meta: { title: 'globals.terms.segments', group: 'lists' },
+    component: () => import('../views/Segments.vue'),
+  },
+  {
     path: '/subscribers',
     name: 'subscribers',
     meta: { title: 'globals.terms.subscribers', group: 'subscribers' },

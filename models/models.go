@@ -216,6 +216,90 @@ type List struct {
 	Total int `db:"total" json:"-"`
 }
 
+// SegmentCondition represents a single condition in a segment filter.
+type SegmentCondition struct {
+	Field     string         `json:"field"`            // e.g., "email", "name", "status", "attribs.plan", "behavior.email_opens"
+	FieldType string         `json:"field_type"`       // text, number, date, boolean, array, behavior
+	Operator  string         `json:"operator"`         // equals, not_equals, contains, greater_than, at_least, zero, etc.
+	Value     any            `json:"value"`            // The comparison value
+	Params    map[string]any `json:"params,omitempty"` // Additional parameters (time_range_days, campaign_id, etc.)
+}
+
+// SegmentConditionGroup represents a group of conditions with AND/OR logic.
+// It can contain SegmentConditions or nested SegmentConditionGroups.
+type SegmentConditionGroup struct {
+	Operator   string `json:"operator"`   // "and" or "or"
+	Conditions []any  `json:"conditions"` // Can be SegmentCondition or nested SegmentConditionGroup
+}
+
+// Scan implements the sql.Scanner interface for JSONB columns.
+func (s *SegmentConditionGroup) Scan(src any) error {
+	if src == nil {
+		return nil
+	}
+
+	var b []byte
+	switch v := src.(type) {
+	case []byte:
+		b = v
+	case string:
+		b = []byte(v)
+	default:
+		return fmt.Errorf("unsupported type for SegmentConditionGroup: %T", src)
+	}
+
+	return json.Unmarshal(b, s)
+}
+
+// Value implements the driver.Valuer interface for JSONB columns.
+func (s SegmentConditionGroup) Value() (driver.Value, error) {
+	return json.Marshal(s)
+}
+
+// Segment represents a dynamic subscriber segment defined by conditions.
+type Segment struct {
+	Base
+
+	UUID        string                `db:"uuid" json:"uuid"`
+	Name        string                `db:"name" json:"name"`
+	Description string                `db:"description" json:"description"`
+	Conditions  SegmentConditionGroup `db:"conditions" json:"conditions"`
+	CachedCount null.Int              `db:"cached_count" json:"cached_count"`
+	CachedAt    null.Time             `db:"cached_at" json:"cached_at"`
+	Tags        pq.StringArray        `db:"tags" json:"tags"`
+
+	// Computed field for subscriber count (from preview/query)
+	SubscriberCount int `db:"-" json:"subscriber_count,omitempty"`
+
+	// Pseudofield for pagination total
+	Total int `db:"total" json:"-"`
+}
+
+// Segments is a slice of Segment.
+type Segments []Segment
+
+// CampaignMinimal represents minimal campaign info for dropdowns.
+type CampaignMinimal struct {
+	ID   int    `db:"id" json:"id"`
+	UUID string `db:"uuid" json:"uuid"`
+	Name string `db:"name" json:"name"`
+}
+
+// CampaignPerformance represents performance metrics for a campaign.
+type CampaignPerformance struct {
+	ID           int       `db:"id" json:"id"`
+	UUID         string    `db:"uuid" json:"uuid"`
+	Name         string    `db:"name" json:"name"`
+	SentAt       time.Time `db:"sent_at" json:"sent_at"`
+	Recipients   int       `db:"recipients" json:"recipients"`
+	Delivered    int       `db:"delivered" json:"delivered"`
+	UniqueOpens  int       `db:"unique_opens" json:"unique_opens"`
+	UniqueClicks int       `db:"unique_clicks" json:"unique_clicks"`
+	OpenRate     float64   `db:"open_rate" json:"open_rate"`
+	ClickRate    float64   `db:"click_rate" json:"click_rate"`
+	Total        int       `db:"total" json:"-"`
+}
+
 // Campaign represents an e-mail campaign.
 type Campaign struct {
 	Base
@@ -244,6 +328,9 @@ type Campaign struct {
 	// BypassTimeWindow allows campaigns to be sent outside the configured time window
 	// (useful for test campaigns when outside normal sending hours)
 	BypassTimeWindow bool `db:"bypass_time_window" json:"bypass_time_window"`
+
+	// TargetType determines how the campaign targets subscribers: 'lists' (default) or 'segments'
+	TargetType string `db:"target_type" json:"target_type"`
 
 	// TemplateBody is joined in from templates by the next-campaigns query.
 	TemplateBody        string             `db:"template_body" json:"-"`
@@ -279,9 +366,14 @@ type CampaignMeta struct {
 	Lists types.JSONText `db:"lists" json:"lists"`
 	Media types.JSONText `db:"media" json:"media"`
 
+	// Segments is a list of {segment_id, name} pairs for segment-targeted campaigns.
+	// Similar to Lists, maintains historical record even after segment is deleted.
+	Segments types.JSONText `db:"segments" json:"segments"`
+
 	StartedAt null.Time `db:"started_at" json:"started_at"`
 	ToSend    int       `db:"to_send" json:"to_send"`
 	Sent      int       `db:"sent" json:"sent"`
+	Delivered int       `db:"delivered" json:"delivered"`
 	AzureSent int       `db:"azure_sent" json:"azure_sent"`
 
 	// Purchase attribution stats (from Shopify integration)
@@ -399,6 +491,26 @@ type WebhookLog struct {
 	Processed      bool            `db:"processed" json:"processed"`
 	ErrorMessage   null.String     `db:"error_message" json:"error_message"`
 	CreatedAt      time.Time       `db:"created_at" json:"created_at"`
+
+	// Pseudofield for getting the total count in queries.
+	Total int `db:"total" json:"-"`
+}
+
+// ActivityEvent represents a unified activity event from various sources
+// (email engagement, site events, etc.) for the activity feed.
+type ActivityEvent struct {
+	ID               int64           `db:"id" json:"id"`
+	EventType        string          `db:"event_type" json:"event_type"`
+	SubscriberID     null.Int        `db:"subscriber_id" json:"subscriber_id"`
+	SubscriberEmail  string          `db:"subscriber_email" json:"subscriber_email"`
+	SubscriberName   string          `db:"subscriber_name" json:"subscriber_name"`
+	SubscriberUUID   string          `db:"subscriber_uuid" json:"subscriber_uuid"`
+	EventDescription string          `db:"event_description" json:"event_description"`
+	CampaignName     null.String     `db:"campaign_name" json:"campaign_name"`
+	CampaignID       null.Int        `db:"campaign_id" json:"campaign_id"`
+	PageURL          null.String     `db:"page_url" json:"page_url"`
+	Properties       json.RawMessage `db:"properties" json:"properties"`
+	CreatedAt        time.Time       `db:"created_at" json:"created_at"`
 
 	// Pseudofield for getting the total count in queries.
 	Total int `db:"total" json:"-"`
@@ -616,6 +728,9 @@ func (camps Campaigns) LoadStats(stmt *sqlx.Stmt) error {
 			camps[i].Clicks = c.Clicks
 			camps[i].Bounces = c.Bounces
 			camps[i].Media = c.Media
+			camps[i].Delivered = c.Delivered
+			camps[i].AzureSent = c.AzureSent
+			camps[i].Segments = c.Segments
 		}
 	}
 

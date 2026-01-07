@@ -498,6 +498,69 @@ UPDATE lists SET updated_at=NOW() WHERE id = ANY($1);
 DELETE FROM lists WHERE id = ALL($1);
 
 
+-- segments
+-- name: create-segment
+INSERT INTO segments (uuid, name, description, conditions, tags)
+VALUES($1, $2, $3, $4, $5) RETURNING id;
+
+-- name: query-segments
+SELECT segments.*, COUNT(*) OVER () AS total
+FROM segments
+WHERE ($1 = 0 OR id = $1)
+    AND ($2 = '' OR uuid = $2::UUID)
+    AND ($3 = '' OR (name ILIKE $3 OR description ILIKE $3))
+ORDER BY %order%
+OFFSET $4 LIMIT (CASE WHEN $5 < 1 THEN NULL ELSE $5 END);
+
+-- name: get-segment
+SELECT * FROM segments WHERE
+    CASE
+        WHEN $1 > 0 THEN id = $1
+        WHEN $2 != '' THEN uuid = $2::UUID
+    END;
+
+-- name: update-segment
+UPDATE segments SET
+    name = (CASE WHEN $2 != '' THEN $2 ELSE name END),
+    description = $3,
+    conditions = (CASE WHEN $4 != '' THEN $4::JSONB ELSE conditions END),
+    tags = $5::VARCHAR(100)[],
+    cached_count = NULL,
+    cached_at = NULL,
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: delete-segment
+DELETE FROM segments WHERE id = $1;
+
+-- name: update-segment-cache
+UPDATE segments SET
+    cached_count = $2,
+    cached_at = NOW()
+WHERE id = $1;
+
+-- name: get-campaign-segments
+-- Returns the segments attached to a campaign.
+SELECT s.id, s.uuid, s.name, s.description, s.conditions, cs.segment_name
+FROM campaign_segments cs
+LEFT JOIN segments s ON cs.segment_id = s.id
+WHERE cs.campaign_id = $1;
+
+-- name: insert-campaign-segments
+-- Inserts segment relationships for a campaign.
+INSERT INTO campaign_segments (campaign_id, segment_id, segment_name)
+SELECT $1, id, name FROM segments WHERE id = ANY($2::INT[])
+ON CONFLICT (campaign_id, segment_id) DO UPDATE SET segment_name = EXCLUDED.segment_name;
+
+-- name: delete-campaign-segments
+-- Deletes segment relationships for a campaign that are not in the given list.
+DELETE FROM campaign_segments WHERE campaign_id = $1 AND NOT(segment_id = ANY($2::INT[]));
+
+-- name: update-campaign-target-type
+-- Updates the target_type for a campaign.
+UPDATE campaigns SET target_type = $2 WHERE id = $1;
+
+
 -- campaigns
 -- name: create-campaign
 -- This creates the campaign and inserts campaign_lists relationships.
@@ -598,6 +661,14 @@ WHERE ($1 = 0 OR id = $1)
     )
 ORDER BY %order% OFFSET $7 LIMIT (CASE WHEN $8 < 1 THEN NULL ELSE $8 END);
 
+-- name: get-campaigns-minimal
+-- Returns minimal campaign info for dropdowns (segment builder, etc.)
+SELECT id, uuid, name
+FROM campaigns
+WHERE status != 'cancelled'
+ORDER BY created_at DESC
+LIMIT 500;
+
 -- name: get-campaign
 SELECT campaigns.*,
     COALESCE(templates.body, (SELECT body FROM templates WHERE is_default = true LIMIT 1), '') AS template_body
@@ -632,17 +703,21 @@ WITH lists AS (
     SELECT campaign_id, JSON_AGG(JSON_BUILD_OBJECT('id', list_id, 'name', list_name)) AS lists FROM campaign_lists
     WHERE campaign_id = ANY($1) GROUP BY campaign_id
 ),
+segments AS (
+    SELECT campaign_id, JSON_AGG(JSON_BUILD_OBJECT('id', segment_id, 'name', segment_name)) AS segments FROM campaign_segments
+    WHERE campaign_id = ANY($1) GROUP BY campaign_id
+),
 media AS (
     SELECT campaign_id, JSON_AGG(JSON_BUILD_OBJECT('id', media_id, 'filename', filename)) AS media FROM campaign_media
     WHERE campaign_id = ANY($1) GROUP BY campaign_id
 ),
 views AS (
-    SELECT campaign_id, COUNT(campaign_id) as num FROM campaign_views
+    SELECT campaign_id, COUNT(DISTINCT subscriber_id) as num FROM campaign_views
     WHERE campaign_id = ANY($1)
     GROUP BY campaign_id
 ),
 clicks AS (
-    SELECT campaign_id, COUNT(campaign_id) as num FROM link_clicks
+    SELECT campaign_id, COUNT(DISTINCT subscriber_id) as num FROM link_clicks
     WHERE campaign_id = ANY($1)
     GROUP BY campaign_id
 ),
@@ -660,22 +735,40 @@ azure_sent AS (
     WHERE campaign_id = ANY($1)
     AND status = 'Delivered'
     GROUP BY campaign_id
+),
+sendgrid_sent AS (
+    SELECT campaign_id, COUNT(*) as num FROM sendgrid_delivery_events
+    WHERE campaign_id = ANY($1)
+    AND event_type = 'delivered'
+    GROUP BY campaign_id
+),
+delivered AS (
+    SELECT campaign_id, SUM(num) as num FROM (
+        SELECT campaign_id, num FROM azure_sent
+        UNION ALL
+        SELECT campaign_id, num FROM sendgrid_sent
+    ) combined
+    GROUP BY campaign_id
 )
 SELECT id as campaign_id,
     COALESCE(v.num, 0) AS views,
     COALESCE(c.num, 0) AS clicks,
     COALESCE(b.num, 0) AS bounces,
     COALESCE(s.sent, 0) AS sent,
+    COALESCE(d.num, 0) AS delivered,
     COALESCE(a.num, 0) AS azure_sent,
     COALESCE(l.lists, '[]') AS lists,
-    COALESCE(m.media, '[]') AS media
+    COALESCE(m.media, '[]') AS media,
+    COALESCE(seg.segments, '[]') AS segments
 FROM (SELECT id FROM UNNEST($1) AS id) x
 LEFT JOIN lists AS l ON (l.campaign_id = id)
+LEFT JOIN segments AS seg ON (seg.campaign_id = id)
 LEFT JOIN media AS m ON (m.campaign_id = id)
 LEFT JOIN views AS v ON (v.campaign_id = id)
 LEFT JOIN clicks AS c ON (c.campaign_id = id)
 LEFT JOIN bounces AS b ON (b.campaign_id = id)
 LEFT JOIN sent_counts AS s ON (s.campaign_id = id)
+LEFT JOIN delivered AS d ON (d.campaign_id = id)
 LEFT JOIN azure_sent AS a ON (a.campaign_id = id)
 ORDER BY ARRAY_POSITION($1, id);
 
@@ -1562,6 +1655,26 @@ WHERE cl.campaign_id = $1
     )
 ON CONFLICT DO NOTHING;
 
+-- name: queue-test-email-first
+-- Explicitly queue the test email first subscriber regardless of list membership.
+-- This ensures the test email receives EVERY campaign, not just ones they're subscribed to.
+-- $1 = campaign_id, $2 = test_email (string)
+-- Uses ON CONFLICT DO UPDATE to set priority=100 even if already queued from main query.
+INSERT INTO email_queue (campaign_id, subscriber_id, status, priority, scheduled_at, created_at, updated_at)
+SELECT
+    $1 as campaign_id,
+    s.id as subscriber_id,
+    'queued' as status,
+    100 as priority,
+    NOW() as scheduled_at,
+    NOW() as created_at,
+    NOW() as updated_at
+FROM subscribers s
+WHERE LOWER(s.email) = LOWER($2::TEXT)
+  AND s.status = 'enabled'
+ON CONFLICT (campaign_id, subscriber_id)
+DO UPDATE SET priority = 100, scheduled_at = NOW(), updated_at = NOW();
+
 -- name: get-queued-email-count
 -- Get the count of emails queued for a campaign
 SELECT COUNT(*) as count FROM email_queue WHERE campaign_id = $1 AND status = 'queued';
@@ -1875,6 +1988,68 @@ FROM purchase_attributions
 WHERE campaign_id = ANY($1)
 GROUP BY campaign_id, currency;
 
+-- name: get-campaigns-performance-detail
+-- Get per-campaign performance data with pagination and sorting
+-- $1: order_by column, $2: order direction, $3: offset, $4: limit
+WITH delivery_counts AS (
+    SELECT campaign_id, COUNT(*) AS delivered FROM (
+        SELECT campaign_id FROM azure_delivery_events WHERE status = 'Delivered'
+        UNION ALL
+        SELECT campaign_id FROM sendgrid_delivery_events WHERE event_type = 'delivered' AND campaign_id IS NOT NULL
+    ) combined
+    GROUP BY campaign_id
+),
+open_counts AS (
+    SELECT campaign_id, COUNT(DISTINCT subscriber_id) AS unique_opens
+    FROM campaign_views
+    WHERE subscriber_id IS NOT NULL
+    GROUP BY campaign_id
+),
+click_counts AS (
+    SELECT campaign_id, COUNT(DISTINCT subscriber_id) AS unique_clicks
+    FROM link_clicks
+    WHERE subscriber_id IS NOT NULL
+    GROUP BY campaign_id
+),
+campaign_data AS (
+    SELECT
+        c.id,
+        c.uuid,
+        c.name,
+        COALESCE(c.started_at, c.created_at) AS sent_at,
+        c.sent AS recipients,
+        COALESCE(dc.delivered, 0) AS delivered,
+        COALESCE(oc.unique_opens, 0) AS unique_opens,
+        COALESCE(cc.unique_clicks, 0) AS unique_clicks,
+        CASE WHEN COALESCE(dc.delivered, 0) > 0 THEN ROUND((COALESCE(oc.unique_opens, 0)::NUMERIC / dc.delivered) * 100, 2) ELSE 0 END AS open_rate,
+        CASE WHEN COALESCE(dc.delivered, 0) > 0 THEN ROUND((COALESCE(cc.unique_clicks, 0)::NUMERIC / dc.delivered) * 100, 2) ELSE 0 END AS click_rate,
+        COUNT(*) OVER() AS total
+    FROM campaigns c
+    LEFT JOIN delivery_counts dc ON c.id = dc.campaign_id
+    LEFT JOIN open_counts oc ON c.id = oc.campaign_id
+    LEFT JOIN click_counts cc ON c.id = cc.campaign_id
+    WHERE c.status = 'finished' AND c.sent > 0
+)
+SELECT * FROM campaign_data
+ORDER BY
+    CASE WHEN $1 = 'name' AND $2 = 'asc' THEN name END ASC,
+    CASE WHEN $1 = 'name' AND $2 = 'desc' THEN name END DESC,
+    CASE WHEN $1 = 'sent_at' AND $2 = 'asc' THEN sent_at END ASC,
+    CASE WHEN $1 = 'sent_at' AND $2 = 'desc' THEN sent_at END DESC,
+    CASE WHEN $1 = 'recipients' AND $2 = 'asc' THEN recipients END ASC,
+    CASE WHEN $1 = 'recipients' AND $2 = 'desc' THEN recipients END DESC,
+    CASE WHEN $1 = 'delivered' AND $2 = 'asc' THEN delivered END ASC,
+    CASE WHEN $1 = 'delivered' AND $2 = 'desc' THEN delivered END DESC,
+    CASE WHEN $1 = 'unique_opens' AND $2 = 'asc' THEN unique_opens END ASC,
+    CASE WHEN $1 = 'unique_opens' AND $2 = 'desc' THEN unique_opens END DESC,
+    CASE WHEN $1 = 'unique_clicks' AND $2 = 'asc' THEN unique_clicks END ASC,
+    CASE WHEN $1 = 'unique_clicks' AND $2 = 'desc' THEN unique_clicks END DESC,
+    CASE WHEN $1 = 'open_rate' AND $2 = 'asc' THEN open_rate END ASC,
+    CASE WHEN $1 = 'open_rate' AND $2 = 'desc' THEN open_rate END DESC,
+    CASE WHEN $1 = 'click_rate' AND $2 = 'asc' THEN click_rate END ASC,
+    CASE WHEN $1 = 'click_rate' AND $2 = 'desc' THEN click_rate END DESC,
+    sent_at DESC
+OFFSET $3 LIMIT $4;
 
 -- Onsite tracking queries
 
@@ -2035,3 +2210,82 @@ SELECT
 FROM combined_events
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
+
+-- name: upsert-shopify-order
+-- Upsert a Shopify order linked to a subscriber
+-- $1: subscriber_id, $2: shopify_order_id, $3: order_number, $4: order_name
+-- $5: created_at, $6: processed_at, $7: total_price, $8: subtotal_price
+-- $9: total_tax, $10: total_discounts, $11: currency, $12: financial_status
+-- $13: fulfillment_status, $14: tags, $15: note
+INSERT INTO shopify_orders (
+    subscriber_id, shopify_order_id, order_number, order_name,
+    created_at, processed_at, total_price, subtotal_price,
+    total_tax, total_discounts, currency, financial_status,
+    fulfillment_status, tags, note, synced_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+ON CONFLICT (shopify_order_id) DO UPDATE SET
+    order_number = EXCLUDED.order_number,
+    order_name = EXCLUDED.order_name,
+    processed_at = EXCLUDED.processed_at,
+    total_price = EXCLUDED.total_price,
+    subtotal_price = EXCLUDED.subtotal_price,
+    total_tax = EXCLUDED.total_tax,
+    total_discounts = EXCLUDED.total_discounts,
+    currency = EXCLUDED.currency,
+    financial_status = EXCLUDED.financial_status,
+    fulfillment_status = EXCLUDED.fulfillment_status,
+    tags = EXCLUDED.tags,
+    note = EXCLUDED.note,
+    synced_at = NOW()
+RETURNING id;
+
+-- name: delete-shopify-order-line-items
+-- Delete all line items for a Shopify order before re-inserting
+DELETE FROM shopify_order_line_items WHERE order_id = $1;
+
+-- name: insert-shopify-line-item
+-- Insert a line item for a Shopify order
+-- $1: order_id, $2: shopify_line_item_id, $3: product_id, $4: product_title
+-- $5: variant_id, $6: variant_title, $7: sku, $8: quantity
+-- $9: price, $10: total_discount, $11: product_type, $12: vendor, $13: properties
+INSERT INTO shopify_order_line_items (
+    order_id, shopify_line_item_id, product_id, product_title,
+    variant_id, variant_title, sku, quantity,
+    price, total_discount, product_type, vendor, properties
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);
+
+-- name: get-subscriber-orders
+-- Get all orders for a subscriber with line item count
+SELECT
+    so.id, so.subscriber_id, so.shopify_order_id, so.order_number, so.order_name,
+    so.created_at, so.processed_at, so.total_price, so.subtotal_price,
+    so.total_tax, so.total_discounts, so.currency, so.financial_status,
+    so.fulfillment_status, so.tags, so.note, so.synced_at,
+    (SELECT COUNT(*) FROM shopify_order_line_items li WHERE li.order_id = so.id) AS line_item_count
+FROM shopify_orders so
+WHERE so.subscriber_id = $1
+ORDER BY so.created_at DESC;
+
+-- name: get-order-line-items
+-- Get all line items for a specific order
+SELECT
+    id, order_id, shopify_line_item_id, product_id, product_title,
+    variant_id, variant_title, sku, quantity, price, total_discount,
+    product_type, vendor, properties
+FROM shopify_order_line_items
+WHERE order_id = $1
+ORDER BY id;
+
+-- name: get-subscriber-product-titles
+-- Get distinct product titles a subscriber has purchased
+SELECT DISTINCT product_title
+FROM shopify_order_line_items li
+JOIN shopify_orders so ON li.order_id = so.id
+WHERE so.subscriber_id = $1 AND li.product_title IS NOT NULL
+ORDER BY product_title;
+
+-- name: get-subscriber-total-order-value
+-- Get the total value of all orders for a subscriber
+SELECT COALESCE(SUM(total_price), 0) AS total_value
+FROM shopify_orders
+WHERE subscriber_id = $1;

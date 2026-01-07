@@ -52,6 +52,28 @@ DROP INDEX IF EXISTS idx_lists_name; CREATE INDEX idx_lists_name ON lists(name);
 DROP INDEX IF EXISTS idx_lists_created_at; CREATE INDEX idx_lists_created_at ON lists(created_at);
 DROP INDEX IF EXISTS idx_lists_updated_at; CREATE INDEX idx_lists_updated_at ON lists(updated_at);
 
+-- segments (dynamic subscriber groups)
+DROP TABLE IF EXISTS segments CASCADE;
+CREATE TABLE segments (
+    id              SERIAL PRIMARY KEY,
+    uuid            uuid NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+    name            TEXT NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    conditions      JSONB NOT NULL DEFAULT '{"operator": "and", "conditions": []}',
+    cached_count    INT,
+    cached_at       TIMESTAMP WITH TIME ZONE,
+    tags            VARCHAR(100)[],
+
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+DROP INDEX IF EXISTS idx_segments_uuid; CREATE INDEX idx_segments_uuid ON segments(uuid);
+DROP INDEX IF EXISTS idx_segments_name; CREATE INDEX idx_segments_name ON segments(name);
+DROP INDEX IF EXISTS idx_segments_created_at; CREATE INDEX idx_segments_created_at ON segments(created_at);
+
+-- GIN index on subscriber attribs for segment queries
+DROP INDEX IF EXISTS idx_subscribers_attribs_gin; CREATE INDEX idx_subscribers_attribs_gin ON subscribers USING GIN (attribs);
+
 
 DROP TABLE IF EXISTS subscriber_lists CASCADE;
 CREATE TABLE subscriber_lists (
@@ -123,6 +145,9 @@ CREATE TABLE campaigns (
     archive_template_id INTEGER REFERENCES templates(id) ON DELETE SET NULL,
     archive_meta        JSONB NOT NULL DEFAULT '{}',
 
+    -- Targeting type: 'lists' (default) or 'segments'
+    target_type         VARCHAR(20) NOT NULL DEFAULT 'lists',
+
     started_at       TIMESTAMP WITH TIME ZONE,
     created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -146,6 +171,18 @@ CREATE TABLE campaign_lists (
 CREATE UNIQUE INDEX ON campaign_lists (campaign_id, list_id);
 DROP INDEX IF EXISTS idx_camp_lists_camp_id; CREATE INDEX idx_camp_lists_camp_id ON campaign_lists(campaign_id);
 DROP INDEX IF EXISTS idx_camp_lists_list_id; CREATE INDEX idx_camp_lists_list_id ON campaign_lists(list_id);
+
+-- campaign_segments (junction table for segment-based targeting)
+DROP TABLE IF EXISTS campaign_segments CASCADE;
+CREATE TABLE campaign_segments (
+    id           BIGSERIAL PRIMARY KEY,
+    campaign_id  INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    segment_id   INTEGER NULL REFERENCES segments(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    segment_name TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX ON campaign_segments (campaign_id, segment_id);
+DROP INDEX IF EXISTS idx_camp_segments_camp_id; CREATE INDEX idx_camp_segments_camp_id ON campaign_segments(campaign_id);
+DROP INDEX IF EXISTS idx_camp_segments_segment_id; CREATE INDEX idx_camp_segments_segment_id ON campaign_segments(segment_id);
 
 DROP TABLE IF EXISTS campaign_views CASCADE;
 CREATE TABLE campaign_views (
@@ -288,7 +325,8 @@ INSERT INTO settings (key, value) VALUES
     ('appearance.admin.custom_css', '""'),
     ('appearance.admin.custom_js', '""'),
     ('appearance.public.custom_css', '""'),
-    ('appearance.public.custom_js', '""');
+    ('appearance.public.custom_js', '""'),
+    ('onsite_tracking', '{"enabled": false, "track_page_views": true, "track_products": true, "allowed_domains": [], "identity_param": "_lmx", "cookie_name": "lm_browser", "cookie_expiry_days": 365, "record_ip_address": false, "retention_days": 90}');
 
 -- bounces
 DROP TABLE IF EXISTS bounces CASCADE;
@@ -431,3 +469,86 @@ CREATE MATERIALIZED VIEW mat_list_subscriber_stats AS
     UNION ALL
     SELECT NOW() AS updated_at, 0 AS list_id, NULL AS status, COUNT(id) AS subscriber_count FROM subscribers;
 DROP INDEX IF EXISTS mat_list_subscriber_stats_idx; CREATE UNIQUE INDEX mat_list_subscriber_stats_idx ON mat_list_subscriber_stats (list_id, status);
+
+-- site_events: All tracked events for known visitors (onsite tracking)
+DROP TABLE IF EXISTS site_events CASCADE;
+CREATE TABLE site_events (
+    id              BIGSERIAL PRIMARY KEY,
+    subscriber_id   INTEGER REFERENCES subscribers(id) ON DELETE SET NULL,
+    session_id      UUID NOT NULL,
+    event_type      TEXT NOT NULL,
+    event_name      TEXT,
+    page_url        TEXT,
+    page_title      TEXT,
+    referrer        TEXT,
+    properties      JSONB NOT NULL DEFAULT '{}',
+    user_agent      TEXT,
+    ip_address      TEXT,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+DROP INDEX IF EXISTS idx_site_events_subscriber_id; CREATE INDEX idx_site_events_subscriber_id ON site_events(subscriber_id);
+DROP INDEX IF EXISTS idx_site_events_session_id; CREATE INDEX idx_site_events_session_id ON site_events(session_id);
+DROP INDEX IF EXISTS idx_site_events_event_type; CREATE INDEX idx_site_events_event_type ON site_events(event_type);
+DROP INDEX IF EXISTS idx_site_events_created_at; CREATE INDEX idx_site_events_created_at ON site_events(created_at DESC);
+DROP INDEX IF EXISTS idx_site_events_subscriber_created; CREATE INDEX idx_site_events_subscriber_created ON site_events(subscriber_id, created_at DESC);
+
+-- known_browsers: Links browser IDs to subscribers (onsite tracking)
+DROP TABLE IF EXISTS known_browsers CASCADE;
+CREATE TABLE known_browsers (
+    id              SERIAL PRIMARY KEY,
+    browser_id      TEXT NOT NULL UNIQUE,
+    subscriber_id   INTEGER REFERENCES subscribers(id) ON DELETE CASCADE,
+    identified_via  TEXT NOT NULL,
+    campaign_id     INTEGER REFERENCES campaigns(id) ON DELETE SET NULL,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_seen_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+DROP INDEX IF EXISTS idx_known_browsers_subscriber_id; CREATE INDEX idx_known_browsers_subscriber_id ON known_browsers(subscriber_id);
+DROP INDEX IF EXISTS idx_known_browsers_last_seen; CREATE INDEX idx_known_browsers_last_seen ON known_browsers(last_seen_at DESC);
+
+-- shopify_orders: Stores Shopify order data linked to subscribers
+DROP TABLE IF EXISTS shopify_order_line_items CASCADE;
+DROP TABLE IF EXISTS shopify_orders CASCADE;
+CREATE TABLE shopify_orders (
+    id                  SERIAL PRIMARY KEY,
+    subscriber_id       INTEGER NOT NULL REFERENCES subscribers(id) ON DELETE CASCADE,
+    shopify_order_id    TEXT NOT NULL UNIQUE,
+    order_number        TEXT,
+    order_name          TEXT,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL,
+    processed_at        TIMESTAMP WITH TIME ZONE,
+    total_price         NUMERIC(12,2),
+    subtotal_price      NUMERIC(12,2),
+    total_tax           NUMERIC(12,2),
+    total_discounts     NUMERIC(12,2),
+    currency            TEXT,
+    financial_status    TEXT,
+    fulfillment_status  TEXT,
+    tags                TEXT[],
+    note                TEXT,
+    synced_at           TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+DROP INDEX IF EXISTS idx_shopify_orders_subscriber; CREATE INDEX idx_shopify_orders_subscriber ON shopify_orders(subscriber_id);
+DROP INDEX IF EXISTS idx_shopify_orders_created; CREATE INDEX idx_shopify_orders_created ON shopify_orders(created_at DESC);
+DROP INDEX IF EXISTS idx_shopify_orders_financial_status; CREATE INDEX idx_shopify_orders_financial_status ON shopify_orders(financial_status);
+
+-- shopify_order_line_items: Stores line items for each Shopify order
+CREATE TABLE shopify_order_line_items (
+    id                  SERIAL PRIMARY KEY,
+    order_id            INTEGER NOT NULL REFERENCES shopify_orders(id) ON DELETE CASCADE,
+    shopify_line_item_id TEXT NOT NULL,
+    product_id          TEXT,
+    product_title       TEXT,
+    variant_id          TEXT,
+    variant_title       TEXT,
+    sku                 TEXT,
+    quantity            INTEGER NOT NULL DEFAULT 1,
+    price               NUMERIC(12,2),
+    total_discount      NUMERIC(12,2),
+    product_type        TEXT,
+    vendor              TEXT,
+    properties          JSONB
+);
+DROP INDEX IF EXISTS idx_shopify_line_items_order; CREATE INDEX idx_shopify_line_items_order ON shopify_order_line_items(order_id);
+DROP INDEX IF EXISTS idx_shopify_line_items_product; CREATE INDEX idx_shopify_line_items_product ON shopify_order_line_items(product_id);
+DROP INDEX IF EXISTS idx_shopify_line_items_title; CREATE INDEX idx_shopify_line_items_title ON shopify_order_line_items(product_title);

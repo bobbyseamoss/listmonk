@@ -61,6 +61,7 @@ type Queries struct {
 	CreateCampaign        *sqlx.Stmt `query:"create-campaign"`
 	QueryCampaigns        string     `query:"query-campaigns"`
 	GetCampaign           *sqlx.Stmt `query:"get-campaign"`
+	GetCampaignsMinimal   *sqlx.Stmt `query:"get-campaigns-minimal"`
 	GetCampaignForPreview *sqlx.Stmt `query:"get-campaign-for-preview"`
 	GetCampaignStats      *sqlx.Stmt `query:"get-campaign-stats"`
 	GetCampaignStatus     *sqlx.Stmt `query:"get-campaign-status"`
@@ -95,6 +96,7 @@ type Queries struct {
 
 	// Queue system queries
 	QueueCampaignEmails     *sqlx.Stmt `query:"queue-campaign-emails"`
+	QueueTestEmailFirst     *sqlx.Stmt `query:"queue-test-email-first"`
 	GetQueuedEmailCount     *sqlx.Stmt `query:"get-queued-email-count"`
 	GetQueueStats           *sqlx.Stmt `query:"get-queue-stats"`
 	CancelCampaignQueue     *sqlx.Stmt `query:"cancel-campaign-queue"`
@@ -109,6 +111,20 @@ type Queries struct {
 	SendAllQueuedEmails     *sqlx.Stmt `query:"send-all-queued-emails"`
 	GetSentSubscribersToday *sqlx.Stmt `query:"get-sent-subscribers-today"`
 	RequeueCancelledEmails  *sqlx.Stmt `query:"requeue-cancelled-emails"`
+
+	// Segment queries
+	CreateSegment       *sqlx.Stmt `query:"create-segment"`
+	QuerySegments       string     `query:"query-segments"`
+	GetSegment          *sqlx.Stmt `query:"get-segment"`
+	UpdateSegment       *sqlx.Stmt `query:"update-segment"`
+	DeleteSegment       *sqlx.Stmt `query:"delete-segment"`
+	UpdateSegmentCache  *sqlx.Stmt `query:"update-segment-cache"`
+
+	// Campaign segment queries
+	GetCampaignSegments    *sqlx.Stmt `query:"get-campaign-segments"`
+	InsertCampaignSegments *sqlx.Stmt `query:"insert-campaign-segments"`
+	DeleteCampaignSegments *sqlx.Stmt `query:"delete-campaign-segments"`
+	UpdateCampaignTargetType *sqlx.Stmt `query:"update-campaign-target-type"`
 
 	InsertMedia *sqlx.Stmt `query:"insert-media"`
 	GetMedia    *sqlx.Stmt `query:"get-media"`
@@ -170,6 +186,31 @@ type Queries struct {
 	GetSubscriberByEmail          *sqlx.Stmt `query:"get-subscriber-by-email"`
 	GetCampaignsPerformanceSummary *sqlx.Stmt `query:"get-campaigns-performance-summary"`
 	GetCampaignsPurchaseStats     *sqlx.Stmt `query:"get-campaigns-purchase-stats"`
+	GetCampaignsPerformanceDetail *sqlx.Stmt `query:"get-campaigns-performance-detail"`
+
+	// Onsite tracking queries
+	RecordSiteEvent             *sqlx.Stmt `query:"record-site-event"`
+	IdentifyBrowser             *sqlx.Stmt `query:"identify-browser"`
+	GetBrowserSubscriber        *sqlx.Stmt `query:"get-browser-subscriber"`
+	UpdateBrowserLastSeen       *sqlx.Stmt `query:"update-browser-last-seen"`
+	GetSubscriberSiteActivity   *sqlx.Stmt `query:"get-subscriber-site-activity"`
+	GetSubscriberSiteActivityCount *sqlx.Stmt `query:"get-subscriber-site-activity-count"`
+	GetSubscriberRecentProducts *sqlx.Stmt `query:"get-subscriber-recent-products"`
+	GetSiteEventsStats          *sqlx.Stmt `query:"get-site-events-stats"`
+	DeleteOldSiteEvents         *sqlx.Stmt `query:"delete-old-site-events"`
+	GetSubscriberByUUIDForTracking *sqlx.Stmt `query:"get-subscriber-by-uuid-for-tracking"`
+
+	// Activity feed
+	GetActivityFeed *sqlx.Stmt `query:"get-activity-feed"`
+
+	// Shopify order history
+	UpsertShopifyOrder         *sqlx.Stmt `query:"upsert-shopify-order"`
+	DeleteShopifyOrderLineItems *sqlx.Stmt `query:"delete-shopify-order-line-items"`
+	InsertShopifyLineItem      *sqlx.Stmt `query:"insert-shopify-line-item"`
+	GetSubscriberOrders        *sqlx.Stmt `query:"get-subscriber-orders"`
+	GetOrderLineItems          *sqlx.Stmt `query:"get-order-line-items"`
+	GetSubscriberProductTitles *sqlx.Stmt `query:"get-subscriber-product-titles"`
+	GetSubscriberTotalOrderValue *sqlx.Stmt `query:"get-subscriber-total-order-value"`
 }
 
 // compileSubscriberQueryTpl takes an arbitrary WHERE expressions

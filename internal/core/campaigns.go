@@ -3,6 +3,8 @@ package core
 import (
 	"database/sql"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
@@ -185,7 +187,7 @@ func (c *Core) GetArchivedCampaigns(offset, limit int) (models.Campaigns, int, e
 }
 
 // CreateCampaign creates a new campaign.
-func (c *Core) CreateCampaign(o models.Campaign, listIDs []int, mediaIDs []int) (models.Campaign, error) {
+func (c *Core) CreateCampaign(o models.Campaign, listIDs []int, mediaIDs []int, segmentIDs []int) (models.Campaign, error) {
 	uu, err := uuid.NewV4()
 	if err != nil {
 		c.log.Printf("error generating UUID: %v", err)
@@ -227,6 +229,23 @@ func (c *Core) CreateCampaign(o models.Campaign, listIDs []int, mediaIDs []int) 
 			c.i18n.Ts("globals.messages.errorCreating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
 	}
 
+	// Handle segment targeting if segment IDs are provided.
+	if len(segmentIDs) > 0 {
+		// Set target_type to 'segments'
+		if _, err := c.q.UpdateCampaignTargetType.Exec(newID, "segments"); err != nil {
+			c.log.Printf("error setting campaign target type: %v", err)
+			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
+				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+		}
+
+		// Insert campaign segment associations
+		if _, err := c.q.InsertCampaignSegments.Exec(newID, pq.Array(segmentIDs)); err != nil {
+			c.log.Printf("error inserting campaign segments: %v", err)
+			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
+				c.i18n.Ts("globals.messages.errorCreating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+		}
+	}
+
 	out, err := c.GetCampaign(newID, "", "")
 	if err != nil {
 		return models.Campaign{}, err
@@ -236,7 +255,7 @@ func (c *Core) CreateCampaign(o models.Campaign, listIDs []int, mediaIDs []int) 
 }
 
 // UpdateCampaign updates a campaign.
-func (c *Core) UpdateCampaign(id int, o models.Campaign, listIDs []int, mediaIDs []int) (models.Campaign, error) {
+func (c *Core) UpdateCampaign(id int, o models.Campaign, listIDs []int, mediaIDs []int, segmentIDs []int) (models.Campaign, error) {
 	_, err := c.q.UpdateCampaign.Exec(id,
 		o.Name,
 		o.Subject,
@@ -261,6 +280,44 @@ func (c *Core) UpdateCampaign(id int, o models.Campaign, listIDs []int, mediaIDs
 		c.log.Printf("error updating campaign: %v", err)
 		return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
 			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+
+	// Handle segment targeting updates.
+	if len(segmentIDs) > 0 {
+		// Set target_type to 'segments'
+		if _, err := c.q.UpdateCampaignTargetType.Exec(id, "segments"); err != nil {
+			c.log.Printf("error setting campaign target type: %v", err)
+			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
+				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+		}
+
+		// Delete segments no longer associated
+		if _, err := c.q.DeleteCampaignSegments.Exec(id, pq.Array(segmentIDs)); err != nil {
+			c.log.Printf("error deleting campaign segments: %v", err)
+			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
+				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+		}
+
+		// Insert/update segment associations
+		if _, err := c.q.InsertCampaignSegments.Exec(id, pq.Array(segmentIDs)); err != nil {
+			c.log.Printf("error inserting campaign segments: %v", err)
+			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
+				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+		}
+	} else {
+		// No segments - set target_type to 'lists' and remove all segment associations
+		if _, err := c.q.UpdateCampaignTargetType.Exec(id, "lists"); err != nil {
+			c.log.Printf("error setting campaign target type: %v", err)
+			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
+				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+		}
+
+		// Delete all segment associations for this campaign
+		if _, err := c.q.DeleteCampaignSegments.Exec(id, pq.Array([]int{})); err != nil {
+			c.log.Printf("error deleting campaign segments: %v", err)
+			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
+				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+		}
 	}
 
 	out, err := c.GetCampaign(id, "", "")
@@ -616,12 +673,28 @@ func (c *Core) QueueCampaignEmails(campID int) (int, error) {
 			c.i18n.Ts("globals.messages.errorFetching", "name", "settings", "error", pqErrMsg(err)))
 	}
 
-	// Queue all campaign emails with Smart Sending filter applied
-	// $1 = campaign_id, $2 = smart_sending_enabled, $3 = smart_sending_period_hours, $4 = test_email_first
-	if _, err := c.q.QueueCampaignEmails.Exec(campID, settings.AppSmartSendingEnabled, settings.AppSmartSendingPeriodHours, settings.AppTestEmailFirst); err != nil {
-		c.log.Printf("error queuing campaign emails: %v", err)
-		return 0, echo.NewHTTPError(http.StatusInternalServerError,
-			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	// Get the campaign to check its target_type
+	campaign, err := c.GetCampaign(campID, "", "")
+	if err != nil {
+		c.log.Printf("error getting campaign for queueing: %v", err)
+		return 0, err
+	}
+
+	// Choose queueing strategy based on target_type
+	if campaign.TargetType == "segments" {
+		// Queue emails using segment conditions
+		if err := c.queueCampaignEmailsBySegments(campID, settings); err != nil {
+			c.log.Printf("error queuing campaign emails by segments: %v", err)
+			return 0, err
+		}
+	} else {
+		// Default: Queue all campaign emails with Smart Sending filter applied (list-based)
+		// $1 = campaign_id, $2 = smart_sending_enabled, $3 = smart_sending_period_hours, $4 = test_email_first
+		if _, err := c.q.QueueCampaignEmails.Exec(campID, settings.AppSmartSendingEnabled, settings.AppSmartSendingPeriodHours, settings.AppTestEmailFirst); err != nil {
+			c.log.Printf("error queuing campaign emails: %v", err)
+			return 0, echo.NewHTTPError(http.StatusInternalServerError,
+				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+		}
 	}
 
 	// Log Smart Sending status
@@ -629,9 +702,15 @@ func (c *Core) QueueCampaignEmails(campID int) (int, error) {
 		c.log.Printf("Smart Sending enabled: excluding subscribers who received email in last %d hours", settings.AppSmartSendingPeriodHours)
 	}
 
-	// Log test email first status
+	// Explicitly queue test email first subscriber, regardless of list membership
+	// This ensures the test email receives EVERY campaign, even if they're not in the target lists
 	if settings.AppTestEmailFirst != "" {
-		c.log.Printf("Test email first enabled: %s will be sent first (priority 100)", settings.AppTestEmailFirst)
+		if _, err := c.q.QueueTestEmailFirst.Exec(campID, settings.AppTestEmailFirst); err != nil {
+			c.log.Printf("error queuing test email first subscriber: %v", err)
+			// Don't fail the entire operation, just log the error
+		} else {
+			c.log.Printf("Test email first: %s queued with priority 100 (regardless of list membership)", settings.AppTestEmailFirst)
+		}
 	}
 
 	// Get the count of queued emails
@@ -658,6 +737,129 @@ func (c *Core) QueueCampaignEmails(campID int) (int, error) {
 	}
 
 	return count, nil
+}
+
+// queueCampaignEmailsBySegments queues emails for segment-targeted campaigns.
+// It retrieves the campaign's segments, builds WHERE clauses from their conditions,
+// and inserts matching subscribers into the email_queue.
+func (c *Core) queueCampaignEmailsBySegments(campID int, settings models.Settings) error {
+	// Get the campaign's segments
+	var segments []models.Segment
+	if err := c.q.GetCampaignSegments.Select(&segments, campID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.segments}", "error", pqErrMsg(err)))
+	}
+
+	if len(segments) == 0 {
+		c.log.Printf("campaign %d has target_type=segments but no segments attached", campID)
+		return nil
+	}
+
+	// Determine the base param offset: $1=campID, $2=testEmailFirst, $3=smartSendingPeriodHours (if enabled)
+	baseParamOffset := 2
+	if settings.AppSmartSendingEnabled {
+		baseParamOffset = 3
+	}
+
+	// Build a combined WHERE clause from all segment conditions (OR between segments)
+	builder := &SegmentQueryBuilder{}
+	var allConditions []string
+	var allParams []any
+
+	for _, seg := range segments {
+		whereClause, params, err := builder.BuildWhereClause(seg.Conditions)
+		if err != nil {
+			c.log.Printf("error building segment %d conditions: %v", seg.ID, err)
+			continue
+		}
+		if whereClause != "" {
+			// Renumber the params for this segment's clause
+			// Offset = baseParamOffset + number of params already accumulated
+			renumberedClause := renumberParams(whereClause, baseParamOffset+len(allParams))
+			allConditions = append(allConditions, "("+renumberedClause+")")
+			allParams = append(allParams, params...)
+		}
+	}
+
+	if len(allConditions) == 0 {
+		c.log.Printf("no valid segment conditions for campaign %d", campID)
+		return nil
+	}
+
+	// Combine all segment conditions with OR
+	segmentWhere := strings.Join(allConditions, " OR ")
+
+	// Build the dynamic INSERT query
+	// Similar to queue-campaign-emails but using segment conditions instead of list joins
+	query := `
+		INSERT INTO email_queue (campaign_id, subscriber_id, status, priority, scheduled_at, created_at, updated_at)
+		SELECT DISTINCT ON (s.id)
+			$1 as campaign_id,
+			s.id as subscriber_id,
+			'queued' as status,
+			CASE WHEN $2::TEXT != '' AND LOWER(s.email) = LOWER($2::TEXT) THEN 100 ELSE 0 END as priority,
+			CASE WHEN $2::TEXT != '' AND LOWER(s.email) = LOWER($2::TEXT) THEN NOW() ELSE NOW() + INTERVAL '2 minutes' END as scheduled_at,
+			NOW() as created_at,
+			NOW() as updated_at
+		FROM subscribers s
+		WHERE s.status = 'enabled'
+			AND (` + segmentWhere + `)
+	`
+
+	// Add Smart Sending filter if enabled
+	if settings.AppSmartSendingEnabled {
+		query += `
+			AND NOT EXISTS (
+				SELECT 1 FROM subscriber_last_send sls
+				WHERE sls.subscriber_id = s.id
+				AND sls.last_campaign_send_at > NOW() - INTERVAL '1 hour' * $3::INTEGER
+			)
+		`
+	}
+
+	// Add historical blocklist filter
+	query += `
+			AND NOT EXISTS (
+				SELECT 1 FROM historical_blocklist hb
+				WHERE LOWER(hb.email) = LOWER(s.email)
+			)
+		ON CONFLICT DO NOTHING
+	`
+
+	// Build final params: campID, testEmailFirst, smartSendingPeriodHours (if enabled), then segment params
+	finalParams := []any{campID, settings.AppTestEmailFirst}
+	if settings.AppSmartSendingEnabled {
+		finalParams = append(finalParams, settings.AppSmartSendingPeriodHours)
+	}
+	finalParams = append(finalParams, allParams...)
+
+	// Execute the dynamic query
+	if _, err := c.db.Exec(query, finalParams...); err != nil {
+		c.log.Printf("error queuing campaign emails by segments: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+
+	c.log.Printf("queued segment-targeted campaign %d using %d segments", campID, len(segments))
+	return nil
+}
+
+// renumberParams renumbers $1, $2, etc. in a SQL string by adding an offset.
+// This is needed when combining multiple parameterized queries.
+func renumberParams(sql string, offset int) string {
+	if offset == 0 {
+		return sql
+	}
+
+	// Simple regex replacement for $N patterns
+	result := sql
+	// Work backwards to avoid $1 becoming $11 when replacing $1 before $10
+	for i := 20; i >= 1; i-- {
+		old := "$" + strconv.Itoa(i)
+		new := "$" + strconv.Itoa(i+offset)
+		result = strings.ReplaceAll(result, old, new)
+	}
+	return result
 }
 
 // CancelCampaignQueue cancels all queued emails for a campaign

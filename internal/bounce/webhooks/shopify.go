@@ -26,6 +26,50 @@ type ShopifyOrder struct {
 	RawJSON     []byte  `json:"-"`
 }
 
+// ShopifyOrderFull represents the complete order data from a Shopify webhook.
+type ShopifyOrderFull struct {
+	ID                int64              `json:"id"`
+	Name              string             `json:"name"`
+	OrderNumber       int                `json:"order_number"`
+	Email             string             `json:"email"`
+	CreatedAt         string             `json:"created_at"`
+	ProcessedAt       string             `json:"processed_at"`
+	TotalPrice        string             `json:"total_price"`
+	SubtotalPrice     string             `json:"subtotal_price"`
+	TotalTax          string             `json:"total_tax"`
+	TotalDiscounts    string             `json:"total_discounts"`
+	Currency          string             `json:"currency"`
+	FinancialStatus   string             `json:"financial_status"`
+	FulfillmentStatus string             `json:"fulfillment_status"`
+	Tags              string             `json:"tags"`
+	Note              string             `json:"note"`
+	LandingSite       string             `json:"landing_site"`
+	LineItems         []ShopifyLineItem  `json:"line_items"`
+	RawJSON           []byte             `json:"-"`
+}
+
+// ShopifyLineItem represents a line item in a Shopify order.
+type ShopifyLineItem struct {
+	ID             int64                    `json:"id"`
+	ProductID      int64                    `json:"product_id"`
+	VariantID      int64                    `json:"variant_id"`
+	Title          string                   `json:"title"`
+	VariantTitle   string                   `json:"variant_title"`
+	SKU            string                   `json:"sku"`
+	Quantity       int                      `json:"quantity"`
+	Price          string                   `json:"price"`
+	TotalDiscount  string                   `json:"total_discount"`
+	ProductType    string                   `json:"product_type,omitempty"`
+	Vendor         string                   `json:"vendor"`
+	Properties     []ShopifyLineItemProp    `json:"properties"`
+}
+
+// ShopifyLineItemProp represents a custom property on a line item.
+type ShopifyLineItemProp struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 // NewShopify creates a new Shopify webhook handler.
 func NewShopify(secret string) *Shopify {
 	return &Shopify{webhookSecret: secret}
@@ -65,6 +109,28 @@ func (s *Shopify) VerifyWebhook(hmacHeader string, body []byte) error {
 // ProcessOrder parses a Shopify order webhook payload and extracts relevant data.
 func (s *Shopify) ProcessOrder(body []byte) (*ShopifyOrder, error) {
 	var order ShopifyOrder
+	if err := json.Unmarshal(body, &order); err != nil {
+		return nil, fmt.Errorf("error parsing order JSON: %v", err)
+	}
+
+	// Store the raw JSON for later reference
+	order.RawJSON = body
+
+	// Validate required fields
+	if order.Email == "" {
+		return nil, errors.New("order missing email address")
+	}
+
+	if order.ID == 0 {
+		return nil, errors.New("order missing ID")
+	}
+
+	return &order, nil
+}
+
+// ProcessOrderFull parses a Shopify order webhook payload with complete details.
+func (s *Shopify) ProcessOrderFull(body []byte) (*ShopifyOrderFull, error) {
+	var order ShopifyOrderFull
 	if err := json.Unmarshal(body, &order); err != nil {
 		return nil, fmt.Errorf("error parsing order JSON: %v", err)
 	}

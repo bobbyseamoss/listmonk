@@ -8,6 +8,8 @@
       :label="$t('globals.terms.lists')">
       <b-menu-item :to="{ name: 'lists' }" tag="router-link" :active="activeItem.lists" data-cy="all-lists"
         icon="format-list-bulleted-square" :label="$t('menu.allLists')" />
+      <b-menu-item :to="{ name: 'segments' }" tag="router-link" :active="activeItem.segments" data-cy="all-segments"
+        icon="filter-variant" :label="$t('menu.allSegments')" />
       <b-menu-item :to="{ name: 'forms' }" tag="router-link" :active="activeItem.forms" class="forms"
         icon="newspaper-variant-outline" :label="$t('menu.forms')" />
     </b-menu-item><!-- lists -->

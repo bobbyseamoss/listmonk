@@ -37,6 +37,7 @@ export default new Vuex.Store({
 
   getters: {
     [models.lists]: (state) => state[models.lists],
+    [models.segments]: (state) => state[models.segments],
     [models.subscribers]: (state) => state[models.subscribers],
     [models.campaigns]: (state) => state[models.campaigns],
     [models.media]: (state) => state[models.media],

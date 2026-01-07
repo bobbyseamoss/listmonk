@@ -165,7 +165,19 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PUT("/api/lists/:id", hasID(a.UpdateList))
 		g.DELETE("/api/lists/:id", hasID(a.DeleteLists))
 
+		// Segments.
+		g.GET("/api/segments", pm(a.GetSegments, "lists:get_all"))
+		g.GET("/api/segments/:id", pm(hasID(a.GetSegment), "lists:get_all"))
+		g.GET("/api/segments/:id/preview", pm(hasID(a.PreviewSegment), "lists:get_all"))
+		g.GET("/api/segments/:id/count", pm(hasID(a.GetSegmentCount), "lists:get_all"))
+		g.POST("/api/segments", pm(a.CreateSegment, "lists:manage_all"))
+		g.POST("/api/segments/preview", pm(a.PreviewSegmentConditions, "lists:get_all"))
+		g.PUT("/api/segments/:id", pm(hasID(a.UpdateSegment), "lists:manage_all"))
+		g.DELETE("/api/segments/:id", pm(hasID(a.DeleteSegment), "lists:manage_all"))
+
 		g.GET("/api/campaigns", pm(a.GetCampaigns, "campaigns:get_all", "campaigns:get"))
+		g.GET("/api/campaigns/minimal", pm(a.GetCampaignsMinimal, "campaigns:get_all", "campaigns:get"))
+		g.GET("/api/campaigns/performance", pm(a.GetCampaignsPerformanceDetail, "campaigns:get_analytics"))
 		g.GET("/api/campaigns/running/stats", pm(a.GetRunningCampaignStats, "campaigns:get_all", "campaigns:get"))
 		g.GET("/api/campaigns/:id", pm(hasID(a.GetCampaign), "campaigns:get_all", "campaigns:get"))
 		g.GET("/api/campaigns/analytics/:type", pm(a.GetCampaignViewAnalytics, "campaigns:get_analytics"))
