@@ -174,6 +174,9 @@ type Settings struct {
 		AttributionWindowDays int    `json:"attribution_window_days"`
 		StoreURL              string `json:"store_url"`
 		AccessToken           string `json:"access_token,omitempty"`
+		// OAuth credentials (Client ID and Secret from Shopify Partner app)
+		ClientID     string `json:"client_id,omitempty"`
+		ClientSecret string `json:"client_secret,omitempty"`
 		// Customer sync settings
 		CustomerSyncEnabled    bool      `json:"customer_sync_enabled"`
 		CustomerSyncListID     int       `json:"customer_sync_list_id"`

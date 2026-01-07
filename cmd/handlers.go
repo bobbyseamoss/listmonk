@@ -287,7 +287,11 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		if a.cfg.ShopifyEnabled {
 			g.POST("/webhooks/shopify/orders", a.ShopifyWebhook)
 			g.POST("/webhooks/shopify/customers", a.ShopifyCustomerWebhook)
+			// OAuth endpoints for Shopify app installation
+			g.GET("/webhooks/shopify/oauth", a.ShopifyOAuthStart)
+			g.GET("/webhooks/shopify/oauth/callback", a.ShopifyOAuthCallback)
 			a.log.Printf("Registered Shopify webhook routes: POST /webhooks/shopify/orders, /webhooks/shopify/customers")
+			a.log.Printf("Registered Shopify OAuth routes: GET /webhooks/shopify/oauth, /webhooks/shopify/oauth/callback")
 		}
 
 		// Onsite tracking endpoints (always registered, but handlers check if enabled)
