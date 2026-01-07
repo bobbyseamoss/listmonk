@@ -2114,6 +2114,13 @@ FROM site_events;
 -- Delete site events older than specified days
 DELETE FROM site_events WHERE created_at < NOW() - ($1::TEXT || ' days')::INTERVAL;
 
+-- name: link-anonymous-events-to-subscriber
+-- Retroactively link all anonymous events from a browser to the now-identified subscriber
+-- $1 = subscriber_id, $2 = browser_id (stored in user_agent column)
+UPDATE site_events
+SET subscriber_id = $1
+WHERE user_agent = $2 AND subscriber_id IS NULL;
+
 -- name: get-subscriber-by-uuid-for-tracking
 -- Get subscriber ID by UUID for tracking identification
 SELECT id FROM subscribers WHERE uuid = $1;

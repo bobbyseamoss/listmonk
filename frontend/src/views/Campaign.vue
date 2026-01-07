@@ -78,8 +78,8 @@
                     :placeholder="$t('campaigns.fromAddressPlaceholder')" required />
                 </b-field>
 
-                <list-selector v-model="form.lists" :selected="form.lists" :all="lists.results" :disabled="!canEdit"
-                  :label="$t('globals.terms.lists')" :placeholder="$t('campaigns.sendToLists')" />
+                <list-selector v-model="form.targets" :selected="form.targets" :all="allTargets" :disabled="!canEdit"
+                  :label="$t('campaigns.targets')" :placeholder="$t('campaigns.selectTargets')" />
 
                 <div class="columns">
                   <div class="column is-6">
@@ -430,7 +430,7 @@ export default Vue.extend({
         headersStr: '[]',
         headers: [],
         messenger: 'email',
-        lists: [],
+        targets: [],
         tags: [],
         sendAt: null,
         content: {
@@ -583,11 +583,38 @@ export default Vue.extend({
     getCampaign(id) {
       return this.$api.getCampaign(id).then((data) => {
         this.data = data;
+
+        // Build unified targets array from lists and segments
+        const targets = [];
+
+        // Add lists with targetType marker
+        if (data.lists && Array.isArray(data.lists)) {
+          data.lists.forEach((l) => {
+            targets.push({
+              id: l.id,
+              name: l.name,
+              targetType: 'list',
+            });
+          });
+        }
+
+        // Add segments with targetType marker
+        if (data.segments && Array.isArray(data.segments)) {
+          data.segments.forEach((s) => {
+            targets.push({
+              id: s.id,
+              name: s.name,
+              targetType: 'segment',
+            });
+          });
+        }
+
         this.form = {
           ...this.form,
           ...data,
           headersStr: JSON.stringify(data.headers, null, 4),
           archiveMetaStr: data.archiveMeta ? JSON.stringify(data.archiveMeta, null, 4) : '{}',
+          targets,
 
           // The structure that is populated by editor input event.
           content: {
@@ -609,11 +636,14 @@ export default Vue.extend({
     },
 
     sendTest() {
+      // Extract lists from unified targets for test send
+      const selectedLists = this.form.targets.filter((t) => t.targetType === 'list').map((l) => l.id);
+
       const data = {
         id: this.data.id,
         name: this.form.name,
         subject: this.form.subject,
-        lists: this.form.lists.map((l) => l.id),
+        lists: selectedLists.length > 0 ? selectedLists : [this.lists.results[0]?.id].filter(Boolean),
         from_email: this.form.fromEmail,
         messenger: this.form.messenger,
         type: 'regular',
@@ -634,11 +664,16 @@ export default Vue.extend({
     },
 
     createCampaign() {
+      // Extract lists and segments from unified targets
+      const selectedLists = this.form.targets.filter((t) => t.targetType === 'list').map((l) => l.id);
+      const selectedSegments = this.form.targets.filter((t) => t.targetType === 'segment').map((s) => s.id);
+
       const data = {
         archiveSlug: this.form.subject,
         name: this.form.name,
         subject: this.form.subject,
-        lists: this.form.lists.map((l) => l.id),
+        lists: selectedLists,
+        segments: selectedSegments,
         from_email: this.form.fromEmail,
         content_type: this.form.content.contentType,
         messenger: this.form.messenger,
@@ -657,11 +692,16 @@ export default Vue.extend({
     },
 
     async updateCampaign(typ) {
+      // Extract lists and segments from unified targets
+      const selectedLists = this.form.targets.filter((t) => t.targetType === 'list').map((l) => l.id);
+      const selectedSegments = this.form.targets.filter((t) => t.targetType === 'segment').map((s) => s.id);
+
       const data = {
         archive_slug: this.form.archiveSlug,
         name: this.form.name,
         subject: this.form.subject,
-        lists: this.form.lists.map((l) => l.id),
+        lists: selectedLists,
+        segments: selectedSegments,
         from_email: this.form.fromEmail,
         messenger: this.form.messenger,
         type: 'regular',
@@ -773,7 +813,7 @@ export default Vue.extend({
   },
 
   computed: {
-    ...mapState(['serverConfig', 'loading', 'lists', 'templates']),
+    ...mapState(['serverConfig', 'loading', 'lists', 'segments', 'templates']),
 
     canManage() {
       return this.$can('campaigns:manage_all', 'campaigns:manage');
@@ -808,6 +848,41 @@ export default Vue.extend({
       return this.lists.results.filter((l) => this.selListIDs.indexOf(l.id) > -1);
     },
 
+    allSegments() {
+      if (!this.segments || !this.segments.results) {
+        return [];
+      }
+      return this.segments.results;
+    },
+
+    // Combine lists and segments into a single array for unified targeting.
+    // Each item has a 'targetType' field to distinguish lists from segments.
+    allTargets() {
+      const targets = [];
+
+      // Add lists
+      if (this.lists && this.lists.results) {
+        this.lists.results.forEach((l) => {
+          targets.push({
+            ...l,
+            targetType: 'list',
+          });
+        });
+      }
+
+      // Add segments
+      if (this.segments && this.segments.results) {
+        this.segments.results.forEach((s) => {
+          targets.push({
+            ...s,
+            targetType: 'segment',
+          });
+        });
+      }
+
+      return targets;
+    },
+
     emailMessengers() {
       return ['email', ...this.serverConfig.messengers.filter((m) => m.startsWith('email-'))];
     },
@@ -826,8 +901,18 @@ export default Vue.extend({
   },
 
   watch: {
+    // When lists are pre-selected via URL query params, add them to targets
     selectedLists() {
-      this.form.lists = this.selectedLists;
+      // Add pre-selected lists to targets with targetType marker
+      this.selectedLists.forEach((l) => {
+        // Only add if not already in targets
+        if (!this.form.targets.find((t) => t.targetType === 'list' && t.id === l.id)) {
+          this.form.targets.push({
+            ...l,
+            targetType: 'list',
+          });
+        }
+      });
     },
 
     // eslint-disable-next-line func-names
@@ -883,6 +968,9 @@ export default Vue.extend({
         }
       }
     });
+
+    // Fetch segments list for targeting.
+    this.$api.getSegments();
 
     // Fetch campaign.
     if (this.isEditing) {

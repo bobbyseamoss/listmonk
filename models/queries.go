@@ -196,8 +196,9 @@ type Queries struct {
 	GetSubscriberSiteActivity   *sqlx.Stmt `query:"get-subscriber-site-activity"`
 	GetSubscriberSiteActivityCount *sqlx.Stmt `query:"get-subscriber-site-activity-count"`
 	GetSubscriberRecentProducts *sqlx.Stmt `query:"get-subscriber-recent-products"`
-	GetSiteEventsStats          *sqlx.Stmt `query:"get-site-events-stats"`
-	DeleteOldSiteEvents         *sqlx.Stmt `query:"delete-old-site-events"`
+	GetSiteEventsStats             *sqlx.Stmt `query:"get-site-events-stats"`
+	DeleteOldSiteEvents            *sqlx.Stmt `query:"delete-old-site-events"`
+	LinkAnonymousEventsToSubscriber *sqlx.Stmt `query:"link-anonymous-events-to-subscriber"`
 	GetSubscriberByUUIDForTracking *sqlx.Stmt `query:"get-subscriber-by-uuid-for-tracking"`
 
 	// Activity feed

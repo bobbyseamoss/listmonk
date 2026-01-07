@@ -50,7 +50,8 @@ func (c *Core) RecordSiteEvent(subscriberID int, sessionID string, event *models
 	return id, nil
 }
 
-// IdentifyBrowser links a browser ID to a subscriber.
+// IdentifyBrowser links a browser ID to a subscriber and retroactively attributes
+// all anonymous events from that browser to the subscriber.
 func (c *Core) IdentifyBrowser(browserID string, subscriberID int, via string, campaignID int) (int, error) {
 	var id int
 	campID := null.Int{}
@@ -61,6 +62,16 @@ func (c *Core) IdentifyBrowser(browserID string, subscriberID int, via string, c
 	if err := c.q.IdentifyBrowser.Get(&id, browserID, subscriberID, via, campID); err != nil {
 		c.log.Printf("error identifying browser: %v", err)
 		return 0, echo.NewHTTPError(http.StatusInternalServerError, c.i18n.T("globals.messages.errorGeneric"))
+	}
+
+	// Retroactively link all anonymous events from this browser to the subscriber.
+	// This allows historical tracking data to be attributed to the now-identified user.
+	result, err := c.q.LinkAnonymousEventsToSubscriber.Exec(subscriberID, browserID)
+	if err != nil {
+		// Log the error but don't fail the identification - the browser link is more important
+		c.log.Printf("error linking anonymous events to subscriber %d: %v", subscriberID, err)
+	} else if rowsAffected, _ := result.RowsAffected(); rowsAffected > 0 {
+		c.log.Printf("retroactively linked %d anonymous events to subscriber %d (browser: %s)", rowsAffected, subscriberID, browserID)
 	}
 
 	return id, nil

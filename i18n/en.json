@@ -84,6 +84,8 @@
     "campaigns.sendTest": "Send test message",
     "campaigns.sendTestHelp": "Hit Enter after typing an address to add multiple recipients. The addresses must belong to existing subscribers.",
     "campaigns.sendToLists": "Lists to send to",
+    "campaigns.targets": "Send to",
+    "campaigns.selectTargets": "Select lists and/or segments",
     "campaigns.targetType": "Target type",
     "campaigns.sent": "Sent",
     "campaigns.start": "Start campaign",

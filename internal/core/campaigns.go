@@ -230,14 +230,8 @@ func (c *Core) CreateCampaign(o models.Campaign, listIDs []int, mediaIDs []int, 
 	}
 
 	// Handle segment targeting if segment IDs are provided.
+	// Note: Both lists AND segments can be selected together.
 	if len(segmentIDs) > 0 {
-		// Set target_type to 'segments'
-		if _, err := c.q.UpdateCampaignTargetType.Exec(newID, "segments"); err != nil {
-			c.log.Printf("error setting campaign target type: %v", err)
-			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
-				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
-		}
-
 		// Insert campaign segment associations
 		if _, err := c.q.InsertCampaignSegments.Exec(newID, pq.Array(segmentIDs)); err != nil {
 			c.log.Printf("error inserting campaign segments: %v", err)
@@ -283,38 +277,18 @@ func (c *Core) UpdateCampaign(id int, o models.Campaign, listIDs []int, mediaIDs
 	}
 
 	// Handle segment targeting updates.
+	// Note: Both lists AND segments can be selected together.
+	// Delete segments no longer associated
+	if _, err := c.q.DeleteCampaignSegments.Exec(id, pq.Array(segmentIDs)); err != nil {
+		c.log.Printf("error deleting campaign segments: %v", err)
+		return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
+	}
+
+	// Insert/update segment associations if any
 	if len(segmentIDs) > 0 {
-		// Set target_type to 'segments'
-		if _, err := c.q.UpdateCampaignTargetType.Exec(id, "segments"); err != nil {
-			c.log.Printf("error setting campaign target type: %v", err)
-			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
-				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
-		}
-
-		// Delete segments no longer associated
-		if _, err := c.q.DeleteCampaignSegments.Exec(id, pq.Array(segmentIDs)); err != nil {
-			c.log.Printf("error deleting campaign segments: %v", err)
-			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
-				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
-		}
-
-		// Insert/update segment associations
 		if _, err := c.q.InsertCampaignSegments.Exec(id, pq.Array(segmentIDs)); err != nil {
 			c.log.Printf("error inserting campaign segments: %v", err)
-			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
-				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
-		}
-	} else {
-		// No segments - set target_type to 'lists' and remove all segment associations
-		if _, err := c.q.UpdateCampaignTargetType.Exec(id, "lists"); err != nil {
-			c.log.Printf("error setting campaign target type: %v", err)
-			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
-				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
-		}
-
-		// Delete all segment associations for this campaign
-		if _, err := c.q.DeleteCampaignSegments.Exec(id, pq.Array([]int{})); err != nil {
-			c.log.Printf("error deleting campaign segments: %v", err)
 			return models.Campaign{}, echo.NewHTTPError(http.StatusInternalServerError,
 				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
 		}
@@ -680,21 +654,36 @@ func (c *Core) QueueCampaignEmails(campID int) (int, error) {
 		return 0, err
 	}
 
-	// Choose queueing strategy based on target_type
-	if campaign.TargetType == "segments" {
-		// Queue emails using segment conditions
-		if err := c.queueCampaignEmailsBySegments(campID, settings); err != nil {
-			c.log.Printf("error queuing campaign emails by segments: %v", err)
-			return 0, err
-		}
-	} else {
-		// Default: Queue all campaign emails with Smart Sending filter applied (list-based)
+	// Queue emails from both lists AND segments (unified targeting).
+	// Both queries use ON CONFLICT DO NOTHING to prevent duplicate entries.
+	hasLists := len(campaign.Lists) > 0
+	hasSegments := len(campaign.Segments) > 0
+
+	// Queue from lists if any are selected
+	if hasLists {
 		// $1 = campaign_id, $2 = smart_sending_enabled, $3 = smart_sending_period_hours, $4 = test_email_first
 		if _, err := c.q.QueueCampaignEmails.Exec(campID, settings.AppSmartSendingEnabled, settings.AppSmartSendingPeriodHours, settings.AppTestEmailFirst); err != nil {
-			c.log.Printf("error queuing campaign emails: %v", err)
+			c.log.Printf("error queuing campaign emails from lists: %v", err)
 			return 0, echo.NewHTTPError(http.StatusInternalServerError,
 				c.i18n.Ts("globals.messages.errorUpdating", "name", "{globals.terms.campaign}", "error", pqErrMsg(err)))
 		}
+	}
+
+	// Queue from segments if any are selected (uses ON CONFLICT DO NOTHING to skip duplicates)
+	if hasSegments {
+		if err := c.queueCampaignEmailsBySegments(campID, settings); err != nil {
+			c.log.Printf("error queuing campaign emails from segments: %v", err)
+			return 0, err
+		}
+	}
+
+	// Log targeting info
+	if hasLists && hasSegments {
+		c.log.Printf("campaign %d: queuing from %d lists AND %d segments (unified targeting)", campID, len(campaign.Lists), len(campaign.Segments))
+	} else if hasLists {
+		c.log.Printf("campaign %d: queuing from %d lists", campID, len(campaign.Lists))
+	} else if hasSegments {
+		c.log.Printf("campaign %d: queuing from %d segments", campID, len(campaign.Segments))
 	}
 
 	// Log Smart Sending status
