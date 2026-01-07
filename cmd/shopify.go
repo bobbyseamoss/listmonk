@@ -181,6 +181,14 @@ func (app *App) storeOrderFromWebhook(rawJSON []byte) error {
 	app.log.Printf("storeOrderFromWebhook: stored order %s with %d line items for subscriber %d",
 		order.Name, len(order.LineItems), sub.ID)
 
+	// Sync customer data from Shopify to update subscriber attribs
+	// This ensures name, address, total_spent, orders_count are up-to-date
+	go func() {
+		if err := app.syncCustomerAfterOrder(order.Email, sub.ID); err != nil {
+			app.log.Printf("storeOrderFromWebhook: error syncing customer after order: %v", err)
+		}
+	}()
+
 	return nil
 }
 

@@ -112,6 +112,46 @@ query GetCustomerOrders($customerId: ID!, $cursor: String) {
 }
 `
 
+// GraphQL query for fetching a single customer by email
+const customerByEmailQuery = `
+query GetCustomerByEmail($email: String!) {
+    customers(first: 1, query: $email) {
+        edges {
+            node {
+                id
+                email
+                firstName
+                lastName
+                phone
+                tags
+                note
+                numberOfOrders
+                amountSpent {
+                    amount
+                    currencyCode
+                }
+                defaultAddress {
+                    address1
+                    address2
+                    city
+                    province
+                    provinceCode
+                    country
+                    countryCode
+                    zip
+                    phone
+                }
+                metafield(namespace: "custom", key: "birthday") {
+                    value
+                }
+                createdAt
+                updatedAt
+            }
+        }
+    }
+}
+`
+
 // GraphQL query for fetching customers
 const customersQuery = `
 query GetCustomers($cursor: String) {
@@ -756,6 +796,154 @@ func (app *App) syncCustomerFromGraphQL(customer *graphQLCustomer, listID int, s
 	if err != nil {
 		return fmt.Errorf("error updating subscriber: %v", err)
 	}
+
+	return nil
+}
+
+// syncCustomerAfterOrder fetches customer data from Shopify by email and updates subscriber attribs.
+// This is called after an order webhook to ensure subscriber data is up-to-date.
+func (app *App) syncCustomerAfterOrder(email string, subscriberID int) error {
+	// Get Shopify settings
+	settings, err := app.core.GetSettings()
+	if err != nil {
+		return fmt.Errorf("error fetching settings: %v", err)
+	}
+
+	storeURL := settings.Shopify.StoreURL
+	accessToken := settings.Shopify.AccessToken
+
+	if storeURL == "" || accessToken == "" {
+		return fmt.Errorf("Shopify not configured (missing store URL or access token)")
+	}
+
+	// Fetch customer from Shopify by email
+	url := fmt.Sprintf("https://%s/admin/api/2024-10/graphql.json", storeURL)
+
+	// Build GraphQL request - search by email
+	reqBody := struct {
+		Query     string                 `json:"query"`
+		Variables map[string]interface{} `json:"variables,omitempty"`
+	}{
+		Query: customerByEmailQuery,
+		Variables: map[string]interface{}{
+			"email": fmt.Sprintf("email:%s", email),
+		},
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("error marshalling request: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Shopify-Access-Token", accessToken)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("Shopify API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var graphqlResp struct {
+		Data   customersResponse `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&graphqlResp); err != nil {
+		return fmt.Errorf("error decoding response: %v", err)
+	}
+
+	if len(graphqlResp.Errors) > 0 {
+		return fmt.Errorf("GraphQL error: %s", graphqlResp.Errors[0].Message)
+	}
+
+	// Check if customer was found
+	if len(graphqlResp.Data.Customers.Edges) == 0 {
+		app.log.Printf("syncCustomerAfterOrder: no Shopify customer found for email %s", email)
+		return nil
+	}
+
+	customer := graphqlResp.Data.Customers.Edges[0].Node
+
+	// Get subscriber
+	sub, err := app.core.GetSubscriber(subscriberID, "", "")
+	if err != nil {
+		return fmt.Errorf("error getting subscriber: %v", err)
+	}
+
+	// Build Shopify attribs
+	attribs := map[string]interface{}{
+		"customer_id":  customer.ID,
+		"first_name":   customer.FirstName,
+		"last_name":    customer.LastName,
+		"phone":        customer.Phone,
+		"orders_count": customer.NumberOfOrders,
+		"synced_at":    time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Add amount spent if available
+	if customer.AmountSpent != nil {
+		attribs["total_spent"] = customer.AmountSpent.Amount
+		attribs["currency"] = customer.AmountSpent.CurrencyCode
+	}
+
+	// Tags
+	if len(customer.Tags) > 0 {
+		attribs["tags"] = customer.Tags
+	}
+
+	// Address
+	if customer.DefaultAddress != nil {
+		attribs["address"] = map[string]interface{}{
+			"address1":      customer.DefaultAddress.Address1,
+			"address2":      customer.DefaultAddress.Address2,
+			"city":          customer.DefaultAddress.City,
+			"province":      customer.DefaultAddress.Province,
+			"province_code": customer.DefaultAddress.ProvinceCode,
+			"country":       customer.DefaultAddress.Country,
+			"country_code":  customer.DefaultAddress.CountryCode,
+			"zip":           customer.DefaultAddress.Zip,
+		}
+	}
+
+	// Birthday from metafield
+	if customer.Metafield != nil && customer.Metafield.Value != "" {
+		attribs["birthday"] = customer.Metafield.Value
+	}
+
+	// Update subscriber name if empty and we have name data
+	if sub.Name == "" && (customer.FirstName != "" || customer.LastName != "") {
+		sub.Name = strings.TrimSpace(customer.FirstName + " " + customer.LastName)
+	}
+
+	// Merge with existing attribs
+	if sub.Attribs == nil {
+		sub.Attribs = make(models.JSON)
+	}
+	sub.Attribs["shopify"] = attribs
+
+	// Update subscriber
+	_, err = app.core.UpdateSubscriber(sub.ID, sub)
+	if err != nil {
+		return fmt.Errorf("error updating subscriber: %v", err)
+	}
+
+	app.log.Printf("syncCustomerAfterOrder: updated subscriber %d (%s) with Shopify data (orders=%s, total_spent=%v)",
+		sub.ID, email, customer.NumberOfOrders, attribs["total_spent"])
 
 	return nil
 }
