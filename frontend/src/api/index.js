@@ -753,3 +753,64 @@ export const getShopifyCustomerSyncStatus = () => http.get('/api/shopify/custome
 
 // Activity Feed API
 export const getActivityFeed = (params) => http.get('/api/activity-feed', { params });
+
+// Sign-up Forms API
+export const getForms = async (params) => http.get(
+  '/api/forms',
+  { params, loading: models.forms },
+);
+
+export const getForm = async (id) => http.get(
+  `/api/forms/${id}`,
+  { loading: models.forms },
+);
+
+export const createForm = async (data) => http.post(
+  '/api/forms',
+  data,
+  { loading: models.forms },
+);
+
+export const updateForm = async (id, data) => http.put(
+  `/api/forms/${id}`,
+  data,
+  { loading: models.forms },
+);
+
+export const deleteForm = async (id) => http.delete(
+  `/api/forms/${id}`,
+  { loading: models.forms },
+);
+
+export const updateFormStatus = async (id, status) => http.put(
+  `/api/forms/${id}/status`,
+  { status },
+  { loading: models.forms },
+);
+
+export const duplicateForm = async (id) => http.post(
+  `/api/forms/${id}/duplicate`,
+  {},
+  { loading: models.forms },
+);
+
+export const getFormAnalytics = async (id, params) => http.get(
+  `/api/forms/${id}/analytics`,
+  { params, loading: models.forms },
+);
+
+export const getFormSubmissions = async (id, params) => http.get(
+  `/api/forms/${id}/submissions`,
+  { params, loading: models.forms },
+);
+
+export const uploadFormCoupons = async (id, data) => http.post(
+  `/api/forms/${id}/coupons`,
+  data,
+  { loading: models.forms },
+);
+
+export const getFormCouponStats = async (id) => http.get(
+  `/api/forms/${id}/coupons/stats`,
+  { loading: models.forms },
+);

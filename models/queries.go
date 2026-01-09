@@ -212,6 +212,26 @@ type Queries struct {
 	GetOrderLineItems          *sqlx.Stmt `query:"get-order-line-items"`
 	GetSubscriberProductTitles *sqlx.Stmt `query:"get-subscriber-product-titles"`
 	GetSubscriberTotalOrderValue *sqlx.Stmt `query:"get-subscriber-total-order-value"`
+
+	// Sign-up forms
+	GetSignUpForm              *sqlx.Stmt `query:"get-sign-up-form"`
+	QuerySignUpForms           string     `query:"query-sign-up-forms"`
+	CreateSignUpForm           *sqlx.Stmt `query:"create-sign-up-form"`
+	UpdateSignUpForm           *sqlx.Stmt `query:"update-sign-up-form"`
+	UpdateSignUpFormStatus     *sqlx.Stmt `query:"update-sign-up-form-status"`
+	DeleteSignUpForms          *sqlx.Stmt `query:"delete-sign-up-forms"`
+	InsertFormSubmission       *sqlx.Stmt `query:"insert-form-submission"`
+	QueryFormSubmissions       *sqlx.Stmt `query:"query-form-submissions"`
+	InsertFormImpression       *sqlx.Stmt `query:"insert-form-impression"`
+	UpdateFormImpressionClosed *sqlx.Stmt `query:"update-form-impression-closed"`
+	UpdateFormImpressionSubmitted *sqlx.Stmt `query:"update-form-impression-submitted"`
+	UpdateFormImpressionStep   *sqlx.Stmt `query:"update-form-impression-step"`
+	GetFormAnalytics           *sqlx.Stmt `query:"get-form-analytics"`
+	GetFormAnalyticsTimeseries *sqlx.Stmt `query:"get-form-analytics-timeseries"`
+	InsertFormCouponCodes      string     `query:"insert-form-coupon-codes"`
+	GetNextCouponCode          *sqlx.Stmt `query:"get-next-coupon-code"`
+	GetCouponStats             *sqlx.Stmt `query:"get-coupon-stats"`
+	GetActiveFormsForTargeting *sqlx.Stmt `query:"get-active-forms-for-targeting"`
 }
 
 // compileSubscriberQueryTpl takes an arbitrary WHERE expressions

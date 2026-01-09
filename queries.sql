@@ -2188,6 +2188,9 @@ WITH combined_events AS (
         CASE
             WHEN se.event_type = 'page_view' THEN 'page_view'
             WHEN se.event_type = 'viewed_product' THEN 'product_view'
+            WHEN se.event_type = 'view_item' THEN 'view_item'
+            WHEN se.event_type = 'add_to_cart' THEN 'add_to_cart'
+            WHEN se.event_type = 'begin_checkout' THEN 'begin_checkout'
             ELSE 'site_activity'
         END AS event_type,
         se.subscriber_id,
@@ -2197,6 +2200,9 @@ WITH combined_events AS (
         CASE
             WHEN se.event_type = 'page_view' THEN CONCAT('Viewed Page: ', COALESCE(se.page_title, se.page_url))
             WHEN se.event_type = 'viewed_product' THEN CONCAT('Viewed Product: ', COALESCE(se.properties->>'product_name', 'Unknown'))
+            WHEN se.event_type = 'view_item' THEN CONCAT('Viewed Item: ', COALESCE(se.properties->>'item_name', se.properties->>'product_name', 'Unknown'))
+            WHEN se.event_type = 'add_to_cart' THEN CONCAT('Added to Cart: ', COALESCE(se.properties->>'item_name', se.properties->>'product_name', 'Unknown'))
+            WHEN se.event_type = 'begin_checkout' THEN 'Started Checkout'
             ELSE CONCAT('Active on Site: ', COALESCE(se.page_title, se.page_url))
         END AS event_description,
         NULL AS campaign_name,
@@ -2304,3 +2310,159 @@ ORDER BY product_title;
 SELECT COALESCE(SUM(total_price), 0) AS total_value
 FROM shopify_orders
 WHERE subscriber_id = $1;
+
+-- sign_up_forms
+-- name: get-sign-up-form
+-- Get a single sign-up form by id or UUID.
+SELECT * FROM sign_up_forms WHERE
+    CASE
+        WHEN $1 > 0 THEN id = $1
+        WHEN $2 != '' THEN uuid = $2::UUID
+    END;
+
+-- name: query-sign-up-forms
+-- Get all sign-up forms with optional filtering and pagination.
+SELECT COUNT(*) OVER () AS total, sign_up_forms.* FROM sign_up_forms WHERE
+    CASE
+        WHEN $1 > 0 THEN id = $1
+        WHEN $2 != '' THEN uuid = $2::UUID
+        ELSE TRUE
+    END
+    AND ($3 = '' OR status = $3::form_status)
+    AND ($4 = '' OR form_type = $4::form_type)
+    AND ($5 = '' OR name ILIKE '%' || $5 || '%')
+ORDER BY %order%
+LIMIT $6 OFFSET $7;
+
+-- name: create-sign-up-form
+-- Create a new sign-up form.
+INSERT INTO sign_up_forms (
+    uuid, name, description, form_type, status,
+    body_source, custom_css, steps, settings,
+    targeting, triggers, frequency, list_ids, coupon_config
+) VALUES (
+    $1, $2, $3, $4, $5,
+    $6, $7, $8, $9,
+    $10, $11, $12, $13, $14
+) RETURNING id;
+
+-- name: update-sign-up-form
+-- Update a sign-up form.
+UPDATE sign_up_forms SET
+    name = (CASE WHEN $2 != '' THEN $2 ELSE name END),
+    description = (CASE WHEN $3 != '' THEN $3 ELSE description END),
+    form_type = (CASE WHEN $4 != '' THEN $4::form_type ELSE form_type END),
+    status = (CASE WHEN $5 != '' THEN $5::form_status ELSE status END),
+    body_source = (CASE WHEN $6::JSONB IS NOT NULL THEN $6 ELSE body_source END),
+    custom_css = (CASE WHEN $7 != '' THEN $7 ELSE custom_css END),
+    steps = (CASE WHEN $8::JSONB IS NOT NULL THEN $8 ELSE steps END),
+    settings = (CASE WHEN $9::JSONB IS NOT NULL THEN $9 ELSE settings END),
+    targeting = (CASE WHEN $10::JSONB IS NOT NULL THEN $10 ELSE targeting END),
+    triggers = (CASE WHEN $11::JSONB IS NOT NULL THEN $11 ELSE triggers END),
+    frequency = (CASE WHEN $12::JSONB IS NOT NULL THEN $12 ELSE frequency END),
+    list_ids = $13,
+    coupon_config = (CASE WHEN $14::JSONB IS NOT NULL THEN $14 ELSE coupon_config END),
+    updated_at = NOW()
+WHERE id = $1;
+
+-- name: update-sign-up-form-status
+-- Update only the status of a sign-up form.
+UPDATE sign_up_forms SET status = $2::form_status, updated_at = NOW() WHERE id = $1;
+
+-- name: delete-sign-up-forms
+-- Delete one or more sign-up forms by IDs.
+DELETE FROM sign_up_forms WHERE id = ANY($1);
+
+-- name: insert-form-submission
+-- Record a form submission.
+INSERT INTO form_submissions (
+    form_id, subscriber_id, email, data,
+    page_url, referrer, utm_source, utm_medium, utm_campaign, utm_term, utm_content,
+    device_type, user_agent, ip_address, country, coupon_code
+) VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7, $8, $9, $10, $11,
+    $12, $13, $14, $15, $16
+) RETURNING id;
+
+-- name: query-form-submissions
+-- Get form submissions with pagination.
+SELECT COUNT(*) OVER () AS total, form_submissions.* FROM form_submissions
+WHERE form_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: insert-form-impression
+-- Record a form impression.
+INSERT INTO form_impressions (
+    form_id, session_id, visitor_id, page_url, device_type, country
+) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;
+
+-- name: update-form-impression-closed
+-- Update a form impression when closed.
+UPDATE form_impressions SET closed_at = NOW() WHERE id = $1;
+
+-- name: update-form-impression-submitted
+-- Update a form impression when submitted.
+UPDATE form_impressions SET submitted_at = NOW() WHERE id = $1;
+
+-- name: update-form-impression-step
+-- Update the step reached in a form impression.
+UPDATE form_impressions SET step_reached = $2 WHERE id = $1;
+
+-- name: get-form-analytics
+-- Get aggregated analytics for a form within a date range.
+SELECT
+    $1 AS form_id,
+    (SELECT COUNT(*) FROM form_impressions WHERE form_id = $1 AND shown_at >= $2 AND shown_at <= $3) AS impressions,
+    (SELECT COUNT(*) FROM form_submissions WHERE form_id = $1 AND created_at >= $2 AND created_at <= $3) AS submissions;
+
+-- name: get-form-analytics-timeseries
+-- Get time-series analytics for a form.
+SELECT
+    DATE_TRUNC('day', d.date) AS date,
+    COALESCE(i.impressions, 0) AS impressions,
+    COALESCE(s.submissions, 0) AS submissions
+FROM generate_series($2::DATE, $3::DATE, '1 day'::INTERVAL) AS d(date)
+LEFT JOIN (
+    SELECT DATE_TRUNC('day', shown_at) AS date, COUNT(*) AS impressions
+    FROM form_impressions WHERE form_id = $1
+    GROUP BY DATE_TRUNC('day', shown_at)
+) i ON DATE_TRUNC('day', d.date) = i.date
+LEFT JOIN (
+    SELECT DATE_TRUNC('day', created_at) AS date, COUNT(*) AS submissions
+    FROM form_submissions WHERE form_id = $1
+    GROUP BY DATE_TRUNC('day', created_at)
+) s ON DATE_TRUNC('day', d.date) = s.date
+ORDER BY date;
+
+-- name: insert-form-coupon-codes
+-- Bulk insert coupon codes for a form.
+INSERT INTO form_coupon_codes (form_id, code) VALUES %s
+ON CONFLICT (form_id, code) DO NOTHING;
+
+-- name: get-next-coupon-code
+-- Get the next available (unused) coupon code for a form.
+UPDATE form_coupon_codes SET used = TRUE, used_by_email = $2, used_at = NOW()
+WHERE id = (
+    SELECT id FROM form_coupon_codes
+    WHERE form_id = $1 AND used = FALSE
+    ORDER BY id LIMIT 1
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING code;
+
+-- name: get-coupon-stats
+-- Get coupon usage stats for a form.
+SELECT
+    COUNT(*) FILTER (WHERE used = FALSE) AS available,
+    COUNT(*) FILTER (WHERE used = TRUE) AS used,
+    COUNT(*) AS total
+FROM form_coupon_codes WHERE form_id = $1;
+
+-- name: get-active-forms-for-targeting
+-- Get all active forms for public display (for the embed script).
+SELECT id, uuid, form_type, targeting, triggers, frequency, status
+FROM sign_up_forms
+WHERE status = 'active';
+

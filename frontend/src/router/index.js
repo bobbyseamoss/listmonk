@@ -25,9 +25,27 @@ const routes = [
   },
   {
     path: '/lists/forms',
-    name: 'forms',
+    name: 'signupForms',
     meta: { title: 'forms.title', group: 'lists' },
-    component: () => import('../views/Forms.vue'),
+    component: () => import('../views/SignupForms.vue'),
+  },
+  {
+    path: '/lists/forms/new',
+    name: 'newSignupForm',
+    meta: { title: 'forms.new', group: 'lists' },
+    component: () => import('../views/FormBuilder.vue'),
+  },
+  {
+    path: '/lists/forms/:id',
+    name: 'editSignupForm',
+    meta: { title: 'forms.edit', group: 'lists' },
+    component: () => import('../views/FormBuilder.vue'),
+  },
+  {
+    path: '/lists/forms/:id/analytics',
+    name: 'formAnalytics',
+    meta: { title: 'forms.analytics', group: 'lists' },
+    component: () => import('../views/FormAnalytics.vue'),
   },
   {
     path: '/lists/:id',

@@ -73,5 +73,13 @@
             "settings:manage",
             "settings:maintain"
         ]
+    },
+    {
+        "group": "forms",
+        "permissions":
+        [
+            "forms:get",
+            "forms:manage"
+        ]
     }
 ]

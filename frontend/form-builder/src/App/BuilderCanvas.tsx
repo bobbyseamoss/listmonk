@@ -1,0 +1,199 @@
+import React from 'react';
+import { Box, Typography, IconButton, Tabs, Tab } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import AddIcon from '@mui/icons-material/Add';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useFormBuilderStore } from '@/store';
+import { BlockRenderer } from '@/blocks/BlockRenderer';
+import type { Block } from '@/types';
+
+interface SortableBlockProps {
+  block: Block;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+}
+
+const SortableBlock: React.FC<SortableBlockProps> = ({
+  block,
+  isSelected,
+  onSelect,
+  onDelete,
+  onDuplicate,
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: block.id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <Box
+      ref={setNodeRef}
+      style={style}
+      sx={{
+        position: 'relative',
+        backgroundColor: '#fff',
+        borderRadius: 1,
+        border: isSelected ? '2px solid #2563eb' : '1px solid transparent',
+        cursor: 'pointer',
+        '&:hover': {
+          border: isSelected ? '2px solid #2563eb' : '1px solid #d1d5db',
+        },
+        '&:hover .block-actions': {
+          opacity: 1,
+        },
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+      }}
+    >
+      {/* Drag handle and actions */}
+      <Box
+        className="block-actions"
+        sx={{
+          position: 'absolute',
+          top: -1,
+          right: -1,
+          display: 'flex',
+          gap: 0.5,
+          backgroundColor: '#fff',
+          borderRadius: '0 4px 0 4px',
+          boxShadow: 1,
+          opacity: isSelected ? 1 : 0,
+          transition: 'opacity 0.2s',
+          zIndex: 10,
+        }}
+      >
+        <IconButton
+          size="small"
+          {...attributes}
+          {...listeners}
+          sx={{ cursor: 'grab', '&:active': { cursor: 'grabbing' } }}
+        >
+          <DragIndicatorIcon fontSize="small" />
+        </IconButton>
+        <IconButton size="small" onClick={(e) => { e.stopPropagation(); onDuplicate(); }}>
+          <ContentCopyIcon fontSize="small" />
+        </IconButton>
+        <IconButton size="small" onClick={(e) => { e.stopPropagation(); onDelete(); }} color="error">
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      </Box>
+
+      {/* Block content */}
+      <BlockRenderer block={block} />
+    </Box>
+  );
+};
+
+export const BuilderCanvas: React.FC = () => {
+  const {
+    form,
+    selectedBlockId,
+    selectedStepIndex,
+    selectBlock,
+    removeBlock,
+    duplicateBlock,
+    selectStep,
+    addStep,
+    removeStep,
+    updateStepName,
+  } = useFormBuilderStore();
+
+  const currentStep = form.steps[selectedStepIndex];
+
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
+    if (newValue === form.steps.length) {
+      addStep();
+    } else {
+      selectStep(newValue);
+    }
+  };
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* Step tabs */}
+      {form.steps.length > 1 && (
+        <Box sx={{ mb: 2, backgroundColor: '#fff', borderRadius: 1, boxShadow: 1 }}>
+          <Tabs value={selectedStepIndex} onChange={handleTabChange}>
+            {form.steps.map((step, index) => (
+              <Tab
+                key={step.id}
+                label={step.name}
+                sx={{ textTransform: 'none' }}
+              />
+            ))}
+            <Tab icon={<AddIcon />} sx={{ minWidth: 40 }} />
+          </Tabs>
+        </Box>
+      )}
+
+      {/* Form preview container */}
+      <Box
+        sx={{
+          width: form.settings.width,
+          maxWidth: form.settings.maxWidth,
+          backgroundColor: form.settings.backgroundColor,
+          borderRadius: `${form.settings.borderRadius}px`,
+          padding: `${form.settings.padding.top}px ${form.settings.padding.right}px ${form.settings.padding.bottom}px ${form.settings.padding.left}px`,
+          boxShadow: 3,
+          minHeight: 200,
+        }}
+      >
+        {currentStep.blocks.length === 0 ? (
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 200,
+              color: '#9ca3af',
+              border: '2px dashed #d1d5db',
+              borderRadius: 1,
+              p: 3,
+            }}
+          >
+            <Typography variant="body1" gutterBottom>
+              Drag blocks here or click to add
+            </Typography>
+            <Typography variant="body2">
+              Start building your form by adding blocks from the sidebar
+            </Typography>
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {currentStep.blocks.map((block) => (
+              <SortableBlock
+                key={block.id}
+                block={block}
+                isSelected={selectedBlockId === block.id}
+                onSelect={() => selectBlock(block.id)}
+                onDelete={() => removeBlock(block.id)}
+                onDuplicate={() => duplicateBlock(block.id)}
+              />
+            ))}
+          </Box>
+        )}
+      </Box>
+
+      {/* Form type indicator */}
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="caption" color="text.secondary">
+          Form Type: {form.formType.charAt(0).toUpperCase() + form.formType.slice(1)} |
+          Status: {form.status.charAt(0).toUpperCase() + form.status.slice(1)}
+        </Typography>
+      </Box>
+    </Box>
+  );
+};

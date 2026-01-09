@@ -71,6 +71,8 @@ const (
 	PermSettingsGet           = "settings:get"
 	PermSettingsManage        = "settings:manage"
 	PermSettingsMaintain      = "settings:maintain"
+	PermFormsGet              = "forms:get"
+	PermFormsManage           = "forms:manage"
 )
 
 // Base holds common fields shared across models.

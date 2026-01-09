@@ -270,6 +270,19 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PUT("/api/roles/lists/:id", pm(hasID(a.UpdateListRole), "roles:manage"))
 		g.DELETE("/api/roles/:id", pm(hasID(a.DeleteRole), "roles:manage"))
 
+		// Sign-up forms.
+		g.GET("/api/forms", pm(a.GetForms, "forms:get"))
+		g.GET("/api/forms/:id", pm(hasID(a.GetForm), "forms:get"))
+		g.GET("/api/forms/:id/submissions", pm(hasID(a.GetFormSubmissions), "forms:get"))
+		g.GET("/api/forms/:id/analytics", pm(hasID(a.GetFormAnalytics), "forms:get"))
+		g.GET("/api/forms/:id/coupons/stats", pm(hasID(a.GetFormCouponStats), "forms:get"))
+		g.POST("/api/forms", pm(a.CreateForm, "forms:manage"))
+		g.POST("/api/forms/:id/duplicate", pm(hasID(a.DuplicateForm), "forms:manage"))
+		g.POST("/api/forms/:id/coupons", pm(hasID(a.UploadFormCoupons), "forms:manage"))
+		g.PUT("/api/forms/:id", pm(hasID(a.UpdateForm), "forms:manage"))
+		g.PUT("/api/forms/:id/status", pm(hasID(a.UpdateFormStatus), "forms:manage"))
+		g.DELETE("/api/forms/:id", pm(hasID(a.DeleteForms), "forms:manage"))
+
 		if a.cfg.BounceWebhooksEnabled {
 			// Private authenticated bounce endpoint.
 			g.POST("/webhooks/bounce", pm(a.BounceWebhook, "webhooks:post_bounce"))
@@ -326,6 +339,15 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		if a.cfg.EnablePublicArchive {
 			g.GET("/api/public/archive", a.GetCampaignArchives)
 		}
+
+		// Public sign-up form APIs.
+		g.GET("/api/public/forms/:uuid", a.GetPublicForm)
+		g.POST("/api/public/forms/:uuid/submit", a.SubmitPublicForm)
+		g.POST("/api/public/forms/:uuid/impression", a.RecordFormImpression)
+		g.PUT("/api/public/forms/impression/:id/closed", a.UpdateFormImpressionClosed)
+		g.PUT("/api/public/forms/impression/:id/submitted", a.UpdateFormImpressionSubmitted)
+		g.PUT("/api/public/forms/impression/:id/step", a.UpdateFormImpressionStep)
+		g.GET("/api/public/forms/active", a.GetActiveFormsForPage)
 
 		// /public/static/* file server is registered in initHTTPServer().
 		// Public subscriber facing views.

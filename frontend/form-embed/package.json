@@ -1,0 +1,22 @@
+{
+  "name": "@listmonk/form-embed",
+  "version": "1.0.0",
+  "description": "JavaScript library for embedding listmonk sign-up forms",
+  "main": "dist/lm-forms.js",
+  "module": "dist/lm-forms.esm.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c -w",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "rollup": "^4.12.0",
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3"
+  }
+}

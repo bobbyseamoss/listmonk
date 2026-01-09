@@ -82,6 +82,19 @@ const (
 	TemplateTypeCampaign       = "campaign"
 	TemplateTypeCampaignVisual = "campaign_visual"
 	TemplateTypeTx             = "tx"
+
+	// Sign-up form types.
+	FormTypePopup    = "popup"
+	FormTypeFlyout   = "flyout"
+	FormTypeFullpage = "fullpage"
+	FormTypeEmbed    = "embed"
+	FormTypeBanner   = "banner"
+
+	// Sign-up form statuses.
+	FormStatusDraft    = "draft"
+	FormStatusActive   = "active"
+	FormStatusPaused   = "paused"
+	FormStatusArchived = "archived"
 )
 
 // Headers represents an array of string maps used to represent SMTP, HTTP headers etc.
@@ -998,4 +1011,97 @@ type AzureEngagementEvent struct {
 	UserAgent         string    `db:"user_agent" json:"user_agent"`
 	EventTimestamp    time.Time `db:"event_timestamp" json:"event_timestamp"`
 	CreatedAt         time.Time `db:"created_at" json:"created_at"`
+}
+
+// SignUpForm represents a sign-up form with Klaviyo-like features.
+type SignUpForm struct {
+	Base
+
+	UUID        string         `db:"uuid" json:"uuid"`
+	Name        string         `db:"name" json:"name"`
+	Description string         `db:"description" json:"description"`
+	FormType    string         `db:"form_type" json:"form_type"`
+	Status      string         `db:"status" json:"status"`
+	BodySource  JSON           `db:"body_source" json:"body_source"`
+	CustomCSS   string         `db:"custom_css" json:"custom_css"`
+	Steps       JSON           `db:"steps" json:"steps"`
+	Settings    JSON           `db:"settings" json:"settings"`
+	Targeting   JSON           `db:"targeting" json:"targeting"`
+	Triggers    JSON           `db:"triggers" json:"triggers"`
+	Frequency   JSON           `db:"frequency" json:"frequency"`
+	ListIDs     pq.Int64Array  `db:"list_ids" json:"list_ids"`
+	CouponConfig JSON          `db:"coupon_config" json:"coupon_config"`
+
+	// Pseudofield for pagination total
+	Total int `db:"total" json:"-"`
+}
+
+// SignUpForms is a slice of SignUpForm.
+type SignUpForms []SignUpForm
+
+// FormSubmission represents a form submission with all captured data.
+type FormSubmission struct {
+	ID           int64          `db:"id" json:"id"`
+	FormID       int            `db:"form_id" json:"form_id"`
+	SubscriberID null.Int       `db:"subscriber_id" json:"subscriber_id"`
+	Email        string         `db:"email" json:"email"`
+	Data         JSON           `db:"data" json:"data"`
+	PageURL      null.String    `db:"page_url" json:"page_url"`
+	Referrer     null.String    `db:"referrer" json:"referrer"`
+	UTMSource    null.String    `db:"utm_source" json:"utm_source"`
+	UTMMedium    null.String    `db:"utm_medium" json:"utm_medium"`
+	UTMCampaign  null.String    `db:"utm_campaign" json:"utm_campaign"`
+	UTMTerm      null.String    `db:"utm_term" json:"utm_term"`
+	UTMContent   null.String    `db:"utm_content" json:"utm_content"`
+	DeviceType   null.String    `db:"device_type" json:"device_type"`
+	UserAgent    null.String    `db:"user_agent" json:"user_agent"`
+	IPAddress    null.String    `db:"ip_address" json:"ip_address"`
+	Country      null.String    `db:"country" json:"country"`
+	CouponCode   null.String    `db:"coupon_code" json:"coupon_code"`
+	CreatedAt    time.Time      `db:"created_at" json:"created_at"`
+
+	// Pseudofield for pagination total
+	Total int `db:"total" json:"-"`
+}
+
+// FormImpression represents a form impression for analytics.
+type FormImpression struct {
+	ID          int64       `db:"id" json:"id"`
+	FormID      int         `db:"form_id" json:"form_id"`
+	SessionID   string      `db:"session_id" json:"session_id"`
+	VisitorID   null.String `db:"visitor_id" json:"visitor_id"`
+	PageURL     null.String `db:"page_url" json:"page_url"`
+	DeviceType  null.String `db:"device_type" json:"device_type"`
+	Country     null.String `db:"country" json:"country"`
+	ShownAt     time.Time   `db:"shown_at" json:"shown_at"`
+	ClosedAt    null.Time   `db:"closed_at" json:"closed_at"`
+	SubmittedAt null.Time   `db:"submitted_at" json:"submitted_at"`
+	StepReached int         `db:"step_reached" json:"step_reached"`
+}
+
+// FormCouponCode represents a unique coupon code for a form.
+type FormCouponCode struct {
+	ID          int         `db:"id" json:"id"`
+	FormID      int         `db:"form_id" json:"form_id"`
+	Code        string      `db:"code" json:"code"`
+	Used        bool        `db:"used" json:"used"`
+	UsedByEmail null.String `db:"used_by_email" json:"used_by_email"`
+	UsedAt      null.Time   `db:"used_at" json:"used_at"`
+	CreatedAt   time.Time   `db:"created_at" json:"created_at"`
+}
+
+// FormAnalytics represents aggregated analytics for a form.
+type FormAnalytics struct {
+	FormID         int     `json:"form_id"`
+	Impressions    int     `json:"impressions"`
+	Submissions    int     `json:"submissions"`
+	ConversionRate float64 `json:"conversion_rate"`
+	AvgStepReached float64 `json:"avg_step_reached"`
+}
+
+// FormAnalyticsTimeSeries represents time-series analytics data.
+type FormAnalyticsTimeSeries struct {
+	Date        time.Time `db:"date" json:"date"`
+	Impressions int       `db:"impressions" json:"impressions"`
+	Submissions int       `db:"submissions" json:"submissions"`
 }
