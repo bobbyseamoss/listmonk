@@ -9,9 +9,9 @@
       <b-menu-item :to="{ name: 'lists' }" tag="router-link" :active="activeItem.lists" data-cy="all-lists"
         icon="format-list-bulleted-square" :label="$t('menu.allLists')" />
       <b-menu-item :to="{ name: 'segments' }" tag="router-link" :active="activeItem.segments" data-cy="all-segments"
-        icon="filter-variant" :label="$t('menu.allSegments')" />
-      <b-menu-item :to="{ name: 'forms' }" tag="router-link" :active="activeItem.forms" class="forms"
-        icon="newspaper-variant-outline" :label="$t('menu.forms')" />
+        icon="file-find-outline" :label="$t('menu.allSegments')" />
+      <b-menu-item :to="{ name: 'signupForms' }" tag="router-link" :active="activeItem.signupForms" class="forms"
+        icon="form-select" :label="$t('menu.forms')" />
     </b-menu-item><!-- lists -->
 
     <b-menu-item v-if="$can('subscribers:*')" :expanded="activeGroup.subscribers" :active="activeGroup.subscribers"
@@ -25,7 +25,7 @@
       <b-menu-item v-if="$can('bounces:get')" :to="{ name: 'bounces' }" tag="router-link" :active="activeItem.bounces"
         data-cy="bounces" icon="email-bounce" :label="$t('globals.terms.bounces')" />
       <b-menu-item v-if="$can('subscribers:get')" :to="{ name: 'activity' }" tag="router-link" :active="activeItem.activity"
-        data-cy="activity" icon="chart-timeline-variant" label="Activity Feed" />
+        data-cy="activity" icon="speedometer" label="Activity Feed" />
     </b-menu-item><!-- subscribers -->
 
     <b-menu-item v-if="$can('campaigns:*')" :expanded="activeGroup.campaigns" :active="activeGroup.campaigns"
@@ -70,11 +70,11 @@
       <b-menu-item v-if="$can('settings:get')" :to="{ name: 'logs' }" tag="router-link" :active="activeItem.logs"
         data-cy="logs" icon="format-list-bulleted-square" :label="$t('menu.logs')" />
       <b-menu-item v-if="$can('settings:get')" :to="{ name: 'webhook-logs' }" tag="router-link" :active="activeItem['webhook-logs']"
-        data-cy="webhook-logs" icon="webhook" :label="'Webhook Logs'" />
+        data-cy="webhook-logs" icon="cloud-download-outline" :label="'Webhook Logs'" />
     </b-menu-item><!-- settings -->
 
     <b-menu-item :to="{ name: 'shopifyOrderTally' }" tag="router-link" :active="activeItem.shopifyOrderTally"
-      icon="shopping" label="Shopify Order Tally" /><!-- shopify order tally -->
+      icon="tag-outline" label="Shopify Order Tally" /><!-- shopify order tally -->
 
     <b-menu-item v-if="isMobile" icon="logout-variant" :label="$t('users.logout')" @click.prevent="doLogout" />
   </b-menu-list>
