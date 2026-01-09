@@ -2413,7 +2413,7 @@ UPDATE form_impressions SET step_reached = $2 WHERE id = $1;
 -- name: get-form-analytics
 -- Get aggregated analytics for a form within a date range.
 SELECT
-    $1 AS form_id,
+    $1::INT AS form_id,
     (SELECT COUNT(*) FROM form_impressions WHERE form_id = $1 AND shown_at >= $2 AND shown_at <= $3) AS impressions,
     (SELECT COUNT(*) FROM form_submissions WHERE form_id = $1 AND created_at >= $2 AND created_at <= $3) AS submissions;
 
