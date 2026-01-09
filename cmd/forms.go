@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/knadh/listmonk/internal/auth"
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
 	null "gopkg.in/volatiletech/null.v6"
@@ -15,12 +14,6 @@ import (
 
 // GetForms retrieves all sign-up forms with optional filtering.
 func (a *App) GetForms(c echo.Context) error {
-	user := auth.GetUser(c)
-	if !user.HasPerm(auth.PermFormsGet) {
-		return echo.NewHTTPError(http.StatusForbidden,
-			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermFormsGet))
-	}
-
 	var (
 		status   = strings.TrimSpace(c.FormValue("status"))
 		formType = strings.TrimSpace(c.FormValue("form_type"))
@@ -48,12 +41,6 @@ func (a *App) GetForms(c echo.Context) error {
 
 // GetForm retrieves a single sign-up form by ID.
 func (a *App) GetForm(c echo.Context) error {
-	user := auth.GetUser(c)
-	if !user.HasPerm(auth.PermFormsGet) {
-		return echo.NewHTTPError(http.StatusForbidden,
-			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermFormsGet))
-	}
-
 	id := getID(c)
 	out, err := a.core.GetForm(id, "")
 	if err != nil {
@@ -65,12 +52,6 @@ func (a *App) GetForm(c echo.Context) error {
 
 // CreateForm creates a new sign-up form.
 func (a *App) CreateForm(c echo.Context) error {
-	user := auth.GetUser(c)
-	if !user.HasPerm(auth.PermFormsManage) {
-		return echo.NewHTTPError(http.StatusForbidden,
-			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermFormsManage))
-	}
-
 	var f models.SignUpForm
 	if err := c.Bind(&f); err != nil {
 		return err
@@ -91,12 +72,6 @@ func (a *App) CreateForm(c echo.Context) error {
 
 // UpdateForm updates an existing sign-up form.
 func (a *App) UpdateForm(c echo.Context) error {
-	user := auth.GetUser(c)
-	if !user.HasPerm(auth.PermFormsManage) {
-		return echo.NewHTTPError(http.StatusForbidden,
-			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermFormsManage))
-	}
-
 	id := getID(c)
 
 	var f models.SignUpForm
@@ -114,12 +89,6 @@ func (a *App) UpdateForm(c echo.Context) error {
 
 // UpdateFormStatus updates only the status of a sign-up form.
 func (a *App) UpdateFormStatus(c echo.Context) error {
-	user := auth.GetUser(c)
-	if !user.HasPerm(auth.PermFormsManage) {
-		return echo.NewHTTPError(http.StatusForbidden,
-			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermFormsManage))
-	}
-
 	id := getID(c)
 
 	var req struct {
@@ -147,12 +116,6 @@ func (a *App) UpdateFormStatus(c echo.Context) error {
 
 // DeleteForms deletes one or more sign-up forms.
 func (a *App) DeleteForms(c echo.Context) error {
-	user := auth.GetUser(c)
-	if !user.HasPerm(auth.PermFormsManage) {
-		return echo.NewHTTPError(http.StatusForbidden,
-			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermFormsManage))
-	}
-
 	var (
 		id, _ = strconv.ParseInt(c.Param("id"), 10, 64)
 		ids   []int
@@ -174,12 +137,6 @@ func (a *App) DeleteForms(c echo.Context) error {
 
 // DuplicateForm creates a copy of an existing form.
 func (a *App) DuplicateForm(c echo.Context) error {
-	user := auth.GetUser(c)
-	if !user.HasPerm(auth.PermFormsManage) {
-		return echo.NewHTTPError(http.StatusForbidden,
-			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermFormsManage))
-	}
-
 	id := getID(c)
 
 	// Get the original form.
@@ -203,12 +160,6 @@ func (a *App) DuplicateForm(c echo.Context) error {
 
 // GetFormSubmissions retrieves submissions for a form.
 func (a *App) GetFormSubmissions(c echo.Context) error {
-	user := auth.GetUser(c)
-	if !user.HasPerm(auth.PermFormsGet) {
-		return echo.NewHTTPError(http.StatusForbidden,
-			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermFormsGet))
-	}
-
 	id := getID(c)
 	pg := a.pg.NewFromURL(c.Request().URL.Query())
 
@@ -229,12 +180,6 @@ func (a *App) GetFormSubmissions(c echo.Context) error {
 
 // GetFormAnalytics retrieves analytics for a form.
 func (a *App) GetFormAnalytics(c echo.Context) error {
-	user := auth.GetUser(c)
-	if !user.HasPerm(auth.PermFormsGet) {
-		return echo.NewHTTPError(http.StatusForbidden,
-			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermFormsGet))
-	}
-
 	id := getID(c)
 
 	// Parse date range.
@@ -262,12 +207,6 @@ func (a *App) GetFormAnalytics(c echo.Context) error {
 
 // GetFormCouponStats retrieves coupon usage stats for a form.
 func (a *App) GetFormCouponStats(c echo.Context) error {
-	user := auth.GetUser(c)
-	if !user.HasPerm(auth.PermFormsGet) {
-		return echo.NewHTTPError(http.StatusForbidden,
-			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermFormsGet))
-	}
-
 	id := getID(c)
 
 	stats, err := a.core.GetCouponStats(id)
@@ -280,12 +219,6 @@ func (a *App) GetFormCouponStats(c echo.Context) error {
 
 // UploadFormCoupons handles bulk upload of coupon codes.
 func (a *App) UploadFormCoupons(c echo.Context) error {
-	user := auth.GetUser(c)
-	if !user.HasPerm(auth.PermFormsManage) {
-		return echo.NewHTTPError(http.StatusForbidden,
-			a.i18n.Ts("globals.messages.permissionDenied", "name", auth.PermFormsManage))
-	}
-
 	id := getID(c)
 
 	// Verify the form exists.
