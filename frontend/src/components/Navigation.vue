@@ -13,7 +13,7 @@
     </b-menu-item><!-- lists -->
 
     <b-menu-item :to="{ name: 'signupForms' }" tag="router-link" :active="activeItem.signupForms"
-      data-cy="forms" icon="text-box-outline" :label="$t('menu.forms')" /><!-- forms -->
+      data-cy="forms" icon="newspaper-variant-outline" :label="$t('menu.forms')" /><!-- forms -->
 
     <b-menu-item v-if="$can('subscribers:*')" :expanded="activeGroup.subscribers" :active="activeGroup.subscribers"
       data-cy="subscribers" @update:active="(state) => toggleGroup('subscribers', state)" icon="account-multiple"

@@ -9,6 +9,15 @@ RUN yarn install --frozen-lockfile
 COPY frontend/email-builder/ ./
 RUN yarn build
 
+# Stage 1b: Build form-builder frontend
+FROM node:20-alpine AS form-builder
+WORKDIR /app
+COPY frontend/form-builder/package.json frontend/form-builder/package-lock.json ./form-builder/
+WORKDIR /app/form-builder
+RUN npm ci
+COPY frontend/form-builder/ ./
+RUN npm run build
+
 # Stage 2: Build main frontend
 FROM node:20-alpine AS frontend-builder
 ARG LOGO_URL
@@ -20,6 +29,8 @@ RUN mkdir -p ../static/public/static && \
     yarn install --frozen-lockfile
 # Copy email-builder output
 COPY --from=email-builder /app/email-builder/dist ./public/static/email-builder
+# Copy form-builder output
+COPY --from=form-builder /app/form-builder/dist ./public/static/form-builder
 # Build without running prelint to skip eslint
 RUN yarn vite build
 
