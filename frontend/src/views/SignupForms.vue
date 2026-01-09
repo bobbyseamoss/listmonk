@@ -152,11 +152,15 @@ export default Vue.extend({
       }
     },
 
-    async toggleStatus(form) {
-      const newStatus = form.status === 'active' ? 'paused' : 'active';
+    async toggleStatus(formItem) {
+      const newStatus = formItem.status === 'active' ? 'paused' : 'active';
       try {
-        await this.$api.updateFormStatus(form.id, newStatus);
-        form.status = newStatus;
+        await this.$api.updateFormStatus(formItem.id, newStatus);
+        // Update the form in the array to trigger reactivity
+        const idx = this.forms.findIndex((f) => f.id === formItem.id);
+        if (idx !== -1) {
+          this.$set(this.forms[idx], 'status', newStatus);
+        }
         this.$utils.toast(this.$t('globals.messages.updated'), 'is-success');
       } catch (err) {
         this.$utils.toast(err.message, 'is-danger');

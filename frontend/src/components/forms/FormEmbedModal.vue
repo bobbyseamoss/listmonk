@@ -136,21 +136,24 @@ export default Vue.extend({
       return window.location.origin;
     },
 
+    endScriptTag() {
+      // Split to avoid ESLint no-useless-concat and prevent closing script tag in source
+      return ['<', '/script>'].join('');
+    },
+
     autoLoadCode() {
-      const endScript = '<' + '/script>';
       return `<!-- Listmonk Form -->
-<script src="${this.baseUrl}/public/lm-forms.js" data-form="${this.form.uuid}">${endScript}`;
+<script src="${this.baseUrl}/public/lm-forms.js" data-form="${this.form.uuid}">${this.endScriptTag}`;
     },
 
     manualTriggerCode() {
-      const endScript = '<' + '/script>';
       return `// Include the script first
-<script src="${this.baseUrl}/public/lm-forms.js">${endScript}
+<script src="${this.baseUrl}/public/lm-forms.js">${this.endScriptTag}
 
 // Then trigger the form
 <script>
   Listmonk.forms.show('${this.form.uuid}');
-${endScript}`;
+${this.endScriptTag}`;
     },
 
     buttonExample() {
@@ -160,13 +163,12 @@ ${endScript}`;
     },
 
     inlineEmbedCode() {
-      const endScript = '<' + '/script>';
       return `<!-- Listmonk Embedded Form -->
 <div id="lm-form-${this.form.uuid}"></div>
 <script src="${this.baseUrl}/public/lm-forms.js"
   data-form="${this.form.uuid}"
   data-type="embed"
-  data-target="#lm-form-${this.form.uuid}">${endScript}`;
+  data-target="#lm-form-${this.form.uuid}">${this.endScriptTag}`;
     },
 
     directUrl() {
