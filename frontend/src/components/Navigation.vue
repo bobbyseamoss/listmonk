@@ -10,9 +10,10 @@
         icon="format-list-bulleted-square" :label="$t('menu.allLists')" />
       <b-menu-item :to="{ name: 'segments' }" tag="router-link" :active="activeItem.segments" data-cy="all-segments"
         icon="file-find-outline" :label="$t('menu.allSegments')" />
-      <b-menu-item :to="{ name: 'signupForms' }" tag="router-link" :active="activeItem.signupForms" class="forms"
-        icon="form-select" :label="$t('menu.forms')" />
     </b-menu-item><!-- lists -->
+
+    <b-menu-item :to="{ name: 'signupForms' }" tag="router-link" :active="activeItem.signupForms"
+      data-cy="forms" icon="form-select" :label="$t('menu.forms')" /><!-- forms -->
 
     <b-menu-item v-if="$can('subscribers:*')" :expanded="activeGroup.subscribers" :active="activeGroup.subscribers"
       data-cy="subscribers" @update:active="(state) => toggleGroup('subscribers', state)" icon="account-multiple"
