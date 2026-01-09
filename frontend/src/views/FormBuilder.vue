@@ -25,6 +25,7 @@
               ref="builderIframe"
               :src="builderUrl"
               frameborder="0"
+              title="Form Builder"
               @load="onIframeLoad"
             />
           </div>
@@ -229,6 +230,10 @@ export default Vue.extend({
           // User cancelled in builder
           this.$router.push({ name: 'signupForms' });
           break;
+
+        default:
+          // Unknown message type, ignore
+          break;
       }
     },
 
@@ -252,7 +257,7 @@ export default Vue.extend({
       }
 
       // Wait a moment for the response
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => { setTimeout(resolve, 200); });
 
       this.loading.save = true;
       try {

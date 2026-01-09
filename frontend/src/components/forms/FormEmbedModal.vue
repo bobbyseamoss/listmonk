@@ -137,18 +137,20 @@ export default Vue.extend({
     },
 
     autoLoadCode() {
+      const endScript = '<' + '/script>';
       return `<!-- Listmonk Form -->
-<script src="${this.baseUrl}/public/lm-forms.js" data-form="${this.form.uuid}"><\/script>`;
+<script src="${this.baseUrl}/public/lm-forms.js" data-form="${this.form.uuid}">${endScript}`;
     },
 
     manualTriggerCode() {
+      const endScript = '<' + '/script>';
       return `// Include the script first
-<script src="${this.baseUrl}/public/lm-forms.js"><\/script>
+<script src="${this.baseUrl}/public/lm-forms.js">${endScript}
 
 // Then trigger the form
 <script>
   Listmonk.forms.show('${this.form.uuid}');
-<\/script>`;
+${endScript}`;
     },
 
     buttonExample() {
@@ -158,12 +160,13 @@ export default Vue.extend({
     },
 
     inlineEmbedCode() {
+      const endScript = '<' + '/script>';
       return `<!-- Listmonk Embedded Form -->
 <div id="lm-form-${this.form.uuid}"></div>
 <script src="${this.baseUrl}/public/lm-forms.js"
   data-form="${this.form.uuid}"
   data-type="embed"
-  data-target="#lm-form-${this.form.uuid}"><\/script>`;
+  data-target="#lm-form-${this.form.uuid}">${endScript}`;
     },
 
     directUrl() {

@@ -149,7 +149,7 @@ export default Vue.extend({
       },
       deep: true,
     },
-    'localValue.type'() {
+    'localValue.type': function () {
       this.emitChange();
     },
   },
