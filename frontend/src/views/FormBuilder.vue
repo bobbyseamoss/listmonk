@@ -301,10 +301,10 @@ export default Vue.extend({
 
         if (this.isEditing) {
           await this.$api.updateForm(this.form.id, payload);
-          this.$utils.toast(this.$t('globals.messages.updated'), 'is-success');
+          this.$utils.toast(this.$t('globals.messages.updated', { name: payload.name }), 'is-success');
         } else {
           const resp = await this.$api.createForm(payload);
-          this.$utils.toast(this.$t('globals.messages.created'), 'is-success');
+          this.$utils.toast(this.$t('globals.messages.created', { name: payload.name }), 'is-success');
           this.$router.push({ name: 'editSignupForm', params: { id: resp.id } });
         }
       } catch (err) {
