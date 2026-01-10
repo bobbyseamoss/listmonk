@@ -268,33 +268,27 @@ export default Vue.extend({
     },
 
     async handleSave() {
-      // Request the current form state from the builder
-      const iframe = this.$refs.builderIframe;
-      if (iframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage({
-          type: 'FORM_BUILDER_REQUEST_SAVE',
-        }, '*');
-      }
-
-      // Wait a moment for the response
-      await new Promise((resolve) => { setTimeout(resolve, 200); });
-
       this.loading.save = true;
+
       try {
+        // Wait for the form builder to send its current state
+        const builderFormData = await this.requestFormBuilderData();
+
+        // Use form builder data directly for the payload
         const payload = {
-          name: this.form.name,
+          name: builderFormData.name || this.form.name || 'New Form',
           description: this.form.description,
-          form_type: this.form.formType,
-          status: this.form.status,
-          body_source: this.form.bodySource,
-          custom_css: this.form.customCss,
-          steps: this.form.steps,
-          settings: this.form.settings,
+          form_type: builderFormData.formType || this.form.formType || 'popup',
+          status: builderFormData.status || this.form.status || 'draft',
+          body_source: builderFormData,
+          custom_css: builderFormData.customCss || this.form.customCss || '',
+          steps: builderFormData.steps || this.form.steps || [],
+          settings: builderFormData.settings || this.form.settings || {},
           targeting: this.form.targeting,
           triggers: this.form.triggers,
           frequency: this.form.frequency,
           list_ids: this.form.listIds,
-          coupon_config: this.form.couponConfig,
+          coupon_config: builderFormData.couponConfig || this.form.couponConfig || {},
         };
 
         if (this.isEditing) {
@@ -310,6 +304,39 @@ export default Vue.extend({
       } finally {
         this.loading.save = false;
       }
+    },
+
+    requestFormBuilderData() {
+      return new Promise((resolve) => {
+        let handler = null;
+        const timeout = setTimeout(() => {
+          window.removeEventListener('message', handler);
+          // Fall back to current form data if no response
+          resolve(this.form.bodySource || {});
+        }, 2000);
+
+        handler = (event) => {
+          if (event.data && event.data.type === 'FORM_BUILDER_SAVE') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            resolve(event.data.form || {});
+          }
+        };
+
+        window.addEventListener('message', handler);
+
+        // Request the form data from the builder
+        const iframe = this.$refs.builderIframe;
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.postMessage({
+            type: 'FORM_BUILDER_REQUEST_SAVE',
+          }, '*');
+        } else {
+          clearTimeout(timeout);
+          window.removeEventListener('message', handler);
+          resolve(this.form.bodySource || {});
+        }
+      });
     },
   },
 });
