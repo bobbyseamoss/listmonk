@@ -130,6 +130,8 @@ export default Vue.extend({
         save: false,
         lists: false,
       },
+      iframeReady: false,
+      formDataLoaded: false,
     };
   },
 
@@ -189,18 +191,21 @@ export default Vue.extend({
           uuid: resp.uuid,
           name: resp.name,
           description: resp.description,
-          formType: resp.form_type || this.form.formType,
+          formType: resp.formType || resp.form_type || this.form.formType,
           status: resp.status,
-          bodySource: resp.body_source || {},
-          customCss: resp.custom_css || '',
+          bodySource: resp.bodySource || resp.body_source || {},
+          customCss: resp.customCss || resp.custom_css || '',
           steps: resp.steps || [],
           settings: resp.settings || {},
           targeting: resp.targeting || this.form.targeting,
           triggers: resp.triggers || this.form.triggers,
           frequency: resp.frequency || this.form.frequency,
-          listIds: resp.list_ids || [],
-          couponConfig: resp.coupon_config || {},
+          listIds: resp.listIds || resp.list_ids || [],
+          couponConfig: resp.couponConfig || resp.coupon_config || {},
         };
+        this.formDataLoaded = true;
+        // If iframe is already ready, send the data now
+        this.trySendFormToBuilder();
       } catch (err) {
         this.$utils.toast(err.message, 'is-danger');
         this.$router.push({ name: 'signupForms' });
@@ -210,17 +215,7 @@ export default Vue.extend({
     },
 
     onIframeLoad() {
-      // Send initial form data to the builder once it's ready
-      const iframe = this.$refs.builderIframe;
-      if (iframe && iframe.contentWindow) {
-        // Wait a bit for React to mount
-        setTimeout(() => {
-          iframe.contentWindow.postMessage({
-            type: 'FORM_BUILDER_INIT',
-            form: this.form.bodySource,
-          }, '*');
-        }, 500);
-      }
+      // Iframe loaded, but wait for FORM_BUILDER_READY message from React app
     },
 
     handleIframeMessage(event) {
@@ -228,8 +223,13 @@ export default Vue.extend({
 
       switch (event.data.type) {
         case 'FORM_BUILDER_READY':
-          // Builder is ready, send form data
-          this.sendFormToBuilder();
+          // Builder is ready, mark iframe as ready and try to send form data
+          this.iframeReady = true;
+          // For new forms (not editing), mark data as loaded since we use defaults
+          if (!this.isEditing) {
+            this.formDataLoaded = true;
+          }
+          this.trySendFormToBuilder();
           break;
 
         case 'FORM_BUILDER_SAVE':
@@ -255,6 +255,14 @@ export default Vue.extend({
           // Unknown message type, ignore
           break;
       }
+    },
+
+    trySendFormToBuilder() {
+      // Only send data when both iframe is ready AND form data is loaded (or it's a new form)
+      if (!this.iframeReady || !this.formDataLoaded) {
+        return;
+      }
+      this.sendFormToBuilder();
     },
 
     sendFormToBuilder() {
