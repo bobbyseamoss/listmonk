@@ -233,8 +233,17 @@ export default Vue.extend({
           break;
 
         case 'FORM_BUILDER_SAVE':
-          // Builder sent updated form data
+          // Builder sent updated form data - sync all fields
           this.form.bodySource = event.data.form;
+          // Also sync individual fields from the form builder
+          if (event.data.form) {
+            this.form.name = event.data.form.name || this.form.name;
+            this.form.formType = event.data.form.formType || this.form.formType;
+            this.form.status = event.data.form.status || this.form.status;
+            this.form.steps = event.data.form.steps || this.form.steps;
+            this.form.settings = event.data.form.settings || this.form.settings;
+            this.form.customCss = event.data.form.customCss || this.form.customCss;
+          }
           break;
 
         case 'FORM_BUILDER_CANCEL':
