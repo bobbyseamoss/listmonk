@@ -12,10 +12,10 @@
     </header>
 
     <b-table
-      :data="forms"
-      :loading="loading"
+      :data="forms.results"
+      :loading="loading.forms"
       hoverable
-      :paginated="forms.length > 20"
+      :paginated="forms.results && forms.results.length > 20"
       per-page="20"
       default-sort="createdAt"
       default-sort-direction="desc"
@@ -106,6 +106,7 @@
 
 <script>
 import Vue from 'vue';
+import { mapState } from 'vuex';
 import EmptyPlaceholder from '../components/EmptyPlaceholder.vue';
 
 export default Vue.extend({
@@ -117,8 +118,6 @@ export default Vue.extend({
 
   data() {
     return {
-      forms: [],
-      loading: true,
       typeColors: {
         popup: 'is-info',
         flyout: 'is-link',
@@ -135,33 +134,25 @@ export default Vue.extend({
     };
   },
 
+  computed: {
+    ...mapState(['forms', 'loading']),
+  },
+
   mounted() {
     this.loadForms();
   },
 
   methods: {
-    async loadForms() {
-      this.loading = true;
-      try {
-        const resp = await this.$api.getForms();
-        this.forms = resp.data || [];
-      } catch (err) {
-        this.$utils.toast(err.message, 'is-danger');
-      } finally {
-        this.loading = false;
-      }
+    loadForms() {
+      this.$api.getForms();
     },
 
     async toggleStatus(formItem) {
       const newStatus = formItem.status === 'active' ? 'paused' : 'active';
       try {
         await this.$api.updateFormStatus(formItem.id, newStatus);
-        // Update the form in the array to trigger reactivity
-        const idx = this.forms.findIndex((f) => f.id === formItem.id);
-        if (idx !== -1) {
-          this.$set(this.forms[idx], 'status', newStatus);
-        }
         this.$utils.toast(this.$t('globals.messages.updated'), 'is-success');
+        this.loadForms(); // Reload to get updated data
       } catch (err) {
         this.$utils.toast(err.message, 'is-danger');
       }
@@ -191,8 +182,8 @@ export default Vue.extend({
     async deleteForm(form) {
       try {
         await this.$api.deleteForm(form.id);
-        this.forms = this.forms.filter((f) => f.id !== form.id);
         this.$utils.toast(this.$t('globals.messages.deleted'), 'is-success');
+        this.loadForms(); // Reload to reflect deletion
       } catch (err) {
         this.$utils.toast(err.message, 'is-danger');
       }

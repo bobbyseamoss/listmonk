@@ -757,7 +757,7 @@ export const getActivityFeed = (params) => http.get('/api/activity-feed', { para
 // Sign-up Forms API
 export const getForms = async (params) => http.get(
   '/api/forms',
-  { params, loading: models.forms },
+  { params, loading: models.forms, store: models.forms },
 );
 
 export const getForm = async (id) => http.get(
