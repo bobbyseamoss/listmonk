@@ -77,7 +77,7 @@ func (c *Core) CreateForm(f models.SignUpForm) (models.SignUpForm, error) {
 		f.BodySource = models.JSON{}
 	}
 	if f.Steps == nil {
-		f.Steps = models.JSON{}
+		f.Steps = models.JSONArray{}
 	}
 	if f.Settings == nil {
 		f.Settings = models.JSON{}

@@ -188,6 +188,9 @@ type SubscriberExportProfile struct {
 // JSON is the wrapper for reading and writing arbitrary JSONB fields from the DB.
 type JSON map[string]any
 
+// JSONArray is the wrapper for reading and writing arbitrary JSON arrays from the DB.
+type JSONArray []map[string]any
+
 // StringIntMap is used to define DB Scan()s.
 type StringIntMap map[string]int
 
@@ -700,6 +703,27 @@ func (s JSON) Scan(src any) error {
 	return fmt.Errorf("could not not decode type %T -> %T", src, s)
 }
 
+// Value returns the JSON marshalled JSONArray.
+func (s JSONArray) Value() (driver.Value, error) {
+	if s == nil {
+		return "[]", nil
+	}
+	return json.Marshal(s)
+}
+
+// Scan unmarshals JSONB array from the DB.
+func (s *JSONArray) Scan(src any) error {
+	if src == nil {
+		*s = make(JSONArray, 0)
+		return nil
+	}
+
+	if data, ok := src.([]byte); ok {
+		return json.Unmarshal(data, s)
+	}
+	return fmt.Errorf("could not not decode type %T -> %T", src, s)
+}
+
 // Scan unmarshals JSONB from the DB.
 func (s StringIntMap) Scan(src any) error {
 	if src == nil {
@@ -1024,7 +1048,7 @@ type SignUpForm struct {
 	Status      string         `db:"status" json:"status"`
 	BodySource  JSON           `db:"body_source" json:"body_source"`
 	CustomCSS   string         `db:"custom_css" json:"custom_css"`
-	Steps       JSON           `db:"steps" json:"steps"`
+	Steps       JSONArray      `db:"steps" json:"steps"`
 	Settings    JSON           `db:"settings" json:"settings"`
 	Targeting   JSON           `db:"targeting" json:"targeting"`
 	Triggers    JSON           `db:"triggers" json:"triggers"`
