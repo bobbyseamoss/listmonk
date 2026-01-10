@@ -293,6 +293,22 @@ const BlockPropertiesPanel: React.FC = () => {
         />
       )}
 
+      {props.width !== undefined && (
+        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+          <InputLabel>Block Width</InputLabel>
+          <Select
+            value={props.width}
+            label="Block Width"
+            onChange={(e) => handleChange('width', e.target.value)}
+          >
+            <MenuItem value="100%">Full Width (100%)</MenuItem>
+            <MenuItem value="50%">Half Width (50%)</MenuItem>
+            <MenuItem value="33%">Third Width (33%)</MenuItem>
+            <MenuItem value="25%">Quarter Width (25%)</MenuItem>
+          </Select>
+        </FormControl>
+      )}
+
       {props.borderRadius !== undefined && (
         <Box sx={{ mb: 2 }}>
           <Typography variant="caption" color="text.secondary">

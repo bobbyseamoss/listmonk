@@ -66,6 +66,7 @@ export const blockDefinitions: BlockDefinition[] = [
       inputTextColor: '#333333',
       borderRadius: 4,
       padding: defaultPadding,
+      width: '100%',
     },
   },
   {
@@ -85,6 +86,7 @@ export const blockDefinitions: BlockDefinition[] = [
       inputTextColor: '#333333',
       borderRadius: 4,
       padding: defaultPadding,
+      width: '100%',
     },
   },
   {
@@ -167,6 +169,7 @@ export const blockDefinitions: BlockDefinition[] = [
       inputTextColor: '#333333',
       borderRadius: 4,
       padding: defaultPadding,
+      width: '100%',
     },
   },
   {
@@ -185,6 +188,7 @@ export const blockDefinitions: BlockDefinition[] = [
       inputTextColor: '#333333',
       borderRadius: 4,
       padding: defaultPadding,
+      width: '100%',
     },
   },
   {

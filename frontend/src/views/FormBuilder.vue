@@ -182,13 +182,24 @@ export default Vue.extend({
       this.loading.form = true;
       try {
         const resp = await this.$api.getForm(this.$route.params.id);
+        // Map snake_case backend response to camelCase frontend properties
         this.form = {
           ...this.form,
-          ...resp,
+          id: resp.id,
+          uuid: resp.uuid,
+          name: resp.name,
+          description: resp.description,
+          formType: resp.form_type || this.form.formType,
+          status: resp.status,
+          bodySource: resp.body_source || {},
+          customCss: resp.custom_css || '',
+          steps: resp.steps || [],
+          settings: resp.settings || {},
           targeting: resp.targeting || this.form.targeting,
           triggers: resp.triggers || this.form.triggers,
           frequency: resp.frequency || this.form.frequency,
-          listIds: resp.listIds || [],
+          listIds: resp.list_ids || [],
+          couponConfig: resp.coupon_config || {},
         };
       } catch (err) {
         this.$utils.toast(err.message, 'is-danger');
@@ -264,17 +275,17 @@ export default Vue.extend({
         const payload = {
           name: this.form.name,
           description: this.form.description,
-          formType: this.form.formType,
+          form_type: this.form.formType,
           status: this.form.status,
-          bodySource: this.form.bodySource,
-          customCss: this.form.customCss,
+          body_source: this.form.bodySource,
+          custom_css: this.form.customCss,
           steps: this.form.steps,
           settings: this.form.settings,
           targeting: this.form.targeting,
           triggers: this.form.triggers,
           frequency: this.form.frequency,
-          listIds: this.form.listIds,
-          couponConfig: this.form.couponConfig,
+          list_ids: this.form.listIds,
+          coupon_config: this.form.couponConfig,
         };
 
         if (this.isEditing) {

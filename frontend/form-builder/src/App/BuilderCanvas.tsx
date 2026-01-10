@@ -10,6 +10,22 @@ import { useFormBuilderStore } from '@/store';
 import { BlockRenderer } from '@/blocks/BlockRenderer';
 import type { Block } from '@/types';
 
+// Helper to get block width from props - accounts for gap between blocks
+const getBlockWidth = (block: Block): string => {
+  const props = block.props as Record<string, unknown>;
+  const width = (props.width as string) || '100%';
+
+  // When blocks are less than 100%, account for the 8px gap (gap: 1 = 8px in MUI)
+  if (width === '50%') {
+    return 'calc(50% - 4px)';
+  } else if (width === '33%') {
+    return 'calc(33.333% - 5.33px)';
+  } else if (width === '25%') {
+    return 'calc(25% - 6px)';
+  }
+  return width;
+};
+
 interface SortableBlockProps {
   block: Block;
   isSelected: boolean;
@@ -29,6 +45,8 @@ const SortableBlock: React.FC<SortableBlockProps> = ({
     id: block.id,
   });
 
+  const blockWidth = getBlockWidth(block);
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -45,6 +63,10 @@ const SortableBlock: React.FC<SortableBlockProps> = ({
         borderRadius: 1,
         border: isSelected ? '2px solid #2563eb' : '1px solid transparent',
         cursor: 'pointer',
+        width: blockWidth,
+        // Account for gap when block is less than 100% width
+        flexShrink: 0,
+        boxSizing: 'border-box',
         '&:hover': {
           border: isSelected ? '2px solid #2563eb' : '1px solid #d1d5db',
         },
@@ -165,14 +187,14 @@ export const BuilderCanvas: React.FC = () => {
             }}
           >
             <Typography variant="body1" gutterBottom>
-              Drag blocks here or click to add
+              Click blocks in the sidebar to add them
             </Typography>
             <Typography variant="body2">
-              Start building your form by adding blocks from the sidebar
+              Start building your form by clicking blocks on the left
             </Typography>
           </Box>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             {currentStep.blocks.map((block) => (
               <SortableBlock
                 key={block.id}

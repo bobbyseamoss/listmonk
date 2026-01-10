@@ -89,6 +89,7 @@ export interface EmailInputBlockProps {
   inputTextColor: string;
   borderRadius: number;
   padding: { top: number; right: number; bottom: number; left: number };
+  width: '100%' | '50%' | '33%' | '25%';
 }
 
 export interface EmailInputBlock extends BaseBlock {
@@ -109,6 +110,7 @@ export interface TextInputBlockProps {
   inputTextColor: string;
   borderRadius: number;
   padding: { top: number; right: number; bottom: number; left: number };
+  width: '100%' | '50%' | '33%' | '25%';
 }
 
 export interface TextInputBlock extends BaseBlock {
@@ -185,6 +187,7 @@ export interface DropdownBlockProps {
   inputTextColor: string;
   borderRadius: number;
   padding: { top: number; right: number; bottom: number; left: number };
+  width: '100%' | '50%' | '33%' | '25%';
 }
 
 export interface DropdownBlock extends BaseBlock {
@@ -204,6 +207,7 @@ export interface DatePickerBlockProps {
   inputTextColor: string;
   borderRadius: number;
   padding: { top: number; right: number; bottom: number; left: number };
+  width: '100%' | '50%' | '33%' | '25%';
 }
 
 export interface DatePickerBlock extends BaseBlock {
