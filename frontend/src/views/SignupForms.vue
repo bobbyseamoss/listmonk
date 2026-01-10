@@ -60,36 +60,35 @@
         {{ $utils.niceDate(props.row.createdAt) }}
       </b-table-column>
 
-      <b-table-column v-slot="props" width="150" cell-class="has-text-right">
-        <!-- Toggle Status -->
-        <b-tooltip :label="props.row.status === 'active' ? 'Pause' : 'Activate'">
-          <b-button
-            size="is-small"
-            :type="props.row.status === 'active' ? 'is-warning' : 'is-success'"
-            :icon-left="props.row.status === 'active' ? 'pause' : 'play'"
-            @click="toggleStatus(props.row)"
-          />
-        </b-tooltip>
+      <b-table-column v-slot="props" cell-class="actions" width="100" align="right">
+        <div>
+          <!-- Toggle Status -->
+          <a href="#" @click.prevent="toggleStatus(props.row)"
+            :aria-label="props.row.status === 'active' ? 'Pause' : 'Activate'">
+            <b-tooltip :label="props.row.status === 'active' ? 'Pause' : 'Activate'" type="is-dark">
+              <b-icon :icon="props.row.status === 'active' ? 'pause' : 'play'" size="is-small" />
+            </b-tooltip>
+          </a>
 
-        <!-- Duplicate -->
-        <b-tooltip label="Duplicate">
-          <b-button size="is-small" icon-left="content-copy" @click="duplicateForm(props.row)" />
-        </b-tooltip>
+          <!-- Duplicate -->
+          <a href="#" @click.prevent="duplicateForm(props.row)" aria-label="Duplicate">
+            <b-tooltip label="Duplicate" type="is-dark">
+              <b-icon icon="file-multiple-outline" size="is-small" />
+            </b-tooltip>
+          </a>
 
-        <!-- Analytics -->
-        <b-tooltip label="Analytics">
-          <b-button
-            size="is-small"
-            icon-left="chart-line"
-            tag="router-link"
-            :to="{ name: 'formAnalytics', params: { id: props.row.id } }"
-          />
-        </b-tooltip>
+          <!-- Analytics -->
+          <router-link :to="{ name: 'formAnalytics', params: { id: props.row.id } }" aria-label="Analytics">
+            <b-tooltip label="Analytics" type="is-dark">
+              <b-icon icon="chart-bar" size="is-small" />
+            </b-tooltip>
+          </router-link>
 
-        <!-- Delete -->
-        <b-tooltip label="Delete">
-          <b-button size="is-small" type="is-danger" icon-left="delete-outline" @click="confirmDelete(props.row)" />
-        </b-tooltip>
+          <!-- Delete -->
+          <a href="#" @click.prevent="confirmDelete(props.row)" aria-label="Delete">
+            <b-icon icon="trash-can-outline" size="is-small" />
+          </a>
+        </div>
       </b-table-column>
 
       <template #empty>
