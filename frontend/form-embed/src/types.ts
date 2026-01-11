@@ -78,6 +78,7 @@ export interface ShowOptions {
   trigger?: 'auto' | 'manual';
   target?: string; // CSS selector for embed forms
   scriptElement?: HTMLScriptElement; // Reference to the script tag that loaded this form
+  formTypeOverride?: 'popup' | 'flyout' | 'fullpage' | 'embed' | 'banner'; // Override form type from data-type attribute
   onShow?: () => void;
   onClose?: () => void;
   onSubmit?: (data: Record<string, unknown>) => void;

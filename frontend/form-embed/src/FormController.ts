@@ -76,6 +76,7 @@ export class FormController {
           trigger: formType === 'embed' ? 'manual' : 'auto',
           target: target || undefined,
           scriptElement: script as HTMLScriptElement,
+          formTypeOverride: formType as ShowOptions['formTypeOverride'],
         });
       }
     });
@@ -157,8 +158,11 @@ export class FormController {
         return;
       }
 
+      // Use formTypeOverride if provided (from data-type attribute), otherwise use config.formType
+      const effectiveFormType = options.formTypeOverride || config.formType;
+
       // For embed type forms, handle auto-creation of container if needed
-      if (config.formType === 'embed') {
+      if (effectiveFormType === 'embed') {
         let target = options.target;
 
         // If no target but we have a script element, auto-create a container
@@ -219,8 +223,11 @@ export class FormController {
       }
     }
 
-    // Create and render form
-    const renderer = new FormRenderer(config, this.baseUrl);
+    // Create and render form - apply formTypeOverride if present
+    const effectiveConfig = options.formTypeOverride
+      ? { ...config, formType: options.formTypeOverride }
+      : config;
+    const renderer = new FormRenderer(effectiveConfig, this.baseUrl);
     const element = renderer.render(options.target);
 
     // Store active form
