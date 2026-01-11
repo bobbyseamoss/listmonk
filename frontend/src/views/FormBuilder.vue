@@ -53,7 +53,13 @@
             <p class="help mb-4">
               Select which lists subscribers will be added to when they submit this form.
             </p>
-            <list-selector v-model="form.listIds" :lists="lists" :loading="loading.lists" />
+            <list-selector
+              :selected="selectedLists"
+              :all="allLists"
+              label="Lists"
+              placeholder="Select lists..."
+              @input="onListsChange"
+            />
           </div>
         </b-tab-item>
 
@@ -148,6 +154,19 @@ export default Vue.extend({
         return 'http://localhost:5174';
       }
       return '/admin/static/form-builder/index.html';
+    },
+
+    // Get all lists as array for ListSelector
+    allLists() {
+      return this.lists && this.lists.results ? this.lists.results : [];
+    },
+
+    // Convert form.listIds (array of IDs) to array of list objects for ListSelector
+    selectedLists() {
+      if (!this.form.listIds || !this.allLists.length) {
+        return [];
+      }
+      return this.allLists.filter((list) => this.form.listIds.includes(list.id));
     },
   },
 
@@ -345,6 +364,11 @@ export default Vue.extend({
           resolve(this.form.bodySource || {});
         }
       });
+    },
+
+    // Handle list selection changes - convert list objects to IDs
+    onListsChange(selectedListObjects) {
+      this.form.listIds = selectedListObjects.map((list) => list.id);
     },
   },
 });

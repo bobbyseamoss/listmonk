@@ -38,7 +38,9 @@
             min="0"
             max="300"
             step="1"
+            type="is-light"
             controls-position="compact"
+            style="width: 140px"
             @input="emitChange"
           />
         </b-field>
@@ -66,7 +68,9 @@
             min="1"
             max="20"
             step="1"
+            type="is-light"
             controls-position="compact"
+            style="width: 140px"
             @input="emitChange"
           />
         </b-field>

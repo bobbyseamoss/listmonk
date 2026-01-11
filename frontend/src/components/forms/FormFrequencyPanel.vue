@@ -14,8 +14,9 @@
             min="0"
             max="365"
             step="1"
+            type="is-light"
             controls-position="compact"
-            style="width: 120px"
+            style="width: 140px"
             @input="emitChange"
           />
           <span class="ml-2">days</span>
@@ -32,8 +33,9 @@
             min="0"
             max="100"
             step="1"
+            type="is-light"
             controls-position="compact"
-            style="width: 120px"
+            style="width: 140px"
             @input="emitChange"
           />
         </div>
@@ -62,8 +64,9 @@
               min="1"
               max="365"
               step="1"
+              type="is-light"
               controls-position="compact"
-              style="width: 120px"
+              style="width: 140px"
               @input="emitChange"
             />
             <span class="ml-2">days</span>
@@ -108,8 +111,9 @@
             min="1"
             max="365"
             step="1"
+            type="is-light"
             controls-position="compact"
-            style="width: 120px"
+            style="width: 140px"
             @input="emitChange"
           />
           <span class="ml-2">days</span>
