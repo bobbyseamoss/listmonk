@@ -40,6 +40,8 @@ const HeadingBlockRenderer: React.FC<{ props: Block['props'] }> = ({ props }) =>
 
 const ImageBlockRenderer: React.FC<{ props: Block['props'] }> = ({ props }) => {
   const p = props as any;
+  // Convert numeric width to px string
+  const imageWidth = typeof p.width === 'number' ? `${p.width}px` : p.width;
   return (
     <div
       style={{
@@ -48,14 +50,15 @@ const ImageBlockRenderer: React.FC<{ props: Block['props'] }> = ({ props }) => {
       }}
     >
       {p.src ? (
-        <img src={p.src} alt={p.alt} style={{ width: p.width, height: p.height, maxWidth: '100%' }} />
+        <img src={p.src} alt={p.alt} style={{ width: imageWidth, height: p.height, maxWidth: '100%' }} />
       ) : (
         <div
           style={{
-            width: '100%',
-            height: '150px',
+            width: imageWidth,
+            maxWidth: '100%',
+            height: '120px',
             backgroundColor: '#f3f4f6',
-            display: 'flex',
+            display: 'inline-flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
@@ -65,13 +68,13 @@ const ImageBlockRenderer: React.FC<{ props: Block['props'] }> = ({ props }) => {
             cursor: 'pointer',
           }}
         >
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: '8px', opacity: 0.5 }}>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: '6px', opacity: 0.5 }}>
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
             <circle cx="8.5" cy="8.5" r="1.5"/>
             <polyline points="21 15 16 10 5 21"/>
           </svg>
-          <span style={{ fontSize: '14px', fontWeight: 500 }}>Click to select</span>
-          <span style={{ fontSize: '12px', marginTop: '4px', opacity: 0.7 }}>Enter image URL in Properties panel →</span>
+          <span style={{ fontSize: '12px', fontWeight: 500 }}>Click to select</span>
+          <span style={{ fontSize: '11px', marginTop: '2px', opacity: 0.7 }}>Set URL in Properties →</span>
         </div>
       )}
     </div>

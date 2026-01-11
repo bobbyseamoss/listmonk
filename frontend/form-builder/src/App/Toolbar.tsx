@@ -164,7 +164,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, onCancel }) => {
                   case 'spacer':
                     return `<div style="height:${p.height}px"></div>`;
                   case 'image':
-                    return p.src ? `<div style="text-align:${p.alignment};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px"><img src="${p.src}" alt="${p.alt}" style="width:${p.width};height:${p.height};max-width:100%"></div>` : '';
+                    const imgWidth = typeof p.width === 'number' ? `${p.width}px` : p.width;
+                    return p.src ? `<div style="text-align:${p.alignment};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px"><img src="${p.src}" alt="${p.alt}" style="width:${imgWidth};height:${p.height};max-width:100%"></div>` : '';
                   default:
                     return `<div style="padding:8px;background:#f3f4f6;border:1px dashed #d1d5db;border-radius:4px;font-size:12px;color:#6b7280">[${block.type}]</div>`;
                 }

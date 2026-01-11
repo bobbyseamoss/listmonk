@@ -409,23 +409,20 @@ const BlockPropertiesPanel: React.FC = () => {
           sx={{ mb: 2 }}
         />
       )}
-      {/* Image width - only for image blocks */}
+      {/* Image width - only for image blocks (in pixels) */}
       {selectedBlock.type === 'image' && props.width !== undefined && (
-        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-          <InputLabel>Image Width</InputLabel>
-          <Select
-            value={props.width}
-            label="Image Width"
-            onChange={(e) => handleChange('width', e.target.value)}
-          >
-            <MenuItem value="100%">Full Width (100%)</MenuItem>
-            <MenuItem value="75%">75%</MenuItem>
-            <MenuItem value="50%">Half Width (50%)</MenuItem>
-            <MenuItem value="33%">Third Width (33%)</MenuItem>
-            <MenuItem value="25%">Quarter Width (25%)</MenuItem>
-            <MenuItem value="auto">Auto</MenuItem>
-          </Select>
-        </FormControl>
+        <TextField
+          fullWidth
+          size="small"
+          label="Image Width (px)"
+          type="number"
+          value={props.width}
+          onChange={(e) => handleChange('width', parseInt(e.target.value) || 200)}
+          InputProps={{
+            endAdornment: <Typography variant="caption" color="text.secondary">px</Typography>,
+          }}
+          sx={{ mb: 2 }}
+        />
       )}
       {/* Image alignment - only for image blocks */}
       {selectedBlock.type === 'image' && props.alignment !== undefined && (

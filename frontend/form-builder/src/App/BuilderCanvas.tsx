@@ -12,6 +12,11 @@ import type { Block } from '@/types';
 
 // Helper to get block width from props - accounts for gap between blocks
 const getBlockWidth = (block: Block): string => {
+  // Image blocks always take full width - image alignment is handled inside the block
+  if (block.type === 'image') {
+    return '100%';
+  }
+
   const props = block.props as Record<string, unknown>;
   const width = (props.width as string) || '100%';
 

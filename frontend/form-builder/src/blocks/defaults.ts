@@ -42,7 +42,7 @@ export const blockDefinitions: BlockDefinition[] = [
     defaultProps: {
       src: '',
       alt: 'Image',
-      width: '100%',
+      width: 200,
       height: 'auto',
       alignment: 'center',
       padding: defaultPadding,
@@ -56,6 +56,7 @@ export const blockDefinitions: BlockDefinition[] = [
     icon: 'email',
     category: 'input',
     defaultProps: {
+      name: 'email',
       label: 'Email address',
       placeholder: 'Enter your email',
       required: true,
@@ -79,6 +80,8 @@ export const blockDefinitions: BlockDefinition[] = [
       label: 'Name',
       placeholder: 'Enter your name',
       required: false,
+      subscriberField: 'name',
+      customFieldName: '',
       fontSize: 14,
       labelColor: '#333333',
       inputBgColor: '#ffffff',
