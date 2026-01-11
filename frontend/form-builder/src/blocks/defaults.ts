@@ -60,6 +60,7 @@ export const blockDefinitions: BlockDefinition[] = [
       label: 'Email address',
       placeholder: 'Enter your email',
       required: true,
+      showLabel: true,
       fontSize: 14,
       labelColor: '#333333',
       inputBgColor: '#ffffff',
@@ -222,8 +223,9 @@ export const blockDefinitions: BlockDefinition[] = [
       hoverBgColor: '#1d4ed8',
       borderRadius: 6,
       fullWidth: true,
+      width: '100%',
       padding: { top: 12, right: 24, bottom: 12, left: 24 },
-      margin: { top: 16, right: 0, bottom: 0, left: 0 },
+      margin: { top: 0, right: 0, bottom: 0, left: 0 },
     },
   },
 

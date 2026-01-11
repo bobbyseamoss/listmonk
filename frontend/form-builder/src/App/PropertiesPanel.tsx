@@ -256,6 +256,19 @@ const BlockPropertiesPanel: React.FC = () => {
         />
       )}
 
+      {props.showLabel !== undefined && (
+        <FormControlLabel
+          control={
+            <Switch
+              checked={props.showLabel}
+              onChange={(e) => handleChange('showLabel', e.target.checked)}
+            />
+          }
+          label="Show Label"
+          sx={{ mb: 2 }}
+        />
+      )}
+
       {props.fontSize !== undefined && (
         <Box sx={{ mb: 2 }}>
           <Typography variant="caption" color="text.secondary">
@@ -332,7 +345,8 @@ const BlockPropertiesPanel: React.FC = () => {
         />
       )}
 
-      {props.width !== undefined && (
+      {/* Block width - not for image blocks (they have separate image width) */}
+      {props.width !== undefined && selectedBlock.type !== 'image' && (
         <FormControl fullWidth size="small" sx={{ mb: 2 }}>
           <InputLabel>Block Width</InputLabel>
           <Select
@@ -341,6 +355,8 @@ const BlockPropertiesPanel: React.FC = () => {
             onChange={(e) => handleChange('width', e.target.value)}
           >
             <MenuItem value="100%">Full Width (100%)</MenuItem>
+            <MenuItem value="75%">75%</MenuItem>
+            <MenuItem value="66%">Two Thirds (66%)</MenuItem>
             <MenuItem value="50%">Half Width (50%)</MenuItem>
             <MenuItem value="33%">Third Width (33%)</MenuItem>
             <MenuItem value="25%">Quarter Width (25%)</MenuItem>

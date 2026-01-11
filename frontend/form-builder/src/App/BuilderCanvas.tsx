@@ -21,14 +21,16 @@ const getBlockWidth = (block: Block): string => {
   const width = (props.width as string) || '100%';
 
   // When blocks are less than 100%, account for the 8px gap (gap: 1 = 8px in MUI)
-  if (width === '50%') {
-    return 'calc(50% - 4px)';
-  } else if (width === '33%') {
-    return 'calc(33.333% - 5.33px)';
-  } else if (width === '25%') {
-    return 'calc(25% - 6px)';
-  }
-  return width;
+  // The formula is: calc(X% - gap * (1 - X/100)) where gap = 8px
+  const widthMap: Record<string, string> = {
+    '75%': 'calc(75% - 2px)',
+    '66%': 'calc(66.666% - 2.67px)',
+    '50%': 'calc(50% - 4px)',
+    '33%': 'calc(33.333% - 5.33px)',
+    '25%': 'calc(25% - 6px)',
+  };
+
+  return widthMap[width] || width;
 };
 
 interface SortableBlockProps {

@@ -83,11 +83,14 @@ const ImageBlockRenderer: React.FC<{ props: Block['props'] }> = ({ props }) => {
 
 const EmailInputBlockRenderer: React.FC<{ props: Block['props'] }> = ({ props }) => {
   const p = props as any;
+  const showLabel = p.showLabel !== false; // Default to true if not set
   return (
     <div style={{ padding: `${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px` }}>
-      <label style={{ display: 'block', marginBottom: '4px', fontSize: p.fontSize, color: p.labelColor }}>
-        {p.label} {p.required && <span style={{ color: 'red' }}>*</span>}
-      </label>
+      {showLabel && (
+        <label style={{ display: 'block', marginBottom: '4px', fontSize: p.fontSize, color: p.labelColor }}>
+          {p.label} {p.required && <span style={{ color: 'red' }}>*</span>}
+        </label>
+      )}
       <input
         type="email"
         placeholder={p.placeholder}
