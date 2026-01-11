@@ -56,12 +56,26 @@ export class FormController {
     scripts.forEach((script) => {
       const formUuid = script.getAttribute('data-form');
       const formType = script.getAttribute('data-type');
-      const target = script.getAttribute('data-target');
+      let target = script.getAttribute('data-target');
 
       if (formUuid) {
+        // For embed forms without a target, auto-create a container div before the script
+        if (formType === 'embed' && !target) {
+          const containerId = `lm-form-${formUuid}`;
+          // Check if container already exists
+          let container = document.getElementById(containerId);
+          if (!container) {
+            container = document.createElement('div');
+            container.id = containerId;
+            script.parentNode?.insertBefore(container, script);
+          }
+          target = `#${containerId}`;
+        }
+
         this.load(formUuid, {
           trigger: formType === 'embed' ? 'manual' : 'auto',
           target: target || undefined,
+          scriptElement: script as HTMLScriptElement,
         });
       }
     });
@@ -143,10 +157,26 @@ export class FormController {
         return;
       }
 
-      // For embed type, show immediately at target
-      if (config.formType === 'embed' && options.target) {
-        this.show(formUuid, options);
-        return;
+      // For embed type forms, handle auto-creation of container if needed
+      if (config.formType === 'embed') {
+        let target = options.target;
+
+        // If no target but we have a script element, auto-create a container
+        if (!target && options.scriptElement) {
+          const containerId = `lm-form-${formUuid}`;
+          let container = document.getElementById(containerId);
+          if (!container) {
+            container = document.createElement('div');
+            container.id = containerId;
+            options.scriptElement.parentNode?.insertBefore(container, options.scriptElement);
+          }
+          target = `#${containerId}`;
+        }
+
+        if (target) {
+          this.show(formUuid, { ...options, target });
+          return;
+        }
       }
 
       // For manual trigger type, don't set up automatic triggers
@@ -190,7 +220,7 @@ export class FormController {
     }
 
     // Create and render form
-    const renderer = new FormRenderer(config);
+    const renderer = new FormRenderer(config, this.baseUrl);
     const element = renderer.render(options.target);
 
     // Store active form
@@ -286,10 +316,10 @@ export class FormController {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId: visitor.sessionId,
-          visitorId: visitor.visitorId,
-          pageUrl: window.location.href,
-          deviceType: getDeviceType(),
+          session_id: visitor.sessionId,
+          visitor_id: visitor.visitorId,
+          page_url: window.location.href,
+          device_type: getDeviceType(),
         }),
       });
     } catch (error) {

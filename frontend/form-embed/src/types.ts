@@ -77,6 +77,7 @@ export interface FrequencyConfig {
 export interface ShowOptions {
   trigger?: 'auto' | 'manual';
   target?: string; // CSS selector for embed forms
+  scriptElement?: HTMLScriptElement; // Reference to the script tag that loaded this form
   onShow?: () => void;
   onClose?: () => void;
   onSubmit?: (data: Record<string, unknown>) => void;
