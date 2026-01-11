@@ -23,14 +23,20 @@ import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows';
 import TabletIcon from '@mui/icons-material/Tablet';
 import { useFormBuilderStore } from '@/store';
 
+// Device width configurations for preview
+const deviceDimensions = {
+  desktop: { width: 1200, height: 800 },
+  tablet: { width: 768, height: 1024 },
+  mobile: { width: 375, height: 667 },
+};
+
 interface ToolbarProps {
   onSave: () => void;
   onCancel: () => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({ onSave, onCancel }) => {
-  const { form, updateFormField } = useFormBuilderStore();
-  const [previewDevice, setPreviewDevice] = React.useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const { form, updateFormField, previewDevice, setPreviewDevice } = useFormBuilderStore();
 
   const statusColors: Record<string, 'default' | 'success' | 'warning' | 'error'> = {
     draft: 'default',
@@ -135,23 +141,72 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, onCancel }) => {
           variant="outlined"
           startIcon={<VisibilityIcon />}
           onClick={() => {
-            // Open preview in new window
-            const previewWindow = window.open('', '_blank', 'width=800,height=600');
+            const device = deviceDimensions[previewDevice];
+            const previewWindow = window.open('', '_blank', `width=${device.width},height=${device.height}`);
             if (previewWindow) {
+              // Generate block HTML
+              const currentStep = form.steps[0]; // Preview first step
+              const blocksHtml = currentStep.blocks.map(block => {
+                const p = block.props as any;
+                switch (block.type) {
+                  case 'heading':
+                    return `<h${p.level} style="font-size:${p.fontSize}px;font-weight:${p.fontWeight};color:${p.color};text-align:${p.textAlign};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px;margin:0">${p.content}</h${p.level}>`;
+                  case 'text':
+                    return `<div style="font-size:${p.fontSize}px;font-weight:${p.fontWeight};color:${p.color};text-align:${p.textAlign};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px">${p.content}</div>`;
+                  case 'email-input':
+                    return `<div style="padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px"><label style="display:block;margin-bottom:4px;font-size:${p.fontSize}px;color:${p.labelColor}">${p.label}${p.required ? ' <span style="color:red">*</span>' : ''}</label><input type="email" placeholder="${p.placeholder}" style="width:100%;padding:10px 12px;font-size:${p.fontSize}px;background:${p.inputBgColor};border:1px solid ${p.inputBorderColor};border-radius:${p.borderRadius}px;color:${p.inputTextColor};box-sizing:border-box"></div>`;
+                  case 'text-input':
+                    return `<div style="padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px"><label style="display:block;margin-bottom:4px;font-size:${p.fontSize}px;color:${p.labelColor}">${p.label}${p.required ? ' <span style="color:red">*</span>' : ''}</label><input type="text" placeholder="${p.placeholder}" style="width:100%;padding:10px 12px;font-size:${p.fontSize}px;background:${p.inputBgColor};border:1px solid ${p.inputBorderColor};border-radius:${p.borderRadius}px;color:${p.inputTextColor};box-sizing:border-box"></div>`;
+                  case 'button':
+                    return `<div style="margin:${p.margin.top}px ${p.margin.right}px ${p.margin.bottom}px ${p.margin.left}px"><button style="width:${p.fullWidth ? '100%' : 'auto'};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px;font-size:${p.fontSize}px;font-weight:${p.fontWeight};color:${p.textColor};background:${p.bgColor};border:none;border-radius:${p.borderRadius}px;cursor:pointer">${p.text}</button></div>`;
+                  case 'divider':
+                    return `<hr style="margin:${p.margin.top}px 0 ${p.margin.bottom}px 0;border:none;border-top:${p.thickness}px ${p.style} ${p.color}">`;
+                  case 'spacer':
+                    return `<div style="height:${p.height}px"></div>`;
+                  case 'image':
+                    return p.src ? `<div style="text-align:${p.alignment};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px"><img src="${p.src}" alt="${p.alt}" style="width:${p.width};height:${p.height};max-width:100%"></div>` : '';
+                  default:
+                    return `<div style="padding:8px;background:#f3f4f6;border:1px dashed #d1d5db;border-radius:4px;font-size:12px;color:#6b7280">[${block.type}]</div>`;
+                }
+              }).join('');
+
               previewWindow.document.write(`
                 <!DOCTYPE html>
                 <html>
                 <head>
                   <title>Form Preview - ${form.name}</title>
                   <style>
-                    body { font-family: sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+                    * { box-sizing: border-box; }
+                    body {
+                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                      margin: 0;
+                      padding: 40px;
+                      background: #f5f5f5;
+                      min-height: 100vh;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                    }
+                    .form-container {
+                      width: ${form.settings.width};
+                      max-width: ${form.settings.maxWidth};
+                      background: ${form.settings.backgroundColor};
+                      border-radius: ${form.settings.borderRadius}px;
+                      padding: ${form.settings.padding.top}px ${form.settings.padding.right}px ${form.settings.padding.bottom}px ${form.settings.padding.left}px;
+                      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+                    }
+                    input, button { font-family: inherit; }
+                    button:hover { opacity: 0.9; }
                   </style>
                 </head>
                 <body>
-                  <div id="form-preview">Form preview will be rendered here</div>
+                  <div class="form-container">
+                    ${blocksHtml || '<p style="text-align:center;color:#9ca3af">No blocks added yet</p>'}
+                  </div>
                 </body>
                 </html>
               `);
+              previewWindow.document.close();
             }
           }}
         >

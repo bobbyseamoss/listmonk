@@ -118,6 +118,13 @@ const SortableBlock: React.FC<SortableBlockProps> = ({
   );
 };
 
+// Device width configurations
+const deviceWidths = {
+  desktop: { maxWidth: '100%', label: 'Desktop' },
+  tablet: { maxWidth: '768px', label: 'Tablet' },
+  mobile: { maxWidth: '375px', label: 'Mobile' },
+};
+
 export const BuilderCanvas: React.FC = () => {
   const {
     form,
@@ -130,9 +137,11 @@ export const BuilderCanvas: React.FC = () => {
     addStep,
     removeStep,
     updateStepName,
+    previewDevice,
   } = useFormBuilderStore();
 
   const currentStep = form.steps[selectedStepIndex];
+  const deviceConfig = deviceWidths[previewDevice];
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     if (newValue === form.steps.length) {
@@ -160,18 +169,26 @@ export const BuilderCanvas: React.FC = () => {
         </Box>
       )}
 
-      {/* Form preview container */}
+      {/* Form preview container - constrained by device preview */}
       <Box
         sx={{
-          width: form.settings.width,
-          maxWidth: form.settings.maxWidth,
-          backgroundColor: form.settings.backgroundColor,
-          borderRadius: `${form.settings.borderRadius}px`,
-          padding: `${form.settings.padding.top}px ${form.settings.padding.right}px ${form.settings.padding.bottom}px ${form.settings.padding.left}px`,
-          boxShadow: 3,
-          minHeight: 200,
+          width: '100%',
+          maxWidth: deviceConfig.maxWidth,
+          transition: 'max-width 0.3s ease',
         }}
       >
+        <Box
+          sx={{
+            width: form.settings.width,
+            maxWidth: form.settings.maxWidth,
+            backgroundColor: form.settings.backgroundColor,
+            borderRadius: `${form.settings.borderRadius}px`,
+            padding: `${form.settings.padding.top}px ${form.settings.padding.right}px ${form.settings.padding.bottom}px ${form.settings.padding.left}px`,
+            boxShadow: 3,
+            minHeight: 200,
+            margin: '0 auto',
+          }}
+        >
         {currentStep.blocks.length === 0 ? (
           <Box
             sx={{
@@ -207,13 +224,15 @@ export const BuilderCanvas: React.FC = () => {
             ))}
           </Box>
         )}
+        </Box>
       </Box>
 
       {/* Form type indicator */}
       <Box sx={{ mt: 2 }}>
         <Typography variant="caption" color="text.secondary">
           Form Type: {form.formType.charAt(0).toUpperCase() + form.formType.slice(1)} |
-          Status: {form.status.charAt(0).toUpperCase() + form.status.slice(1)}
+          Status: {form.status.charAt(0).toUpperCase() + form.status.slice(1)} |
+          Preview: {deviceConfig.label}
         </Typography>
       </Box>
     </Box>

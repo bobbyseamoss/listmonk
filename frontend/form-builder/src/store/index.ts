@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Block, BlockType, FormConfig, FormStep, FormSettings, FormTargeting, FormTriggers, FormFrequency, CouponConfig } from '@/types';
 import { getDefaultBlockProps } from '@/blocks/defaults';
 
+type PreviewDevice = 'desktop' | 'tablet' | 'mobile';
+
 interface FormBuilderState {
   // Form configuration
   form: FormConfig;
@@ -11,10 +13,12 @@ interface FormBuilderState {
   selectedBlockId: string | null;
   selectedStepIndex: number;
   isDirty: boolean;
+  previewDevice: PreviewDevice;
 
   // Actions
   setForm: (form: FormConfig) => void;
   updateFormField: <K extends keyof FormConfig>(field: K, value: FormConfig[K]) => void;
+  setPreviewDevice: (device: PreviewDevice) => void;
 
   // Step actions
   addStep: () => void;
@@ -65,6 +69,7 @@ const defaultTargeting: FormTargeting = {
   devices: ['desktop', 'tablet', 'mobile'],
   countries: [],
   excludeSubscribers: false,
+  shopifyPages: [],
 };
 
 const defaultTriggers: FormTriggers = {
@@ -109,8 +114,33 @@ export const useFormBuilderStore = create<FormBuilderState>((set, get) => ({
   selectedBlockId: null,
   selectedStepIndex: 0,
   isDirty: false,
+  previewDevice: 'desktop',
 
-  setForm: (form) => set({ form, isDirty: false }),
+  setPreviewDevice: (device) => set({ previewDevice: device }),
+
+  setForm: (form) => {
+    // If form is empty/invalid, use default form
+    if (!form || !form.steps || !Array.isArray(form.steps) || form.steps.length === 0) {
+      set({ form: createDefaultForm(), isDirty: false });
+      return;
+    }
+    // Merge with defaults to ensure all required fields exist
+    const mergedForm: FormConfig = {
+      name: form.name || 'New Form',
+      description: form.description || '',
+      formType: form.formType || 'popup',
+      status: form.status || 'draft',
+      steps: form.steps,
+      settings: { ...defaultSettings, ...(form.settings || {}) },
+      targeting: { ...defaultTargeting, ...(form.targeting || {}) },
+      triggers: { ...defaultTriggers, ...(form.triggers || {}) },
+      frequency: { ...defaultFrequency, ...(form.frequency || {}) },
+      listIds: form.listIds || [],
+      couponConfig: { ...defaultCouponConfig, ...(form.couponConfig || {}) },
+      customCss: form.customCss || '',
+    };
+    set({ form: mergedForm, isDirty: false });
+  },
 
   updateFormField: (field, value) =>
     set((state) => ({
@@ -310,5 +340,5 @@ export const useFormBuilderStore = create<FormBuilderState>((set, get) => ({
       isDirty: true,
     })),
 
-  reset: () => set({ form: createDefaultForm(), selectedBlockId: null, selectedStepIndex: 0, isDirty: false }),
+  reset: () => set({ form: createDefaultForm(), selectedBlockId: null, selectedStepIndex: 0, isDirty: false, previewDevice: 'desktop' }),
 }));
