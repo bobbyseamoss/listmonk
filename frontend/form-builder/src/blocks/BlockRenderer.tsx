@@ -56,14 +56,22 @@ const ImageBlockRenderer: React.FC<{ props: Block['props'] }> = ({ props }) => {
             height: '150px',
             backgroundColor: '#f3f4f6',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#9ca3af',
+            color: '#6b7280',
             border: '2px dashed #d1d5db',
             borderRadius: '4px',
+            cursor: 'pointer',
           }}
         >
-          Click to add image
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: '8px', opacity: 0.5 }}>
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          <span style={{ fontSize: '14px', fontWeight: 500 }}>Click to select</span>
+          <span style={{ fontSize: '12px', marginTop: '4px', opacity: 0.7 }}>Enter image URL in Properties panel →</span>
         </div>
       )}
     </div>
