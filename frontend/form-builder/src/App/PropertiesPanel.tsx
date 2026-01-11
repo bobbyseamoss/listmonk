@@ -204,6 +204,45 @@ const BlockPropertiesPanel: React.FC = () => {
         />
       )}
 
+      {/* Subscriber Field Mapping - only for text-input blocks */}
+      {props.subscriberField !== undefined && (
+        <>
+          <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+            <InputLabel>Subscriber Field</InputLabel>
+            <Select
+              value={props.subscriberField}
+              label="Subscriber Field"
+              onChange={(e) => handleChange('subscriberField', e.target.value)}
+            >
+              <MenuItem value="name">Name (built-in)</MenuItem>
+              <MenuItem value="first_name">First Name</MenuItem>
+              <MenuItem value="last_name">Last Name</MenuItem>
+              <MenuItem value="phone">Phone</MenuItem>
+              <MenuItem value="company">Company</MenuItem>
+              <MenuItem value="address">Address</MenuItem>
+              <MenuItem value="city">City</MenuItem>
+              <MenuItem value="state">State/Province</MenuItem>
+              <MenuItem value="zip">ZIP/Postal Code</MenuItem>
+              <MenuItem value="country">Country</MenuItem>
+              <MenuItem value="birthday">Birthday</MenuItem>
+              <MenuItem value="custom">Custom Attribute...</MenuItem>
+            </Select>
+          </FormControl>
+          {props.subscriberField === 'custom' && (
+            <TextField
+              fullWidth
+              size="small"
+              label="Custom Attribute Name"
+              value={props.customFieldName || ''}
+              onChange={(e) => handleChange('customFieldName', e.target.value)}
+              placeholder="e.g., favorite_color"
+              helperText="Lowercase, use underscores for spaces"
+              sx={{ mb: 2 }}
+            />
+          )}
+        </>
+      )}
+
       {props.required !== undefined && (
         <FormControlLabel
           control={
@@ -369,6 +408,39 @@ const BlockPropertiesPanel: React.FC = () => {
           onChange={(e) => handleChange('alt', e.target.value)}
           sx={{ mb: 2 }}
         />
+      )}
+      {/* Image width - only for image blocks */}
+      {selectedBlock.type === 'image' && props.width !== undefined && (
+        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+          <InputLabel>Image Width</InputLabel>
+          <Select
+            value={props.width}
+            label="Image Width"
+            onChange={(e) => handleChange('width', e.target.value)}
+          >
+            <MenuItem value="100%">Full Width (100%)</MenuItem>
+            <MenuItem value="75%">75%</MenuItem>
+            <MenuItem value="50%">Half Width (50%)</MenuItem>
+            <MenuItem value="33%">Third Width (33%)</MenuItem>
+            <MenuItem value="25%">Quarter Width (25%)</MenuItem>
+            <MenuItem value="auto">Auto</MenuItem>
+          </Select>
+        </FormControl>
+      )}
+      {/* Image alignment - only for image blocks */}
+      {selectedBlock.type === 'image' && props.alignment !== undefined && (
+        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+          <InputLabel>Alignment</InputLabel>
+          <Select
+            value={props.alignment}
+            label="Alignment"
+            onChange={(e) => handleChange('alignment', e.target.value)}
+          >
+            <MenuItem value="left">Left</MenuItem>
+            <MenuItem value="center">Center</MenuItem>
+            <MenuItem value="right">Right</MenuItem>
+          </Select>
+        </FormControl>
       )}
 
       {/* Spacer */}
