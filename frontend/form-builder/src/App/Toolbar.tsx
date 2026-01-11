@@ -182,7 +182,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, onCancel }) => {
                     blockContent = `<div style="padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px"><label style="display:block;margin-bottom:4px;font-size:${p.fontSize}px;color:${p.labelColor}">${p.label}${p.required ? ' <span style="color:red">*</span>' : ''}</label><input type="text" placeholder="${p.placeholder}" style="width:100%;padding:10px 12px;font-size:${p.fontSize}px;background:${p.inputBgColor};border:1px solid ${p.inputBorderColor};border-radius:${p.borderRadius}px;color:${p.inputTextColor};box-sizing:border-box"></div>`;
                     break;
                   case 'button':
-                    blockContent = `<div style="margin:${p.margin.top}px ${p.margin.right}px ${p.margin.bottom}px ${p.margin.left}px;height:100%;display:flex;align-items:flex-end"><button style="width:${p.fullWidth ? '100%' : 'auto'};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px;font-size:${p.fontSize}px;font-weight:${p.fontWeight};color:${p.textColor};background:${p.bgColor};border:none;border-radius:${p.borderRadius}px;cursor:pointer">${p.text}</button></div>`;
+                    blockContent = `<div style="margin:${p.margin.top}px ${p.margin.right}px ${p.margin.bottom}px ${p.margin.left}px"><button style="width:${p.fullWidth ? '100%' : 'auto'};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px;font-size:${p.fontSize}px;font-weight:${p.fontWeight};color:${p.textColor};background:${p.bgColor};border:none;border-radius:${p.borderRadius}px;cursor:pointer">${p.text}</button></div>`;
                     break;
                   case 'divider':
                     blockContent = `<hr style="margin:${p.margin.top}px 0 ${p.margin.bottom}px 0;border:none;border-top:${p.thickness}px ${p.style} ${p.color}">`;
@@ -231,7 +231,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, onCancel }) => {
                       display: flex;
                       flex-wrap: wrap;
                       gap: 8px;
-                      align-items: stretch;
+                      align-items: flex-end;
                     }
                     input, button { font-family: inherit; }
                     button:hover { opacity: 0.9; }
