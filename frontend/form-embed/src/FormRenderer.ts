@@ -2,12 +2,14 @@ import type { FormConfig, FormBlock, FormStep, FormSettings } from './types';
 
 export class FormRenderer {
   private config: FormConfig;
+  private baseUrl: string;
   private currentStep: number = 0;
   private formData: Record<string, unknown> = {};
   private element: HTMLElement | null = null;
 
-  constructor(config: FormConfig) {
+  constructor(config: FormConfig, baseUrl: string = '') {
     this.config = config;
+    this.baseUrl = baseUrl;
   }
 
   render(targetSelector?: string): HTMLElement {
@@ -198,6 +200,9 @@ export class FormRenderer {
     // Create form element
     const form = document.createElement('form');
     form.className = 'lm-form';
+    // Use flexbox to allow side-by-side blocks with width < 100%
+    // align-items: flex-end ensures button aligns with input (not label)
+    form.style.cssText = 'display: flex; flex-wrap: wrap; align-items: flex-end;';
     form.addEventListener('submit', (e) => this.handleSubmit(e));
 
     // Render blocks
@@ -216,6 +221,15 @@ export class FormRenderer {
     container.setAttribute('data-block-id', block.id);
 
     const props = block.props as Record<string, unknown>;
+
+    // Apply width if specified (for side-by-side layout)
+    const blockWidth = props.width as string | undefined;
+    if (blockWidth && blockWidth !== '100%') {
+      container.style.width = blockWidth;
+      container.style.boxSizing = 'border-box';
+    } else {
+      container.style.width = '100%';
+    }
 
     switch (block.type) {
       case 'text':
@@ -459,7 +473,7 @@ export class FormRenderer {
       type = 'submit';
     }
 
-    return `<div style="margin: ${margin.top}px ${margin.right}px ${margin.bottom}px ${margin.left}px;">
+    return `<div style="padding: 8px; margin: ${margin.top}px ${margin.right}px ${margin.bottom}px ${margin.left}px;">
       <button type="${type}" data-action="${action}"
         style="width: ${props.fullWidth ? '100%' : 'auto'};
         padding: ${padding.top}px ${padding.right}px ${padding.bottom}px ${padding.left}px;
@@ -606,13 +620,13 @@ export class FormRenderer {
 
     // Submit to API
     try {
-      const response = await fetch(`/api/public/forms/${this.config.uuid}/submit`, {
+      const response = await fetch(`${this.baseUrl}/api/public/forms/${this.config.uuid}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: data.email,
           data,
-          pageUrl: window.location.href,
+          page_url: window.location.href,
           referrer: document.referrer,
         }),
       });
