@@ -144,32 +144,62 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, onCancel }) => {
             const device = deviceDimensions[previewDevice];
             const previewWindow = window.open('', '_blank', `width=${device.width},height=${device.height}`);
             if (previewWindow) {
-              // Generate block HTML
+              // Helper to get block width CSS
+              const getBlockWidth = (blockType: string, width: string | undefined): string => {
+                // Image blocks always take full width
+                if (blockType === 'image') return '100%';
+                const w = width || '100%';
+                // Account for 8px gap
+                const widthMap: Record<string, string> = {
+                  '75%': 'calc(75% - 2px)',
+                  '66%': 'calc(66.666% - 2.67px)',
+                  '50%': 'calc(50% - 4px)',
+                  '33%': 'calc(33.333% - 5.33px)',
+                  '25%': 'calc(25% - 6px)',
+                };
+                return widthMap[w] || w;
+              };
+
+              // Generate block HTML with width wrappers
               const currentStep = form.steps[0]; // Preview first step
               const blocksHtml = currentStep.blocks.map(block => {
                 const p = block.props as any;
+                const blockWidth = getBlockWidth(block.type, p.width);
+                let blockContent = '';
+
                 switch (block.type) {
                   case 'heading':
-                    return `<h${p.level} style="font-size:${p.fontSize}px;font-weight:${p.fontWeight};color:${p.color};text-align:${p.textAlign};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px;margin:0">${p.content}</h${p.level}>`;
+                    blockContent = `<h${p.level} style="font-size:${p.fontSize}px;font-weight:${p.fontWeight};color:${p.color};text-align:${p.textAlign};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px;margin:0">${p.content}</h${p.level}>`;
+                    break;
                   case 'text':
-                    return `<div style="font-size:${p.fontSize}px;font-weight:${p.fontWeight};color:${p.color};text-align:${p.textAlign};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px">${p.content}</div>`;
+                    blockContent = `<div style="font-size:${p.fontSize}px;font-weight:${p.fontWeight};color:${p.color};text-align:${p.textAlign};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px">${p.content}</div>`;
+                    break;
                   case 'email-input':
                     const emailLabel = p.showLabel !== false ? `<label style="display:block;margin-bottom:4px;font-size:${p.fontSize}px;color:${p.labelColor}">${p.label}${p.required ? ' <span style="color:red">*</span>' : ''}</label>` : '';
-                    return `<div style="padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px">${emailLabel}<input type="email" placeholder="${p.placeholder}" style="width:100%;padding:10px 12px;font-size:${p.fontSize}px;background:${p.inputBgColor};border:1px solid ${p.inputBorderColor};border-radius:${p.borderRadius}px;color:${p.inputTextColor};box-sizing:border-box"></div>`;
+                    blockContent = `<div style="padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px">${emailLabel}<input type="email" placeholder="${p.placeholder}" style="width:100%;padding:10px 12px;font-size:${p.fontSize}px;background:${p.inputBgColor};border:1px solid ${p.inputBorderColor};border-radius:${p.borderRadius}px;color:${p.inputTextColor};box-sizing:border-box"></div>`;
+                    break;
                   case 'text-input':
-                    return `<div style="padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px"><label style="display:block;margin-bottom:4px;font-size:${p.fontSize}px;color:${p.labelColor}">${p.label}${p.required ? ' <span style="color:red">*</span>' : ''}</label><input type="text" placeholder="${p.placeholder}" style="width:100%;padding:10px 12px;font-size:${p.fontSize}px;background:${p.inputBgColor};border:1px solid ${p.inputBorderColor};border-radius:${p.borderRadius}px;color:${p.inputTextColor};box-sizing:border-box"></div>`;
+                    blockContent = `<div style="padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px"><label style="display:block;margin-bottom:4px;font-size:${p.fontSize}px;color:${p.labelColor}">${p.label}${p.required ? ' <span style="color:red">*</span>' : ''}</label><input type="text" placeholder="${p.placeholder}" style="width:100%;padding:10px 12px;font-size:${p.fontSize}px;background:${p.inputBgColor};border:1px solid ${p.inputBorderColor};border-radius:${p.borderRadius}px;color:${p.inputTextColor};box-sizing:border-box"></div>`;
+                    break;
                   case 'button':
-                    return `<div style="margin:${p.margin.top}px ${p.margin.right}px ${p.margin.bottom}px ${p.margin.left}px"><button style="width:${p.fullWidth ? '100%' : 'auto'};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px;font-size:${p.fontSize}px;font-weight:${p.fontWeight};color:${p.textColor};background:${p.bgColor};border:none;border-radius:${p.borderRadius}px;cursor:pointer">${p.text}</button></div>`;
+                    blockContent = `<div style="margin:${p.margin.top}px ${p.margin.right}px ${p.margin.bottom}px ${p.margin.left}px;height:100%;display:flex;align-items:flex-end"><button style="width:${p.fullWidth ? '100%' : 'auto'};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px;font-size:${p.fontSize}px;font-weight:${p.fontWeight};color:${p.textColor};background:${p.bgColor};border:none;border-radius:${p.borderRadius}px;cursor:pointer">${p.text}</button></div>`;
+                    break;
                   case 'divider':
-                    return `<hr style="margin:${p.margin.top}px 0 ${p.margin.bottom}px 0;border:none;border-top:${p.thickness}px ${p.style} ${p.color}">`;
+                    blockContent = `<hr style="margin:${p.margin.top}px 0 ${p.margin.bottom}px 0;border:none;border-top:${p.thickness}px ${p.style} ${p.color}">`;
+                    break;
                   case 'spacer':
-                    return `<div style="height:${p.height}px"></div>`;
+                    blockContent = `<div style="height:${p.height}px"></div>`;
+                    break;
                   case 'image':
                     const imgWidth = typeof p.width === 'number' ? `${p.width}px` : p.width;
-                    return p.src ? `<div style="text-align:${p.alignment};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px"><img src="${p.src}" alt="${p.alt}" style="width:${imgWidth};height:${p.height};max-width:100%"></div>` : '';
+                    blockContent = p.src ? `<div style="text-align:${p.alignment};padding:${p.padding.top}px ${p.padding.right}px ${p.padding.bottom}px ${p.padding.left}px"><img src="${p.src}" alt="${p.alt}" style="width:${imgWidth};height:${p.height};max-width:100%"></div>` : '';
+                    break;
                   default:
-                    return `<div style="padding:8px;background:#f3f4f6;border:1px dashed #d1d5db;border-radius:4px;font-size:12px;color:#6b7280">[${block.type}]</div>`;
+                    blockContent = `<div style="padding:8px;background:#f3f4f6;border:1px dashed #d1d5db;border-radius:4px;font-size:12px;color:#6b7280">[${block.type}]</div>`;
                 }
+
+                // Wrap in width container
+                return `<div style="width:${blockWidth};box-sizing:border-box">${blockContent}</div>`;
               }).join('');
 
               previewWindow.document.write(`
@@ -197,13 +227,21 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, onCancel }) => {
                       padding: ${form.settings.padding.top}px ${form.settings.padding.right}px ${form.settings.padding.bottom}px ${form.settings.padding.left}px;
                       box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
                     }
+                    .blocks-container {
+                      display: flex;
+                      flex-wrap: wrap;
+                      gap: 8px;
+                      align-items: stretch;
+                    }
                     input, button { font-family: inherit; }
                     button:hover { opacity: 0.9; }
                   </style>
                 </head>
                 <body>
                   <div class="form-container">
-                    ${blocksHtml || '<p style="text-align:center;color:#9ca3af">No blocks added yet</p>'}
+                    <div class="blocks-container">
+                      ${blocksHtml || '<p style="text-align:center;color:#9ca3af;width:100%">No blocks added yet</p>'}
+                    </div>
                   </div>
                 </body>
                 </html>
