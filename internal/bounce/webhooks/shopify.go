@@ -11,7 +11,7 @@ import (
 
 // Shopify handles Shopify webhook verification and parsing.
 type Shopify struct {
-	webhookSecret string
+	webhookSecrets []string // Multiple secrets to try (client_secret, webhook_secret)
 }
 
 // ShopifyOrder represents the relevant fields from a Shopify order webhook.
@@ -70,16 +70,26 @@ type ShopifyLineItemProp struct {
 	Value string `json:"value"`
 }
 
-// NewShopify creates a new Shopify webhook handler.
-func NewShopify(secret string) *Shopify {
-	return &Shopify{webhookSecret: secret}
+// NewShopify creates a new Shopify webhook handler with one or more secrets.
+// For Partner app webhooks, pass the client_secret first (primary).
+// Multiple secrets are tried in order during verification.
+func NewShopify(secrets ...string) *Shopify {
+	// Filter out empty secrets
+	validSecrets := make([]string, 0, len(secrets))
+	for _, s := range secrets {
+		if s != "" {
+			validSecrets = append(validSecrets, s)
+		}
+	}
+	return &Shopify{webhookSecrets: validSecrets}
 }
 
 // VerifyWebhook verifies the HMAC signature of a Shopify webhook.
 // The signature is in the X-Shopify-Hmac-Sha256 header and is a base64-encoded
 // HMAC-SHA256 hash of the raw request body.
+// It tries all configured secrets in order and succeeds if any one matches.
 func (s *Shopify) VerifyWebhook(hmacHeader string, body []byte) error {
-	if s.webhookSecret == "" {
+	if len(s.webhookSecrets) == 0 {
 		return errors.New("webhook secret not configured")
 	}
 
@@ -93,17 +103,18 @@ func (s *Shopify) VerifyWebhook(hmacHeader string, body []byte) error {
 		return fmt.Errorf("error decoding HMAC: %v", err)
 	}
 
-	// Compute the HMAC of the body using the webhook secret
-	mac := hmac.New(sha256.New, []byte(s.webhookSecret))
-	mac.Write(body)
-	computedMAC := mac.Sum(nil)
+	// Try each secret until one matches
+	for _, secret := range s.webhookSecrets {
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write(body)
+		computedMAC := mac.Sum(nil)
 
-	// Compare the computed HMAC with the expected HMAC
-	if !hmac.Equal(computedMAC, expectedMAC) {
-		return errors.New("HMAC verification failed")
+		if hmac.Equal(computedMAC, expectedMAC) {
+			return nil // Success!
+		}
 	}
 
-	return nil
+	return errors.New("HMAC verification failed")
 }
 
 // ProcessOrder parses a Shopify order webhook payload and extracts relevant data.

@@ -367,8 +367,9 @@ func (app *App) ShopifyCustomerWebhook(c echo.Context) error {
 		return echo.NewHTTPError(responseCode, errorMsg)
 	}
 
-	// Initialize Shopify webhook handler
-	shopifyHandler := webhooks.NewShopify(app.cfg.ShopifyWebhookSecret)
+	// Initialize Shopify webhook handler with both client_secret (for Partner apps)
+	// and webhook_secret (for manual webhooks). It tries both during verification.
+	shopifyHandler := webhooks.NewShopify(app.cfg.ShopifyClientSecret, app.cfg.ShopifyWebhookSecret)
 
 	// Verify HMAC signature
 	hmacHeader := c.Request().Header.Get("X-Shopify-Hmac-Sha256")

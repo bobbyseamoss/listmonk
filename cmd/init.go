@@ -150,6 +150,7 @@ type Config struct {
 
 	ShopifyEnabled               bool
 	ShopifyWebhookSecret         string
+	ShopifyClientSecret          string
 	ShopifyAttributionWindowDays int
 
 	// Spintax configuration
@@ -506,11 +507,7 @@ func initConstConfig(ko *koanf.Koanf) *Config {
 	// Load Shopify settings
 	c.ShopifyEnabled = ko.Bool("shopify.enabled")
 	c.ShopifyWebhookSecret = ko.String("shopify.webhook_secret")
-	// For Shopify Partner app webhooks, the Client Secret is used for HMAC signing.
-	// Fallback to client_secret if webhook_secret is not set.
-	if c.ShopifyWebhookSecret == "" {
-		c.ShopifyWebhookSecret = ko.String("shopify.client_secret")
-	}
+	c.ShopifyClientSecret = ko.String("shopify.client_secret")
 	c.ShopifyAttributionWindowDays = ko.Int("shopify.attribution_window_days")
 	if c.ShopifyAttributionWindowDays == 0 {
 		c.ShopifyAttributionWindowDays = 7 // Default to 7 days

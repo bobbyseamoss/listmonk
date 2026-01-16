@@ -37,8 +37,9 @@ func (app *App) ShopifyWebhook(c echo.Context) error {
 		return echo.NewHTTPError(responseCode, errorMsg)
 	}
 
-	// Initialize Shopify webhook handler
-	shopifyHandler := webhooks.NewShopify(app.cfg.ShopifyWebhookSecret)
+	// Initialize Shopify webhook handler with both client_secret (for Partner apps)
+	// and webhook_secret (for manual webhooks). It tries both during verification.
+	shopifyHandler := webhooks.NewShopify(app.cfg.ShopifyClientSecret, app.cfg.ShopifyWebhookSecret)
 
 	// Verify HMAC signature
 	hmacHeader := c.Request().Header.Get("X-Shopify-Hmac-Sha256")
@@ -74,15 +75,81 @@ func (app *App) ShopifyWebhook(c echo.Context) error {
 		// Don't fail the webhook, just log the error
 	}
 
+	// Trigger flows based on the Shopify webhook topic
+	if app.flowProc != nil {
+		go app.triggerOrderFlows(c.Request().Header.Get("X-Shopify-Topic"), order, rawReq)
+	}
+
 	// Log the webhook
 	app.logWebhook(service, eventType, c.Request().Header, rawReq, responseCode, "", processed, errorMsg)
 
 	return c.JSON(http.StatusOK, okResp{true})
 }
 
+// triggerOrderFlows triggers flows based on the Shopify order webhook topic.
+func (app *App) triggerOrderFlows(topic string, order *webhooks.ShopifyOrder, rawJSON []byte) {
+	// Find the subscriber by email
+	sub, err := app.core.GetSubscriber(0, "", order.Email)
+	if err != nil {
+		app.log.Printf("triggerOrderFlows: no subscriber found for email %s, skipping flow trigger", order.Email)
+		return
+	}
+
+	// Determine the trigger type based on the webhook topic
+	var triggerType string
+	switch topic {
+	case "orders/create":
+		triggerType = models.FlowTriggerShopifyOrderCreated
+		// When an order is created, cancel any abandoned checkout flows for this subscriber
+		if err := app.core.CancelAbandonedCheckoutFlows(sub.ID); err != nil {
+			app.log.Printf("triggerOrderFlows: error cancelling abandoned checkout flows: %v", err)
+		}
+	case "orders/fulfilled":
+		triggerType = models.FlowTriggerShopifyOrderFulfilled
+	case "orders/cancelled":
+		triggerType = models.FlowTriggerShopifyOrderCancelled
+	default:
+		app.log.Printf("triggerOrderFlows: unhandled topic %s, skipping flow trigger", topic)
+		return
+	}
+
+	// Build event data from order
+	eventData := map[string]interface{}{
+		"order_id":       fmt.Sprintf("%d", order.ID),
+		"order_number":   order.OrderNumber,
+		"email":          order.Email,
+		"total_price":    order.TotalPrice,
+		"currency":       order.Currency,
+		"landing_site":   order.LandingSite,
+	}
+
+	// Parse line items if available
+	var fullOrder webhooks.ShopifyOrderFull
+	if err := json.Unmarshal(rawJSON, &fullOrder); err == nil {
+		var lineItems []map[string]interface{}
+		for _, item := range fullOrder.LineItems {
+			lineItems = append(lineItems, map[string]interface{}{
+				"product_id":    fmt.Sprintf("%d", item.ProductID),
+				"title":         item.Title,
+				"quantity":      item.Quantity,
+				"price":         item.Price,
+				"sku":           item.SKU,
+				"product_type":  item.ProductType,
+				"vendor":        item.Vendor,
+			})
+		}
+		eventData["line_items"] = lineItems
+	}
+
+	// Trigger the flow
+	if err := app.flowProc.TriggerFlow(triggerType, &sub, eventData); err != nil {
+		app.log.Printf("triggerOrderFlows: error triggering flow: %v", err)
+	}
+}
+
 // storeOrderFromWebhook stores a Shopify order from webhook data in the database.
 func (app *App) storeOrderFromWebhook(rawJSON []byte) error {
-	shopifyHandler := webhooks.NewShopify(app.cfg.ShopifyWebhookSecret)
+	shopifyHandler := webhooks.NewShopify() // Only used for parsing, no HMAC verification
 
 	// Parse the full order data
 	order, err := shopifyHandler.ProcessOrderFull(rawJSON)
