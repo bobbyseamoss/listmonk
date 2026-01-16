@@ -403,6 +403,11 @@ func (app *App) ShopifyCustomerWebhook(c echo.Context) error {
 	} else {
 		processed = true
 		app.log.Printf("synced Shopify customer %d (%s)", customer.ID, customer.Email)
+
+		// Trigger flows for new customers
+		if topic == "customers/create" && app.flowProc != nil {
+			go app.triggerCustomerFlows(customer)
+		}
 	}
 
 	// Log the webhook
@@ -411,23 +416,101 @@ func (app *App) ShopifyCustomerWebhook(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{true})
 }
 
+// triggerCustomerFlows triggers flows for a new Shopify customer.
+func (app *App) triggerCustomerFlows(customer *webhooks.ShopifyCustomer) {
+	// Find subscriber by email
+	sub, err := app.core.GetSubscriber(0, "", customer.Email)
+	if err != nil {
+		app.log.Printf("triggerCustomerFlows: no subscriber found for email %s, skipping flow trigger", customer.Email)
+		return
+	}
+
+	// Build event data from customer webhook
+	eventData := map[string]interface{}{
+		"customer_id":    fmt.Sprintf("%d", customer.ID),
+		"email":          customer.Email,
+		"first_name":     customer.FirstName,
+		"last_name":      customer.LastName,
+		"phone":          customer.Phone,
+		"orders_count":   customer.OrdersCount,
+		"total_spent":    customer.TotalSpent,
+		"currency":       customer.Currency,
+		"verified_email": customer.VerifiedEmail,
+		"tags":           customer.Tags,
+	}
+
+	// Add address if available
+	if customer.DefaultAddress != nil {
+		eventData["city"] = customer.DefaultAddress.City
+		eventData["province"] = customer.DefaultAddress.Province
+		eventData["country"] = customer.DefaultAddress.Country
+		eventData["country_code"] = customer.DefaultAddress.CountryCode
+		eventData["zip"] = customer.DefaultAddress.Zip
+	}
+
+	if err := app.flowProc.TriggerFlow(models.FlowTriggerShopifyCustomerCreated, &sub, eventData); err != nil {
+		app.log.Printf("triggerCustomerFlows: error triggering flow: %v", err)
+	}
+}
+
 // syncShopifyCustomer syncs a Shopify customer to the corresponding subscriber.
+// It creates a new subscriber if one doesn't exist, or updates the existing one.
 func (app *App) syncShopifyCustomer(customer *webhooks.ShopifyCustomer, listID int) error {
+	// Build Shopify attribs
+	shopifyAttribs := buildShopifyAttribs(customer)
+
 	// Find subscriber by email
 	sub, err := app.core.GetSubscriber(0, "", customer.Email)
 	if err != nil {
 		// Check if subscriber doesn't exist
-		if err.(*echo.HTTPError).Code == http.StatusBadRequest {
-			// Subscriber not found - log and skip
-			return fmt.Errorf("subscriber not found: %s", customer.Email)
+		if httpErr, ok := err.(*echo.HTTPError); ok && httpErr.Code == http.StatusBadRequest {
+			// Subscriber not found - create a new one
+			app.log.Printf("Shopify customer %s not found, creating new subscriber", customer.Email)
+
+			// Build subscriber name from Shopify first/last name
+			name := strings.TrimSpace(customer.FirstName + " " + customer.LastName)
+
+			newSub := models.Subscriber{
+				Email:  customer.Email,
+				Name:   name,
+				Status: models.SubscriberStatusEnabled,
+				Attribs: models.JSON{
+					"shopify": shopifyAttribs,
+				},
+			}
+
+			// Create subscriber with the configured list ID, preconfirmed
+			listIDs := []int{}
+			if listID > 0 {
+				listIDs = []int{listID}
+			}
+
+			createdSub, _, createErr := app.core.InsertSubscriber(newSub, listIDs, nil, true, false)
+			if createErr != nil {
+				// Check if this is a duplicate key error - subscriber was created by another
+				// process (race condition) or already exists despite lookup failing
+				if strings.Contains(createErr.Error(), "duplicate key") ||
+					strings.Contains(createErr.Error(), "idx_subs_email") {
+					app.log.Printf("Shopify customer %s: subscriber already exists (race condition), fetching and updating", customer.Email)
+					// Retry the lookup and update
+					sub, err = app.core.GetSubscriber(0, "", customer.Email)
+					if err != nil {
+						return fmt.Errorf("error finding existing subscriber after duplicate key: %v", err)
+					}
+					// Fall through to update logic below
+					goto updateSubscriber
+				}
+				return fmt.Errorf("error creating subscriber: %v", createErr)
+			}
+
+			app.log.Printf("created new subscriber %d (%s) from Shopify customer", createdSub.ID, customer.Email)
+			return nil
 		}
 		return fmt.Errorf("error finding subscriber: %v", err)
 	}
 
-	// Build Shopify attribs
-	shopifyAttribs := buildShopifyAttribs(customer)
-
-	// Merge with existing attribs
+updateSubscriber:
+	// Subscriber exists - update with Shopify attribs
 	if sub.Attribs == nil {
 		sub.Attribs = make(models.JSON)
 	}
@@ -439,6 +522,15 @@ func (app *App) syncShopifyCustomer(customer *webhooks.ShopifyCustomer, listID i
 		return fmt.Errorf("error updating subscriber: %v", err)
 	}
 
+	// If list ID is configured, try to add subscriber to that list
+	// (AddSubscribersToLists handles duplicates gracefully)
+	if listID > 0 {
+		if err := app.core.AddSubscribersToLists([]int{sub.ID}, []int{listID}); err != nil {
+			app.log.Printf("error adding subscriber %d to list %d: %v", sub.ID, listID, err)
+		}
+	}
+
+	app.log.Printf("updated subscriber %d (%s) with Shopify customer data", sub.ID, customer.Email)
 	return nil
 }
 
