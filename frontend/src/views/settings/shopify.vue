@@ -37,12 +37,12 @@
         <div class="column">
           <b-field
             :label="$t('settings.shopify.webhookSecret', 'Webhook Secret')"
-            :message="$t('settings.shopify.webhookSecretHelp', 'Copy this from your Shopify webhook configuration. Leave blank to keep existing value.')">
+            :message="webhookSecretHelp">
             <b-input
               v-model="webhookSecret"
               type="password"
               name="webhook_secret"
-              placeholder="Leave blank to keep existing" />
+              placeholder="Leave blank to use Client Secret" />
           </b-field>
         </div>
       </div>
@@ -230,13 +230,77 @@
           </p>
         </div>
       </div>
+
+      <hr />
+
+      <!-- Storefront Forms Section -->
+      <h4 class="title is-6">
+        <b-icon icon="form-select" size="is-small" class="mr-1" />
+        Storefront Forms
+      </h4>
+      <p class="has-text-grey mb-4">
+        Automatically display listmonk sign-up forms on your Shopify storefront.
+        Create forms in the <router-link :to="{ name: 'signupForms' }">Forms</router-link> section
+        and configure Shopify page targeting.
+      </p>
+
+      <div class="columns mb-4">
+        <div class="column is-3">
+          <b-field label="Enable Storefront Forms">
+            <b-switch v-model="formsEnabled" name="shopify.forms_enabled" :disabled="!storeUrl || !accessToken" />
+          </b-field>
+        </div>
+      </div>
+
+      <div v-if="!storeUrl || !accessToken" class="notification is-warning is-light mb-4">
+        <b-icon icon="alert" size="is-small" />
+        Configure Store URL and Admin API Access Token above before enabling Storefront Forms.
+      </div>
+
+      <div v-else-if="formsEnabled">
+        <div v-if="formsStatus && formsStatus.installed" class="notification is-success is-light mb-4">
+          <p><strong>ScriptTag Installed</strong></p>
+          <p class="is-size-7 mt-1">
+            Your Shopify store will automatically load forms based on targeting rules.
+          </p>
+          <p class="is-size-7 has-text-grey mt-2">
+            ScriptTag ID: {{ formsStatus.script_tag_id }}
+          </p>
+        </div>
+
+        <div v-else class="notification is-warning is-light mb-4">
+          <p><strong>ScriptTag Not Installed</strong></p>
+          <p class="mb-3 is-size-7">
+            Click "Save" to install the form loader script on your Shopify store.
+          </p>
+        </div>
+
+        <div class="notification is-info is-light">
+          <p><strong>How it works:</strong></p>
+          <ol class="mt-2">
+            <li>Create forms in <router-link :to="{ name: 'signupForms' }">Forms</router-link></li>
+            <li>Under <strong>Targeting</strong>, select Shopify page types (Product, Cart, etc.)</li>
+            <li>Activate the form</li>
+            <li>Forms automatically appear on matching Shopify pages</li>
+          </ol>
+          <p class="mt-3 is-size-7 has-text-grey">
+            <strong>Note:</strong> You may need to re-install the Shopify app if you see permission errors.
+            The app now requires the <code>write_script_tags</code> scope.
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
 import Vue from 'vue';
-import { getLists, startShopifyCustomerSync, getShopifyCustomerSyncStatus } from '../../api';
+import {
+  getLists,
+  startShopifyCustomerSync,
+  getShopifyCustomerSyncStatus,
+  getShopifyFormsStatus,
+} from '../../api';
 
 export default Vue.extend({
   name: 'Shopify',
@@ -251,6 +315,7 @@ export default Vue.extend({
       lists: [],
       syncStatus: null,
       syncPollInterval: null,
+      formsStatus: null,
     };
   },
   computed: {
@@ -258,6 +323,13 @@ export default Vue.extend({
       // Get the root URL from app settings
       const rootUrl = this.$store.state.settings['app.root_url'] || window.location.origin;
       return `${rootUrl}/webhooks/shopify/orders`;
+    },
+    webhookSecretHelp() {
+      return this.$t(
+        'settings.shopify.webhookSecretHelp',
+        'For Partner app webhooks, leave blank to auto-use the Client Secret. '
+        + 'For manual webhooks, copy from Shopify Admin → Notifications → Webhooks.',
+      );
     },
     customerWebhookUrl() {
       const rootUrl = this.$store.state.settings['app.root_url'] || window.location.origin;
@@ -322,6 +394,14 @@ export default Vue.extend({
     lastSyncTime() {
       return this.form.shopify?.last_customer_sync || null;
     },
+    formsEnabled: {
+      get() {
+        return this.form.shopify?.forms_enabled || false;
+      },
+      set(value) {
+        this.$set(this.form.shopify, 'forms_enabled', value);
+      },
+    },
     syncProgress() {
       if (!this.syncStatus || this.syncStatus.total_count === 0) return 0;
       return Math.round(((this.syncStatus.synced_count + this.syncStatus.skipped_count + this.syncStatus.error_count) / this.syncStatus.total_count) * 100);
@@ -330,6 +410,7 @@ export default Vue.extend({
   mounted() {
     this.loadLists();
     this.loadSyncStatus();
+    this.loadFormsStatus();
   },
   beforeDestroy() {
     if (this.syncPollInterval) {
@@ -415,6 +496,14 @@ export default Vue.extend({
       if (!dateStr) return '';
       const date = new Date(dateStr);
       return date.toLocaleString();
+    },
+    async loadFormsStatus() {
+      try {
+        const resp = await getShopifyFormsStatus();
+        this.formsStatus = resp.data;
+      } catch (e) {
+        // Ignore errors loading forms status
+      }
     },
   },
 });

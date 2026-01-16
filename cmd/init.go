@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"database/sql"
 	"encoding/json"
@@ -36,6 +37,7 @@ import (
 	"github.com/knadh/listmonk/internal/bounce/mailbox"
 	"github.com/knadh/listmonk/internal/captcha"
 	"github.com/knadh/listmonk/internal/core"
+	"github.com/knadh/listmonk/internal/flows"
 	"github.com/knadh/listmonk/internal/i18n"
 	"github.com/knadh/listmonk/internal/manager"
 	"github.com/knadh/listmonk/internal/media"
@@ -504,6 +506,11 @@ func initConstConfig(ko *koanf.Koanf) *Config {
 	// Load Shopify settings
 	c.ShopifyEnabled = ko.Bool("shopify.enabled")
 	c.ShopifyWebhookSecret = ko.String("shopify.webhook_secret")
+	// For Shopify Partner app webhooks, the Client Secret is used for HMAC signing.
+	// Fallback to client_secret if webhook_secret is not set.
+	if c.ShopifyWebhookSecret == "" {
+		c.ShopifyWebhookSecret = ko.String("shopify.client_secret")
+	}
 	c.ShopifyAttributionWindowDays = ko.Int("shopify.attribution_window_days")
 	if c.ShopifyAttributionWindowDays == 0 {
 		c.ShopifyAttributionWindowDays = 7 // Default to 7 days
@@ -864,6 +871,58 @@ func initQueueProcessor(db *sqlx.DB, settings models.Settings) *queue.Processor 
 	return proc
 }
 
+// flowMessengerStore wraps the messenger slice to implement the flows.MessengerStore interface.
+type flowMessengerStore struct {
+	messengers []manager.Messenger
+}
+
+// GetMessenger returns a messenger by name.
+func (f *flowMessengerStore) GetMessenger(name string) (flows.Messenger, bool) {
+	for _, m := range f.messengers {
+		if m.Name() == name {
+			return m, true
+		}
+	}
+	return nil, false
+}
+
+// GetDefaultMessenger returns the first available messenger (email).
+func (f *flowMessengerStore) GetDefaultMessenger() flows.Messenger {
+	for _, m := range f.messengers {
+		if m.Name() == "email" {
+			return m
+		}
+	}
+	if len(f.messengers) > 0 {
+		return f.messengers[0]
+	}
+	return nil
+}
+
+// initFlowProcessor initializes and starts the flow processor for automated flows
+func initFlowProcessor(db *sqlx.DB, core *core.Core, messengers []manager.Messenger, settings models.Settings) *flows.Processor {
+	// Create the messenger store wrapper
+	msgStore := &flowMessengerStore{messengers: messengers}
+
+	// Configure the flow processor
+	cfg := flows.Config{
+		PollInterval: 30 * time.Second,
+		BatchSize:    100,
+		FromEmail:    settings.AppFromEmail,
+		RootURL:      settings.AppRootURL,
+		UnsubHeader:  true,
+	}
+
+	// Create the processor with core as the store
+	proc := flows.NewProcessor(db, core, msgStore, lo, cfg)
+
+	// Start the processor in a background goroutine
+	go proc.Start(context.Background())
+
+	lo.Println("started flow processor for automated flows")
+	return proc
+}
+
 // initMediaStore initializes Upload manager with a custom backend.
 func initMediaStore(ko *koanf.Koanf) media.Store {
 	switch provider := ko.String("upload.provider"); provider {
@@ -1060,6 +1119,33 @@ func initHTTPServer(cfg *Config, urlCfg *UrlConfig, i *i18n.I18n, fs stuffbin.Fi
 
 	// Public (subscriber) facing static files.
 	srv.GET("/public/static/*", echo.WrapHandler(fSrv))
+
+	// Explicit routes for form-builder - MUST be registered BEFORE wildcard routes
+	// Handler function to serve form-builder index.html
+	serveFormBuilderIndex := func(c echo.Context) error {
+		b, err := fs.Read("/admin/static/form-builder/index.html")
+		if err != nil {
+			lo.Printf("form-builder index.html not found in filesystem: %v", err)
+			return echo.NewHTTPError(http.StatusNotFound, "form-builder not found")
+		}
+		return c.HTMLBlob(http.StatusOK, b)
+	}
+
+	// Handle all variations: with/without trailing slash and with/without index.html
+	srv.GET("/admin/static/form-builder", serveFormBuilderIndex)
+	srv.GET("/admin/static/form-builder/", serveFormBuilderIndex)
+	srv.GET("/admin/static/form-builder/index.html", serveFormBuilderIndex)
+
+	// Explicit route for form-builder JS file
+	srv.GET("/admin/static/form-builder/form-builder.js", func(c echo.Context) error {
+		b, err := fs.Read("/admin/static/form-builder/form-builder.js")
+		if err != nil {
+			lo.Printf("form-builder.js not found in filesystem: %v", err)
+			return echo.NewHTTPError(http.StatusNotFound, "form-builder.js not found")
+		}
+		c.Response().Header().Set("Content-Type", "application/javascript")
+		return c.Blob(http.StatusOK, "application/javascript", b)
+	})
 
 	// Admin (frontend) facing static files.
 	srv.GET("/admin/static/*", echo.WrapHandler(fSrv))
