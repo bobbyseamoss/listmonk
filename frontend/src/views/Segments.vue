@@ -34,6 +34,11 @@
               </div>
             </form>
           </div>
+          <div class="column is-6 has-text-right">
+            <b-button size="is-small" icon-left="refresh" :loading="refreshingAll" @click="refreshAllCounts">
+              {{ $t('segments.refreshAllCounts') }}
+            </b-button>
+          </div>
         </div>
       </template>
 
@@ -96,6 +101,13 @@
             :aria-label="$t('segments.preview')">
             <b-tooltip :label="$t('segments.previewSubscribers')" type="is-dark">
               <b-icon icon="eye-outline" size="is-small" />
+            </b-tooltip>
+          </a>
+
+          <a href="#" @click.prevent="exportSegment(props.row)" data-cy="btn-export"
+            :aria-label="$t('segments.exportSubscribers')">
+            <b-tooltip :label="$t('segments.exportSubscribers')" type="is-dark">
+              <b-icon icon="cloud-download-outline" size="is-small" />
             </b-tooltip>
           </a>
 
@@ -189,6 +201,7 @@ export default Vue.extend({
       previewData: { results: [], total: 0 },
       previewLoading: false,
       previewPage: 1,
+      refreshingAll: false,
     };
   },
 
@@ -262,6 +275,24 @@ export default Vue.extend({
       });
     },
 
+    async refreshAllCounts() {
+      this.refreshingAll = true;
+      try {
+        // Refresh counts for all segments on the current page
+        const promises = this.segments.results.map((segment) => this.$api.getSegmentCount(segment.id, false)
+          .then((resp) => {
+            const idx = this.segments.results.findIndex((s) => s.id === segment.id);
+            if (idx !== -1) {
+              this.segments.results[idx].cachedCount = resp.count;
+            }
+          }));
+        await Promise.all(promises);
+        this.$utils.toast(this.$t('segments.countsRefreshed'));
+      } finally {
+        this.refreshingAll = false;
+      }
+    },
+
     showPreview(segment) {
       this.previewSegment = segment;
       this.previewPage = 1;
@@ -293,6 +324,16 @@ export default Vue.extend({
             this.getSegments();
             this.$utils.toast(this.$t('globals.messages.deleted', { name: segment.name }));
           });
+        },
+      );
+    },
+
+    exportSegment(segment) {
+      const count = segment.cachedCount !== null ? segment.cachedCount : 0;
+      this.$utils.confirm(
+        this.$t('segments.confirmExport', { num: this.$utils.formatNumber(count), name: segment.name }),
+        () => {
+          document.location.href = `/api/segments/${segment.id}/export`;
         },
       );
     },

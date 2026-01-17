@@ -170,6 +170,7 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/segments/:id", pm(hasID(a.GetSegment), "lists:get_all"))
 		g.GET("/api/segments/:id/preview", pm(hasID(a.PreviewSegment), "lists:get_all"))
 		g.GET("/api/segments/:id/count", pm(hasID(a.GetSegmentCount), "lists:get_all"))
+		g.GET("/api/segments/:id/export", pm(hasID(a.ExportSegmentSubscribers), "lists:get_all"))
 		g.POST("/api/segments", pm(a.CreateSegment, "lists:manage_all"))
 		g.POST("/api/segments/preview", pm(a.PreviewSegmentConditions, "lists:get_all"))
 		g.PUT("/api/segments/:id", pm(hasID(a.UpdateSegment), "lists:manage_all"))
@@ -246,6 +247,26 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.POST("/api/shopify/orders/sync", pm(a.TriggerOrderSync, "settings:manage"))
 		g.GET("/api/shopify/orders/sync/status", pm(a.GetOrderSyncStatus, "settings:get"))
 
+		// Shopify Forms API endpoints (ScriptTag management)
+		g.GET("/api/shopify/forms/status", pm(a.GetShopifyFormsStatus, "settings:get"))
+		g.PUT("/api/shopify/forms", pm(a.UpdateShopifyFormsSettings, "settings:manage"))
+
+		// Flows (automation) API endpoints
+		g.GET("/api/flows", pm(a.GetFlows, "flows:get"))
+		g.GET("/api/flows/:id", pm(hasID(a.GetFlow), "flows:get"))
+		g.POST("/api/flows", pm(a.CreateFlow, "flows:manage"))
+		g.PUT("/api/flows/:id", pm(hasID(a.UpdateFlow), "flows:manage"))
+		g.PUT("/api/flows/:id/status", pm(hasID(a.UpdateFlowStatus), "flows:manage"))
+		g.DELETE("/api/flows/:id", pm(hasID(a.DeleteFlow), "flows:manage"))
+		g.GET("/api/flows/:id/steps", pm(hasID(a.GetFlowSteps), "flows:get"))
+		g.POST("/api/flows/:id/steps", pm(hasID(a.CreateFlowStep), "flows:manage"))
+		g.PUT("/api/flows/:id/steps/:stepId", pm(hasID(a.UpdateFlowStep), "flows:manage"))
+		g.DELETE("/api/flows/:id/steps/:stepId", pm(hasID(a.DeleteFlowStep), "flows:manage"))
+		g.PUT("/api/flows/:id/steps/reorder", pm(hasID(a.ReorderFlowSteps), "flows:manage"))
+		g.GET("/api/flows/:id/stats", pm(hasID(a.GetFlowStats), "flows:get"))
+		g.GET("/api/flows/:id/runs", pm(hasID(a.GetFlowRuns), "flows:get"))
+		g.GET("/api/flows/:id/runs/:runId/logs", pm(hasID(a.GetFlowRunLogs), "flows:get"))
+
 		g.DELETE("/api/maintenance/subscribers/:type", pm(a.GCSubscribers, "settings:maintain"))
 		g.DELETE("/api/maintenance/analytics/:type", pm(a.GCCampaignAnalytics, "settings:maintain"))
 		g.DELETE("/api/maintenance/subscriptions/unconfirmed", pm(a.GCSubscriptions, "settings:maintain"))
@@ -318,6 +339,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.POST("/public/identify", a.handleIdentifyVisitor)
 		g.OPTIONS("/public/identify", a.handleTrackEventOptions)
 
+		// Public forms embed script
+		g.GET("/public/lm-forms.js", a.handleServeLmFormsJS)
+
 		// Landing page.
 		g.GET("/", func(c echo.Context) error {
 			return c.Render(http.StatusOK, "home", publicTpl{Title: "listmonk"})
@@ -340,14 +364,26 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 			g.GET("/api/public/archive", a.GetCampaignArchives)
 		}
 
-		// Public sign-up form APIs.
+		// Public sign-up form APIs with CORS support.
 		g.GET("/api/public/forms/:uuid", a.GetPublicForm)
+		g.OPTIONS("/api/public/forms/:uuid", a.handlePublicFormsCORSPreflight)
 		g.POST("/api/public/forms/:uuid/submit", a.SubmitPublicForm)
+		g.OPTIONS("/api/public/forms/:uuid/submit", a.handlePublicFormsCORSPreflight)
 		g.POST("/api/public/forms/:uuid/impression", a.RecordFormImpression)
+		g.OPTIONS("/api/public/forms/:uuid/impression", a.handlePublicFormsCORSPreflight)
 		g.PUT("/api/public/forms/impression/:id/closed", a.UpdateFormImpressionClosed)
+		g.OPTIONS("/api/public/forms/impression/:id/closed", a.handlePublicFormsCORSPreflight)
 		g.PUT("/api/public/forms/impression/:id/submitted", a.UpdateFormImpressionSubmitted)
+		g.OPTIONS("/api/public/forms/impression/:id/submitted", a.handlePublicFormsCORSPreflight)
 		g.PUT("/api/public/forms/impression/:id/step", a.UpdateFormImpressionStep)
+		g.OPTIONS("/api/public/forms/impression/:id/step", a.handlePublicFormsCORSPreflight)
 		g.GET("/api/public/forms/active", a.GetActiveFormsForPage)
+		g.OPTIONS("/api/public/forms/active", a.handlePublicFormsCORSPreflight)
+		g.GET("/api/public/forms/shopify", a.GetShopifyFormsForPage)
+		g.OPTIONS("/api/public/forms/shopify", a.handlePublicFormsCORSPreflight)
+
+		// Shopify forms loader script (public)
+		g.GET("/public/shopify-forms-loader.js", a.GetShopifyFormsLoaderScript)
 
 		// /public/static/* file server is registered in initHTTPServer().
 		// Public subscriber facing views.

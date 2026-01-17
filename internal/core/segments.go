@@ -131,6 +131,8 @@ func (b *SegmentQueryBuilder) buildCondition(field, fieldType, operator string, 
 		return b.buildArrayCondition(field, operator, value)
 	case "behavior":
 		return b.buildBehavioralCondition(field, operator, value, params)
+	case "list_membership":
+		return b.buildListMembershipCondition(operator, value)
 	default:
 		return "", fmt.Errorf("unknown field type: %s", fieldType)
 	}
@@ -836,6 +838,36 @@ func (b *SegmentQueryBuilder) buildOrderCountCondition(operator string, value in
 	}
 }
 
+// buildListMembershipCondition builds SQL for list membership checks.
+// Checks if subscriber belongs to (or doesn't belong to) a specific list.
+func (b *SegmentQueryBuilder) buildListMembershipCondition(operator string, value interface{}) (string, error) {
+	listID := 0
+	if v, ok := value.(float64); ok {
+		listID = int(v)
+	}
+
+	if listID == 0 {
+		return "", fmt.Errorf("list membership requires a valid list_id")
+	}
+
+	switch operator {
+	case "is_in":
+		return fmt.Sprintf(`subscribers.id IN (
+			SELECT subscriber_id FROM subscriber_lists
+			WHERE list_id = %d AND status = 'confirmed'
+		)`, listID), nil
+
+	case "is_not_in":
+		return fmt.Sprintf(`subscribers.id NOT IN (
+			SELECT subscriber_id FROM subscriber_lists
+			WHERE list_id = %d AND status = 'confirmed'
+		)`, listID), nil
+
+	default:
+		return "", fmt.Errorf("unknown list membership operator: %s", operator)
+	}
+}
+
 func (b *SegmentQueryBuilder) nextParam() int {
 	idx := b.paramIndex
 	b.paramIndex++
@@ -1100,6 +1132,62 @@ func (c *Core) GetSegmentSubscribersFromConditions(conditions models.SegmentCond
 	}
 
 	return out, total, nil
+}
+
+// ExportSegmentSubscribers returns an iterator function that yields batches of subscribers
+// matching a segment's conditions for memory-efficient CSV export.
+func (c *Core) ExportSegmentSubscribers(segmentID int, batchSize int) (models.Segment, func() ([]models.SubscriberExport, error), error) {
+	seg, err := c.GetSegment(segmentID, "")
+	if err != nil {
+		return models.Segment{}, nil, err
+	}
+
+	// Build WHERE clause from conditions
+	builder := &SegmentQueryBuilder{}
+	whereClause, params, err := builder.BuildWhereClause(seg.Conditions)
+	if err != nil {
+		return models.Segment{}, nil, echo.NewHTTPError(http.StatusBadRequest,
+			c.i18n.Ts("segments.invalidConditions", "error", err.Error()))
+	}
+
+	// Build the export query with ID-based pagination
+	query := fmt.Sprintf(`SELECT id, uuid, email, name, attribs::TEXT as attribs, status, created_at, updated_at
+		FROM subscribers
+		WHERE (%s) AND id > $%d
+		ORDER BY id ASC
+		LIMIT $%d`,
+		whereClause, len(params)+1, len(params)+2)
+
+	// Prepare the statement
+	stmt, err := c.db.Preparex(query)
+	if err != nil {
+		c.log.Printf("error preparing segment export query: %v", err)
+		return models.Segment{}, nil, echo.NewHTTPError(http.StatusInternalServerError,
+			c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.subscribers}", "error", pqErrMsg(err)))
+	}
+
+	lastID := 0
+	return seg, func() ([]models.SubscriberExport, error) {
+		var out []models.SubscriberExport
+
+		// Append pagination params
+		queryParams := append(params, lastID, batchSize)
+
+		if err := stmt.Select(&out, queryParams...); err != nil {
+			c.log.Printf("error exporting segment subscribers: %v", err)
+			return nil, echo.NewHTTPError(http.StatusInternalServerError,
+				c.i18n.Ts("globals.messages.errorFetching", "name", "{globals.terms.subscribers}", "error", pqErrMsg(err)))
+		}
+
+		if len(out) == 0 {
+			return nil, nil
+		}
+
+		// Update lastID for next batch
+		lastID = out[len(out)-1].ID
+
+		return out, nil
+	}, nil
 }
 
 // GetSegmentCount returns the subscriber count for a segment (with optional caching).

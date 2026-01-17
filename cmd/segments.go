@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/csv"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/knadh/listmonk/models"
 	"github.com/labstack/echo/v4"
@@ -202,4 +205,65 @@ func (a *App) PreviewSegmentConditions(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// ExportSegmentSubscribers exports all subscribers matching a segment's conditions as CSV.
+func (a *App) ExportSegmentSubscribers(c echo.Context) error {
+	var (
+		id, _ = strconv.Atoi(c.Param("id"))
+	)
+
+	if id < 1 {
+		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidID"))
+	}
+
+	// Get the batched export iterator
+	seg, exp, err := a.core.ExportSegmentSubscribers(id, a.cfg.DBBatchSize)
+	if err != nil {
+		return err
+	}
+
+	// Sanitize segment name for filename (remove special characters)
+	re := regexp.MustCompile(`[^a-zA-Z0-9_-]`)
+	safeName := re.ReplaceAllString(strings.ReplaceAll(seg.Name, " ", "-"), "")
+	if safeName == "" {
+		safeName = "segment"
+	}
+
+	var (
+		hdr = c.Response().Header()
+		wr  = csv.NewWriter(c.Response())
+	)
+
+	hdr.Set(echo.HeaderContentType, echo.MIMEOctetStream)
+	hdr.Set("Content-type", "text/csv")
+	hdr.Set(echo.HeaderContentDisposition, "attachment; filename=\"segment-"+safeName+".csv\"")
+	hdr.Set("Content-Transfer-Encoding", "binary")
+	hdr.Set("Cache-Control", "no-cache")
+	wr.Write([]string{"uuid", "email", "name", "attributes", "status", "created_at", "updated_at"})
+
+loop:
+	// Iterate in batches until there are no more subscribers to export
+	for {
+		out, err := exp()
+		if err != nil {
+			return err
+		}
+		if len(out) == 0 {
+			break
+		}
+
+		for _, r := range out {
+			if err = wr.Write([]string{r.UUID, r.Email, r.Name, r.Attribs, r.Status,
+				r.CreatedAt.Time.String(), r.UpdatedAt.Time.String()}); err != nil {
+				a.log.Printf("error streaming segment CSV export: %v", err)
+				break loop
+			}
+		}
+
+		// Flush CSV to stream after each batch
+		wr.Flush()
+	}
+
+	return nil
 }
