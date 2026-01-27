@@ -40,12 +40,18 @@ export class FormRenderer {
       const target = document.querySelector(targetSelector);
       if (target) {
         target.appendChild(container);
+        // Dispatch 'open' event for GTM/analytics integration
+        this.dispatchFormEvent('open');
         return container;
       }
     }
 
     // For other types, add to body
     document.body.appendChild(container);
+
+    // Dispatch 'open' event for GTM/analytics integration
+    this.dispatchFormEvent('open');
+
     return container;
   }
 
@@ -223,12 +229,18 @@ export class FormRenderer {
     const props = block.props as Record<string, unknown>;
 
     // Apply width if specified (for side-by-side layout)
-    const blockWidth = props.width as string | undefined;
-    if (blockWidth && blockWidth !== '100%') {
-      container.style.width = blockWidth;
-      container.style.boxSizing = 'border-box';
-    } else {
+    // Note: For image blocks, props.width is the IMAGE width, not the block width
+    // Image blocks should always be full width so the image can be centered within
+    if (block.type === 'image') {
       container.style.width = '100%';
+    } else {
+      const blockWidth = props.width as string | undefined;
+      if (blockWidth && blockWidth !== '100%') {
+        container.style.width = blockWidth;
+        container.style.boxSizing = 'border-box';
+      } else {
+        container.style.width = '100%';
+      }
     }
 
     switch (block.type) {
@@ -319,8 +331,12 @@ export class FormRenderer {
     if (!props.src) {
       return '';
     }
-    return `<div style="text-align: ${props.alignment}; padding: ${padding.top}px ${padding.right}px ${padding.bottom}px ${padding.left}px;">
-      <img src="${props.src}" alt="${props.alt || ''}" style="width: ${props.width}; height: ${props.height}; max-width: 100%;" />
+    // Convert numeric width to px string (form builder stores width as number, e.g., 200)
+    const imageWidth = typeof props.width === 'number' ? `${props.width}px` : (props.width || 'auto');
+    const imageHeight = props.height || 'auto';
+    const alignment = props.alignment || 'center';
+    return `<div style="text-align: ${alignment}; padding: ${padding.top}px ${padding.right}px ${padding.bottom}px ${padding.left}px;">
+      <img src="${props.src}" alt="${props.alt || ''}" style="width: ${imageWidth}; height: ${imageHeight}; max-width: 100%;" />
     </div>`;
   }
 
@@ -614,6 +630,8 @@ export class FormRenderer {
     // Check for next-step button action
     const activeButton = document.activeElement as HTMLButtonElement;
     if (activeButton?.dataset.action === 'next-step') {
+      // Dispatch stepSubmit event for multi-step forms
+      this.dispatchFormEvent('stepSubmit', data, this.currentStep);
       this.goToNextStep();
       return;
     }
@@ -645,12 +663,65 @@ export class FormRenderer {
         }
       }
 
+      // Dispatch submit event for GTM/analytics integration (like Klaviyo's klaviyoForms event)
+      this.dispatchFormEvent('submit', data, this.currentStep, result);
+
       // Handle success action
       this.handleSuccess(result);
     } catch (error) {
       console.error('Form submission error:', error);
       // Show error message to user
     }
+  }
+
+  /**
+   * Dispatch a custom window event for GTM/analytics integration.
+   * Similar to Klaviyo's 'klaviyoForms' event pattern.
+   *
+   * Event types:
+   * - 'open': Form was displayed to user
+   * - 'submit': Form was submitted successfully
+   * - 'stepSubmit': A step in a multi-step form was submitted
+   * - 'close': Form was closed
+   *
+   * Usage in GTM:
+   * window.addEventListener('listmonkForms', function(e) {
+   *   if (e.detail.type === 'submit') {
+   *     dataLayer.push({ event: 'listmonk_form_submit', formData: e.detail });
+   *   }
+   * });
+   */
+  dispatchFormEvent(
+    type: 'open' | 'submit' | 'stepSubmit' | 'close',
+    data?: Record<string, unknown>,
+    step?: number,
+    result?: { couponCode?: string }
+  ): void {
+    const eventDetail = {
+      type,
+      formUUID: this.config.uuid,
+      formName: this.config.name,
+      formType: this.config.formType,
+      metaData: {
+        $email: data?.email,
+        $first_name: data?.first_name || data?.firstName || data?.name,
+        $last_name: data?.last_name || data?.lastName,
+        ...data,
+      },
+      step,
+      couponCode: result?.couponCode,
+      pageUrl: window.location.href,
+      referrer: document.referrer,
+      timestamp: new Date().toISOString(),
+    };
+
+    const event = new CustomEvent('listmonkForms', {
+      detail: eventDetail,
+      bubbles: true,
+      cancelable: false,
+    });
+
+    window.dispatchEvent(event);
   }
 
   private goToNextStep(): void {
@@ -700,6 +771,8 @@ export class FormRenderer {
 
   close(): void {
     if (this.element) {
+      // Dispatch 'close' event for GTM/analytics integration
+      this.dispatchFormEvent('close');
       this.element.remove();
       this.element = null;
     }
