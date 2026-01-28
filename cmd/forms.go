@@ -268,8 +268,17 @@ func (a *App) UploadFormCoupons(c echo.Context) error {
 
 // ========== Public Form Handlers ==========
 
+// handlePublicFormsCORSPreflight handles CORS preflight requests for public form endpoints.
+func (a *App) handlePublicFormsCORSPreflight(c echo.Context) error {
+	setPublicFormsCORSHeaders(c)
+	return c.NoContent(http.StatusNoContent)
+}
+
 // GetPublicForm returns a form's public configuration by UUID.
 func (a *App) GetPublicForm(c echo.Context) error {
+	// Set CORS headers for cross-origin requests
+	setPublicFormsCORSHeaders(c)
+
 	uuid := c.Param("uuid")
 	if uuid == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidUUID"))
@@ -290,6 +299,9 @@ func (a *App) GetPublicForm(c echo.Context) error {
 
 // SubmitPublicForm handles form submissions from the public embed script.
 func (a *App) SubmitPublicForm(c echo.Context) error {
+	// Set CORS headers for cross-origin requests
+	setPublicFormsCORSHeaders(c)
+
 	uuid := c.Param("uuid")
 	if uuid == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidUUID"))
@@ -335,11 +347,29 @@ func (a *App) SubmitPublicForm(c echo.Context) error {
 	}
 	req.Email = em
 
-	// Handle name.
+	// Handle name - extract from form data fields if not provided directly.
 	req.Name = strings.TrimSpace(req.Name)
 	if len(req.Name) == 0 {
-		req.Name = strings.Split(req.Email, "@")[0]
-	} else if len(req.Name) > stdInputMaxLen {
+		// Try to build name from first_name/last_name or fn/ln fields in form data.
+		var firstName, lastName string
+		if fn, ok := req.Data["fn"].(string); ok {
+			firstName = strings.TrimSpace(fn)
+		} else if fn, ok := req.Data["first_name"].(string); ok {
+			firstName = strings.TrimSpace(fn)
+		}
+		if ln, ok := req.Data["ln"].(string); ok {
+			lastName = strings.TrimSpace(ln)
+		} else if ln, ok := req.Data["last_name"].(string); ok {
+			lastName = strings.TrimSpace(ln)
+		}
+
+		if firstName != "" || lastName != "" {
+			req.Name = strings.TrimSpace(firstName + " " + lastName)
+		} else {
+			req.Name = strings.Split(req.Email, "@")[0]
+		}
+	}
+	if len(req.Name) > stdInputMaxLen {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("subscribers.invalidName"))
 	}
 
@@ -355,6 +385,7 @@ func (a *App) SubmitPublicForm(c echo.Context) error {
 
 	// Insert or update the subscriber.
 	var subscriberID int
+	var subscriberUUID string
 	sub, hasOptin, err := a.core.InsertSubscriber(models.Subscriber{
 		Name:   req.Name,
 		Email:  req.Email,
@@ -362,14 +393,23 @@ func (a *App) SubmitPublicForm(c echo.Context) error {
 	}, listIDs, nil, false, true)
 	if err == nil {
 		subscriberID = sub.ID
+		subscriberUUID = sub.UUID
 	} else if e, ok := err.(*echo.HTTPError); ok && e.Code == http.StatusConflict {
-		// Subscriber already exists. Update subscriptions.
+		// Subscriber already exists. Update their name and subscriptions.
 		existingSub, err := a.core.GetSubscriber(0, "", req.Email)
 		if err != nil {
 			return err
 		}
 		subscriberID = existingSub.ID
-		_, hasOptin, err = a.core.UpdateSubscriberWithLists(existingSub.ID, existingSub, listIDs, nil, false, false, true)
+		subscriberUUID = existingSub.UUID
+
+		// Update the subscriber's name if a new name was provided.
+		updatedSub := existingSub
+		if req.Name != "" && req.Name != existingSub.Name {
+			updatedSub.Name = req.Name
+		}
+
+		_, hasOptin, err = a.core.UpdateSubscriberWithLists(existingSub.ID, updatedSub, listIDs, nil, false, false, true)
 		if err != nil {
 			return err
 		}
@@ -421,14 +461,18 @@ func (a *App) SubmitPublicForm(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, okResp{map[string]interface{}{
-		"submission_id": submissionID,
-		"has_optin":     hasOptin,
-		"coupon_code":   couponCode,
+		"submission_id":   submissionID,
+		"has_optin":       hasOptin,
+		"coupon_code":     couponCode,
+		"subscriber_uuid": subscriberUUID,
 	}})
 }
 
 // RecordFormImpression records a form impression for analytics.
 func (a *App) RecordFormImpression(c echo.Context) error {
+	// Set CORS headers for cross-origin requests
+	setPublicFormsCORSHeaders(c)
+
 	uuid := c.Param("uuid")
 	if uuid == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidUUID"))
@@ -471,6 +515,9 @@ func (a *App) RecordFormImpression(c echo.Context) error {
 
 // UpdateFormImpressionClosed marks a form impression as closed.
 func (a *App) UpdateFormImpressionClosed(c echo.Context) error {
+	// Set CORS headers for cross-origin requests
+	setPublicFormsCORSHeaders(c)
+
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if id < 1 {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidID"))
@@ -485,6 +532,9 @@ func (a *App) UpdateFormImpressionClosed(c echo.Context) error {
 
 // UpdateFormImpressionSubmitted marks a form impression as submitted.
 func (a *App) UpdateFormImpressionSubmitted(c echo.Context) error {
+	// Set CORS headers for cross-origin requests
+	setPublicFormsCORSHeaders(c)
+
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if id < 1 {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidID"))
@@ -499,6 +549,9 @@ func (a *App) UpdateFormImpressionSubmitted(c echo.Context) error {
 
 // UpdateFormImpressionStep updates the step reached in a form impression.
 func (a *App) UpdateFormImpressionStep(c echo.Context) error {
+	// Set CORS headers for cross-origin requests
+	setPublicFormsCORSHeaders(c)
+
 	id, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	if id < 1 {
 		return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidID"))
@@ -520,12 +573,79 @@ func (a *App) UpdateFormImpressionStep(c echo.Context) error {
 
 // GetActiveFormsForPage returns all active forms for the embed script to evaluate targeting.
 func (a *App) GetActiveFormsForPage(c echo.Context) error {
+	// Set CORS headers for cross-origin requests
+	setPublicFormsCORSHeaders(c)
+
 	forms, err := a.core.GetActiveFormsForTargeting()
 	if err != nil {
 		return err
 	}
 
 	return c.JSON(http.StatusOK, okResp{forms})
+}
+
+// LookupPublicSubscriber returns subscriber profile data by UUID.
+// This enables GTM/analytics integrations to look up subscriber data
+// similar to Klaviyo's profile lookup API.
+func (a *App) LookupPublicSubscriber(c echo.Context) error {
+	// Set CORS headers for cross-origin requests
+	setPublicFormsCORSHeaders(c)
+
+	uuid := c.QueryParam("uuid")
+	if uuid == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "uuid parameter is required")
+	}
+
+	// Look up subscriber by UUID
+	sub, err := a.core.GetSubscriber(0, uuid, "")
+	if err != nil {
+		// Return empty response instead of error for privacy
+		return c.JSON(http.StatusOK, okResp{map[string]interface{}{
+			"found": false,
+		}})
+	}
+
+	// Extract profile fields from subscriber attributes
+	attribs := sub.Attribs
+	firstName := ""
+	lastName := ""
+	phone := ""
+	birthday := ""
+	address := ""
+
+	if fn, ok := attribs["first_name"].(string); ok {
+		firstName = fn
+	} else if fn, ok := attribs["fn"].(string); ok {
+		firstName = fn
+	}
+	if ln, ok := attribs["last_name"].(string); ok {
+		lastName = ln
+	} else if ln, ok := attribs["ln"].(string); ok {
+		lastName = ln
+	}
+	if p, ok := attribs["phone"].(string); ok {
+		phone = p
+	}
+	if bd, ok := attribs["birthday"].(string); ok {
+		birthday = bd
+	} else if bd, ok := attribs["Birthday"].(string); ok {
+		birthday = bd
+	}
+	if addr, ok := attribs["address"].(string); ok {
+		address = addr
+	}
+
+	return c.JSON(http.StatusOK, okResp{map[string]interface{}{
+		"found":      true,
+		"uuid":       sub.UUID,
+		"email":      sub.Email,
+		"name":       sub.Name,
+		"first_name": firstName,
+		"last_name":  lastName,
+		"phone":      phone,
+		"birthday":   birthday,
+		"address":    address,
+	}})
 }
 
 // parseDateRange parses from and to date parameters from the request.

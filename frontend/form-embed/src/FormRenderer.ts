@@ -695,13 +695,14 @@ export class FormRenderer {
     type: 'open' | 'submit' | 'stepSubmit' | 'close',
     data?: Record<string, unknown>,
     step?: number,
-    result?: { couponCode?: string }
+    result?: { couponCode?: string; subscriber_uuid?: string }
   ): void {
     const eventDetail = {
       type,
       formUUID: this.config.uuid,
       formName: this.config.name,
       formType: this.config.formType,
+      subscriberUUID: result?.subscriber_uuid,
       metaData: {
         $email: data?.email,
         $first_name: data?.first_name || data?.firstName || data?.name,

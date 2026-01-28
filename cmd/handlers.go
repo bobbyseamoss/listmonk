@@ -382,6 +382,10 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.GET("/api/public/forms/shopify", a.GetShopifyFormsForPage)
 		g.OPTIONS("/api/public/forms/shopify", a.handlePublicFormsCORSPreflight)
 
+		// Public subscriber lookup for GTM/analytics integration
+		g.GET("/api/public/subscriber/lookup", a.LookupPublicSubscriber)
+		g.OPTIONS("/api/public/subscriber/lookup", a.handlePublicFormsCORSPreflight)
+
 		// Shopify forms loader script (public)
 		g.GET("/public/shopify-forms-loader.js", a.GetShopifyFormsLoaderScript)
 
