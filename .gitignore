@@ -31,3 +31,4 @@ deployment/configs/credential_map.json
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+webhook-logs-*.csv
