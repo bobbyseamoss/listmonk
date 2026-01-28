@@ -655,6 +655,12 @@ export class FormRenderer {
 
       const result = await response.json();
 
+      // Store subscriber UUID in cookie for profile lookup API (365 days)
+      if (result.subscriber_uuid) {
+        const maxAge = 365 * 24 * 60 * 60; // 365 days in seconds
+        document.cookie = `lm_subscriber=${result.subscriber_uuid}; path=/; max-age=${maxAge}; SameSite=Lax`;
+      }
+
       // Update coupon code if present
       if (result.couponCode) {
         const couponEl = this.element?.querySelector('.lm-coupon-code');
