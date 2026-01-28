@@ -37,7 +37,6 @@ import (
 	"github.com/knadh/listmonk/internal/bounce/mailbox"
 	"github.com/knadh/listmonk/internal/captcha"
 	"github.com/knadh/listmonk/internal/core"
-	"github.com/knadh/listmonk/internal/flows"
 	"github.com/knadh/listmonk/internal/i18n"
 	"github.com/knadh/listmonk/internal/manager"
 	"github.com/knadh/listmonk/internal/media"
@@ -865,58 +864,6 @@ func initQueueProcessor(db *sqlx.DB, settings models.Settings) *queue.Processor 
 	go proc.StartCampaignStatsSync()
 
 	lo.Println("started queue processor, auto-pause scheduler, and stats sync for automatic campaigns")
-	return proc
-}
-
-// flowMessengerStore wraps the messenger slice to implement the flows.MessengerStore interface.
-type flowMessengerStore struct {
-	messengers []manager.Messenger
-}
-
-// GetMessenger returns a messenger by name.
-func (f *flowMessengerStore) GetMessenger(name string) (flows.Messenger, bool) {
-	for _, m := range f.messengers {
-		if m.Name() == name {
-			return m, true
-		}
-	}
-	return nil, false
-}
-
-// GetDefaultMessenger returns the first available messenger (email).
-func (f *flowMessengerStore) GetDefaultMessenger() flows.Messenger {
-	for _, m := range f.messengers {
-		if m.Name() == "email" {
-			return m
-		}
-	}
-	if len(f.messengers) > 0 {
-		return f.messengers[0]
-	}
-	return nil
-}
-
-// initFlowProcessor initializes and starts the flow processor for automated flows
-func initFlowProcessor(db *sqlx.DB, core *core.Core, messengers []manager.Messenger, settings models.Settings) *flows.Processor {
-	// Create the messenger store wrapper
-	msgStore := &flowMessengerStore{messengers: messengers}
-
-	// Configure the flow processor
-	cfg := flows.Config{
-		PollInterval: 30 * time.Second,
-		BatchSize:    100,
-		FromEmail:    settings.AppFromEmail,
-		RootURL:      settings.AppRootURL,
-		UnsubHeader:  true,
-	}
-
-	// Create the processor with core as the store
-	proc := flows.NewProcessor(db, core, msgStore, lo, cfg)
-
-	// Start the processor in a background goroutine
-	go proc.Start(context.Background())
-
-	lo.Println("started flow processor for automated flows")
 	return proc
 }
 
