@@ -404,54 +404,12 @@ func (app *App) ShopifyCustomerWebhook(c echo.Context) error {
 	} else {
 		processed = true
 		app.log.Printf("synced Shopify customer %d (%s)", customer.ID, customer.Email)
-
-		// Trigger flows for new customers
-		if topic == "customers/create" && app.flowProc != nil {
-			go app.triggerCustomerFlows(customer)
-		}
 	}
 
 	// Log the webhook
 	app.logWebhook(service, eventType, c.Request().Header, rawReq, responseCode, "", processed, errorMsg)
 
 	return c.JSON(http.StatusOK, okResp{true})
-}
-
-// triggerCustomerFlows triggers flows for a new Shopify customer.
-func (app *App) triggerCustomerFlows(customer *webhooks.ShopifyCustomer) {
-	// Find subscriber by email
-	sub, err := app.core.GetSubscriber(0, "", customer.Email)
-	if err != nil {
-		app.log.Printf("triggerCustomerFlows: no subscriber found for email %s, skipping flow trigger", customer.Email)
-		return
-	}
-
-	// Build event data from customer webhook
-	eventData := map[string]interface{}{
-		"customer_id":    fmt.Sprintf("%d", customer.ID),
-		"email":          customer.Email,
-		"first_name":     customer.FirstName,
-		"last_name":      customer.LastName,
-		"phone":          customer.Phone,
-		"orders_count":   customer.OrdersCount,
-		"total_spent":    customer.TotalSpent,
-		"currency":       customer.Currency,
-		"verified_email": customer.VerifiedEmail,
-		"tags":           customer.Tags,
-	}
-
-	// Add address if available
-	if customer.DefaultAddress != nil {
-		eventData["city"] = customer.DefaultAddress.City
-		eventData["province"] = customer.DefaultAddress.Province
-		eventData["country"] = customer.DefaultAddress.Country
-		eventData["country_code"] = customer.DefaultAddress.CountryCode
-		eventData["zip"] = customer.DefaultAddress.Zip
-	}
-
-	if err := app.flowProc.TriggerFlow(models.FlowTriggerShopifyCustomerCreated, &sub, eventData); err != nil {
-		app.log.Printf("triggerCustomerFlows: error triggering flow: %v", err)
-	}
 }
 
 // syncShopifyCustomer syncs a Shopify customer to the corresponding subscriber.
