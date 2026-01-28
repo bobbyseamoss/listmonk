@@ -750,6 +750,7 @@ export const getShopifyOrderTally = (params) => http.get('/api/shopify/order-tal
 // Shopify Customer Sync API
 export const startShopifyCustomerSync = () => http.post('/api/shopify/customers/sync');
 export const getShopifyCustomerSyncStatus = () => http.get('/api/shopify/customers/sync/status');
+export const getShopifyFormsStatus = () => http.get('/api/shopify/forms/status');
 
 // Activity Feed API
 export const getActivityFeed = (params) => http.get('/api/activity-feed', { params });
