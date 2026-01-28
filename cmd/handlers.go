@@ -247,26 +247,6 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.POST("/api/shopify/orders/sync", pm(a.TriggerOrderSync, "settings:manage"))
 		g.GET("/api/shopify/orders/sync/status", pm(a.GetOrderSyncStatus, "settings:get"))
 
-		// Shopify Forms API endpoints (ScriptTag management)
-		g.GET("/api/shopify/forms/status", pm(a.GetShopifyFormsStatus, "settings:get"))
-		g.PUT("/api/shopify/forms", pm(a.UpdateShopifyFormsSettings, "settings:manage"))
-
-		// Flows (automation) API endpoints
-		g.GET("/api/flows", pm(a.GetFlows, "flows:get"))
-		g.GET("/api/flows/:id", pm(hasID(a.GetFlow), "flows:get"))
-		g.POST("/api/flows", pm(a.CreateFlow, "flows:manage"))
-		g.PUT("/api/flows/:id", pm(hasID(a.UpdateFlow), "flows:manage"))
-		g.PUT("/api/flows/:id/status", pm(hasID(a.UpdateFlowStatus), "flows:manage"))
-		g.DELETE("/api/flows/:id", pm(hasID(a.DeleteFlow), "flows:manage"))
-		g.GET("/api/flows/:id/steps", pm(hasID(a.GetFlowSteps), "flows:get"))
-		g.POST("/api/flows/:id/steps", pm(hasID(a.CreateFlowStep), "flows:manage"))
-		g.PUT("/api/flows/:id/steps/:stepId", pm(hasID(a.UpdateFlowStep), "flows:manage"))
-		g.DELETE("/api/flows/:id/steps/:stepId", pm(hasID(a.DeleteFlowStep), "flows:manage"))
-		g.PUT("/api/flows/:id/steps/reorder", pm(hasID(a.ReorderFlowSteps), "flows:manage"))
-		g.GET("/api/flows/:id/stats", pm(hasID(a.GetFlowStats), "flows:get"))
-		g.GET("/api/flows/:id/runs", pm(hasID(a.GetFlowRuns), "flows:get"))
-		g.GET("/api/flows/:id/runs/:runId/logs", pm(hasID(a.GetFlowRunLogs), "flows:get"))
-
 		g.DELETE("/api/maintenance/subscribers/:type", pm(a.GCSubscribers, "settings:maintain"))
 		g.DELETE("/api/maintenance/analytics/:type", pm(a.GCCampaignAnalytics, "settings:maintain"))
 		g.DELETE("/api/maintenance/subscriptions/unconfirmed", pm(a.GCSubscriptions, "settings:maintain"))

@@ -268,6 +268,20 @@ func (a *App) UploadFormCoupons(c echo.Context) error {
 
 // ========== Public Form Handlers ==========
 
+// setPublicFormsCORSHeaders sets CORS headers for public form endpoints.
+// Public forms can be embedded on any domain, so we allow all origins.
+func setPublicFormsCORSHeaders(c echo.Context) {
+	origin := c.Request().Header.Get("Origin")
+	if origin == "" {
+		origin = "*"
+	}
+	c.Response().Header().Set("Access-Control-Allow-Origin", origin)
+	c.Response().Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	c.Response().Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	c.Response().Header().Set("Access-Control-Allow-Credentials", "true")
+	c.Response().Header().Set("Access-Control-Max-Age", "86400")
+}
+
 // handlePublicFormsCORSPreflight handles CORS preflight requests for public form endpoints.
 func (a *App) handlePublicFormsCORSPreflight(c echo.Context) error {
 	setPublicFormsCORSHeaders(c)
