@@ -7,12 +7,16 @@ import router from './router';
 import store from './store';
 import * as api from './api';
 import Utils from './utils';
+import MaterialIcon from './components/MaterialIcon.vue';
 
 // Internationalisation.
 Vue.use(VueI18n);
 const i18n = new VueI18n();
 
-Vue.use(Buefy, {});
+Vue.use(Buefy, {
+  defaultIconComponent: MaterialIcon,
+  defaultIconPack: 'material-symbols',
+});
 Vue.config.productionTip = false;
 
 // Setup the router.
