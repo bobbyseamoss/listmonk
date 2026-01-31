@@ -15,6 +15,9 @@
     <b-menu-item :to="{ name: 'signupForms' }" tag="router-link" :active="activeItem.signupForms"
       data-cy="forms" icon="newspaper-variant-outline" :label="$t('menu.forms')" /><!-- forms -->
 
+    <b-menu-item v-if="$can('flows:get')" :to="{ name: 'flows' }" tag="router-link" :active="activeItem.flows"
+      data-cy="flows" icon="account_tree" label="Flows" /><!-- flows (automation) -->
+
     <b-menu-item v-if="$can('subscribers:*')" :expanded="activeGroup.subscribers" :active="activeGroup.subscribers"
       data-cy="subscribers" @update:active="(state) => toggleGroup('subscribers', state)" icon="account-multiple"
       :label="$t('globals.terms.subscribers')">

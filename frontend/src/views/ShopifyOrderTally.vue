@@ -17,7 +17,7 @@
                 <b-datepicker
                   v-model="startDate"
                   placeholder="Select start date"
-                  icon="calendar-today"
+                  icon="calendar_today"
                   :max-date="endDate || new Date()"
                   trap-focus />
               </b-field>
@@ -27,7 +27,7 @@
                 <b-datepicker
                   v-model="endDate"
                   placeholder="Select end date"
-                  icon="calendar-today"
+                  icon="calendar_today"
                   :min-date="startDate"
                   :max-date="new Date()"
                   trap-focus />

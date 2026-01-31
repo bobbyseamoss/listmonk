@@ -26,6 +26,7 @@ const iconMap = {
   'file-find-outline': 'find_in_page',
   'clock-start': 'schedule',
   'file-multiple-outline': 'content_copy',
+  'file-multiple': 'file_copy',
   'trash-can-outline': 'delete',
   'pencil-outline': 'edit',
   'arrow-top-right': 'arrow_outward',
@@ -72,6 +73,14 @@ const iconMap = {
   'wrench-outline': 'build',
   'tray-full': 'inbox',
   'arrow-right': 'arrow_forward',
+  'cart': 'shopping_cart',
+  'microsoft-azure': 'cloud',
+  'playlist-plus': 'playlist_add',
+  'playlist-minus': 'playlist_remove',
+  'account-edit-outline': 'manage_accounts',
+  'code-tags': 'code',
+  'lightning-bolt': 'bolt',
+  'calendar-today': 'calendar_today',
 };
 /* eslint-enable quote-props */
 
@@ -79,7 +88,7 @@ export default {
   name: 'MaterialIcon',
   props: {
     icon: {
-      type: String,
+      type: [String, Array],
       required: true,
     },
     size: {
@@ -88,9 +97,17 @@ export default {
     },
   },
   computed: {
+    // Extract the icon name from the prop (Buefy passes [pack, icon] array)
+    iconName() {
+      if (Array.isArray(this.icon)) {
+        // Buefy passes [pack, iconName] - we want the iconName (second element)
+        return this.icon[1] || this.icon[0];
+      }
+      return this.icon;
+    },
     mappedIcon() {
       // Return mapped icon or the original if no mapping exists
-      return iconMap[this.icon] || this.icon;
+      return iconMap[this.iconName] || this.iconName;
     },
     sizeClass() {
       if (this.size === 'is-small') return 'is-size-small';
