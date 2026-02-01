@@ -379,7 +379,10 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.OPTIONS("/api/public/forms/active", a.handlePublicFormsCORSPreflight)
 
 		// Form embed script for displaying forms on external sites.
+		// Support both paths for backwards compatibility
 		g.GET("/api/public/lm-forms.js", a.handleServeLmFormsJS)
+		g.GET("/public/lm-forms.js", a.handleServeLmFormsJS)
+		g.GET("/public/shopify-forms-loader.js", a.handleServeLmFormsJS) // Alias for Shopify
 
 		// Public subscriber lookup for GTM/analytics integration
 		g.GET("/api/public/subscriber/lookup", a.LookupPublicSubscriber)
