@@ -81,6 +81,9 @@ const iconMap = {
   'code-tags': 'code',
   'lightning-bolt': 'bolt',
   'calendar-today': 'calendar_today',
+  'pencil': 'edit',
+  'cog': 'settings',
+  'format-list-bulleted': 'format_list_bulleted',
 };
 /* eslint-enable quote-props */
 

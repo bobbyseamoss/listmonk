@@ -284,6 +284,27 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.PUT("/api/forms/:id/status", pm(hasID(a.UpdateFormStatus), "forms:manage"))
 		g.DELETE("/api/forms/:id", pm(hasID(a.DeleteForms), "forms:manage"))
 
+		// Flows (automation).
+		g.GET("/api/flows", pm(a.GetFlows, "flows:get"))
+		g.GET("/api/flows/:id", pm(hasID(a.GetFlow), "flows:get"))
+		g.POST("/api/flows", pm(a.CreateFlow, "flows:manage"))
+		g.POST("/api/flows/:id/duplicate", pm(hasID(a.DuplicateFlow), "flows:manage"))
+		g.PUT("/api/flows/:id", pm(hasID(a.UpdateFlow), "flows:manage"))
+		g.PUT("/api/flows/:id/status", pm(hasID(a.UpdateFlowStatus), "flows:manage"))
+		g.DELETE("/api/flows/:id", pm(hasID(a.DeleteFlow), "flows:manage"))
+
+		g.GET("/api/flows/:id/steps", pm(hasID(a.GetFlowSteps), "flows:get"))
+		g.POST("/api/flows/:id/steps", pm(hasID(a.CreateFlowStep), "flows:manage"))
+		g.PUT("/api/flows/:id/steps/:stepId", pm(hasID(a.UpdateFlowStep), "flows:manage"))
+		g.DELETE("/api/flows/:id/steps/:stepId", pm(hasID(a.DeleteFlowStep), "flows:manage"))
+		g.PUT("/api/flows/:id/steps/reorder", pm(hasID(a.ReorderFlowSteps), "flows:manage"))
+
+		g.GET("/api/flows/:id/stats", pm(hasID(a.GetFlowStats), "flows:get"))
+		g.GET("/api/flows/:id/runs", pm(hasID(a.GetFlowRuns), "flows:get"))
+		g.GET("/api/flows/:id/runs/:runId/logs", pm(hasID(a.GetFlowRunLogs), "flows:get"))
+		g.POST("/api/flows/:id/trigger", pm(hasID(a.TriggerFlow), "flows:manage"))
+		g.DELETE("/api/flows/:id/runs/:runId", pm(hasID(a.CancelFlowRun), "flows:manage"))
+
 		if a.cfg.BounceWebhooksEnabled {
 			// Private authenticated bounce endpoint.
 			g.POST("/webhooks/bounce", pm(a.BounceWebhook, "webhooks:post_bounce"))
@@ -356,6 +377,9 @@ func initHTTPHandlers(e *echo.Echo, a *App) {
 		g.OPTIONS("/api/public/forms/impression/:id/step", a.handlePublicFormsCORSPreflight)
 		g.GET("/api/public/forms/active", a.GetActiveFormsForPage)
 		g.OPTIONS("/api/public/forms/active", a.handlePublicFormsCORSPreflight)
+
+		// Form embed script for displaying forms on external sites.
+		g.GET("/api/public/lm-forms.js", a.handleServeLmFormsJS)
 
 		// Public subscriber lookup for GTM/analytics integration
 		g.GET("/api/public/subscriber/lookup", a.LookupPublicSubscriber)
