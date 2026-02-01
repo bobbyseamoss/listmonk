@@ -1058,6 +1058,8 @@ var Listmonk = (function (exports) {
             incrementPageViews();
             // Auto-load forms from script tags
             this.autoLoadFromScripts();
+            // Auto-discover active forms from API (for popups, flyouts, etc.)
+            this.autoDiscoverForms();
             // Add global styles
             this.addGlobalStyles();
         }
@@ -1089,6 +1091,81 @@ var Listmonk = (function (exports) {
                     });
                 }
             });
+        }
+        async autoDiscoverForms() {
+            try {
+                // Build query params for targeting
+                const params = new URLSearchParams();
+                params.set('url', window.location.href);
+                // Detect Shopify page type if on Shopify
+                const shopifyPageType = this.detectShopifyPageType();
+                if (shopifyPageType) {
+                    params.set('shopifyPages', shopifyPageType);
+                }
+                // Fetch active forms from API
+                const response = await fetch(`${this.baseUrl}/api/public/forms/active?${params.toString()}`);
+                if (!response.ok) {
+                    console.log('Failed to fetch active forms');
+                    return;
+                }
+                const result = await response.json();
+                const forms = result.data;
+                if (!forms || forms.length === 0) {
+                    return;
+                }
+                // Load non-embed forms (popups, flyouts, etc.) that weren't already loaded via script tags
+                for (const form of forms) {
+                    // Skip embed forms - they need explicit placement via script tags
+                    if (form.formType === 'embed') {
+                        continue;
+                    }
+                    // Skip if already loaded via script tag
+                    if (this.loadedConfigs.has(form.uuid)) {
+                        continue;
+                    }
+                    // Load the form with auto trigger
+                    this.load(form.uuid, { trigger: 'auto' });
+                }
+            }
+            catch (error) {
+                console.error('Error auto-discovering forms:', error);
+            }
+        }
+        detectShopifyPageType() {
+            // Check for Shopify meta tags or URL patterns
+            const shopifyMeta = document.querySelector('meta[name="shopify-checkout-api-token"]');
+            const isShopify = shopifyMeta || window.location.hostname.includes('.myshopify.com') ||
+                document.querySelector('script[src*="shopify"]');
+            if (!isShopify) {
+                return null;
+            }
+            const path = window.location.pathname;
+            // Detect page type from URL
+            if (path === '/' || path === '') {
+                return 'homepage';
+            }
+            if (path.includes('/products/')) {
+                return 'product';
+            }
+            if (path === '/collections' || path.includes('/collections/')) {
+                return 'collection';
+            }
+            if (path === '/cart') {
+                return 'cart';
+            }
+            if (path.includes('/checkouts/')) {
+                return 'checkout';
+            }
+            if (path === '/pages' || path.includes('/pages/')) {
+                return 'page';
+            }
+            if (path === '/blogs' || path.includes('/blogs/')) {
+                return 'blog';
+            }
+            if (path === '/account' || path.includes('/account/')) {
+                return 'account';
+            }
+            return 'other';
         }
         addGlobalStyles() {
             if (document.getElementById('lm-forms-styles'))

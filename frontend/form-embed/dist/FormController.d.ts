@@ -8,6 +8,8 @@ export declare class FormController {
     private detectBaseUrl;
     private init;
     private autoLoadFromScripts;
+    private autoDiscoverForms;
+    private detectShopifyPageType;
     private addGlobalStyles;
     load(formUuid: string, options?: ShowOptions): Promise<void>;
     show(formUuid: string, options?: ShowOptions): void;

@@ -47,6 +47,9 @@ export class FormController {
     // Auto-load forms from script tags
     this.autoLoadFromScripts();
 
+    // Auto-discover active forms from API (for popups, flyouts, etc.)
+    this.autoDiscoverForms();
+
     // Add global styles
     this.addGlobalStyles();
   }
@@ -80,6 +83,93 @@ export class FormController {
         });
       }
     });
+  }
+
+  private async autoDiscoverForms(): Promise<void> {
+    try {
+      // Build query params for targeting
+      const params = new URLSearchParams();
+      params.set('url', window.location.href);
+
+      // Detect Shopify page type if on Shopify
+      const shopifyPageType = this.detectShopifyPageType();
+      if (shopifyPageType) {
+        params.set('shopifyPages', shopifyPageType);
+      }
+
+      // Fetch active forms from API
+      const response = await fetch(`${this.baseUrl}/api/public/forms/active?${params.toString()}`);
+      if (!response.ok) {
+        console.log('Failed to fetch active forms');
+        return;
+      }
+
+      const result = await response.json();
+      const forms = result.data as Array<{ uuid: string; formType: string }>;
+
+      if (!forms || forms.length === 0) {
+        return;
+      }
+
+      // Load non-embed forms (popups, flyouts, etc.) that weren't already loaded via script tags
+      for (const form of forms) {
+        // Skip embed forms - they need explicit placement via script tags
+        if (form.formType === 'embed') {
+          continue;
+        }
+
+        // Skip if already loaded via script tag
+        if (this.loadedConfigs.has(form.uuid)) {
+          continue;
+        }
+
+        // Load the form with auto trigger
+        this.load(form.uuid, { trigger: 'auto' });
+      }
+    } catch (error) {
+      console.error('Error auto-discovering forms:', error);
+    }
+  }
+
+  private detectShopifyPageType(): string | null {
+    // Check for Shopify meta tags or URL patterns
+    const shopifyMeta = document.querySelector('meta[name="shopify-checkout-api-token"]');
+    const isShopify = shopifyMeta || window.location.hostname.includes('.myshopify.com') ||
+      document.querySelector('script[src*="shopify"]');
+
+    if (!isShopify) {
+      return null;
+    }
+
+    const path = window.location.pathname;
+
+    // Detect page type from URL
+    if (path === '/' || path === '') {
+      return 'homepage';
+    }
+    if (path.includes('/products/')) {
+      return 'product';
+    }
+    if (path === '/collections' || path.includes('/collections/')) {
+      return 'collection';
+    }
+    if (path === '/cart') {
+      return 'cart';
+    }
+    if (path.includes('/checkouts/')) {
+      return 'checkout';
+    }
+    if (path === '/pages' || path.includes('/pages/')) {
+      return 'page';
+    }
+    if (path === '/blogs' || path.includes('/blogs/')) {
+      return 'blog';
+    }
+    if (path === '/account' || path.includes('/account/')) {
+      return 'account';
+    }
+
+    return 'other';
   }
 
   private addGlobalStyles(): void {
@@ -140,26 +230,34 @@ export class FormController {
         return;
       }
 
-      // Evaluate targeting rules
-      if (!evaluateTargeting(config.targeting)) {
-        console.log(`Form ${formUuid} targeting rules not matched`);
-        return;
-      }
-
-      // Check frequency/suppression rules
-      if (!shouldShowForm(formUuid, config.frequency)) {
-        console.log(`Form ${formUuid} suppressed by frequency rules`);
-        return;
-      }
-
-      // Check collision prevention (only one form at a time)
-      if (this.activeForms.size > 0 && config.frequency.priority <= this.currentFormPriority) {
-        console.log(`Form ${formUuid} blocked by higher priority form`);
-        return;
-      }
-
       // Use formTypeOverride if provided (from data-type attribute), otherwise use config.formType
       const effectiveFormType = options.formTypeOverride || config.formType;
+
+      // Skip targeting/frequency rules for embed forms - they should always show
+      // Embed forms are typically placed in footers, sidebars, etc. and should be visible every time
+      if (effectiveFormType !== 'embed') {
+        // Evaluate targeting rules
+        if (!evaluateTargeting(config.targeting)) {
+          console.log(`Form ${formUuid} targeting rules not matched`);
+          return;
+        }
+
+        // Check frequency/suppression rules
+        if (!shouldShowForm(formUuid, config.frequency)) {
+          console.log(`Form ${formUuid} suppressed by frequency rules`);
+          return;
+        }
+
+        // Check collision prevention (only one popup/modal form at a time)
+        // Embed forms should NOT block popup forms since they occupy different spaces
+        const activePopupForms = Array.from(this.activeForms.values()).filter(
+          (f) => f.config.formType !== 'embed'
+        );
+        if (activePopupForms.length > 0 && config.frequency.priority <= this.currentFormPriority) {
+          console.log(`Form ${formUuid} blocked by higher priority popup form`);
+          return;
+        }
+      }
 
       // For embed type forms, handle auto-creation of container if needed
       if (effectiveFormType === 'embed') {
@@ -236,7 +334,11 @@ export class FormController {
       config,
       options,
     });
-    this.currentFormPriority = config.frequency.priority;
+
+    // Only track priority for popup/modal forms, not embed forms
+    if (effectiveConfig.formType !== 'embed') {
+      this.currentFormPriority = config.frequency.priority;
+    }
 
     // Record impression
     recordImpression(formUuid);
@@ -299,12 +401,15 @@ export class FormController {
       recordClose(formUuid);
       cleanupTriggers();
 
-      // Update current priority
-      if (this.activeForms.size === 0) {
+      // Update current priority (only from non-embed forms)
+      const activePopupForms = Array.from(this.activeForms.values()).filter(
+        (f) => f.config.formType !== 'embed'
+      );
+      if (activePopupForms.length === 0) {
         this.currentFormPriority = 0;
       } else {
         this.currentFormPriority = Math.max(
-          ...Array.from(this.activeForms.values()).map((f) => f.config.frequency.priority)
+          ...activePopupForms.map((f) => f.config.frequency.priority)
         );
       }
     }
