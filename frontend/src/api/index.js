@@ -491,12 +491,6 @@ export const deleteCampaign = async (id) => http.delete(
   { loading: models.campaigns },
 );
 
-export const removeSentSubscribersFromLists = async (id) => http.post(
-  `/api/campaigns/${id}/remove-sent-today`,
-  {},
-  { loading: models.campaigns },
-);
-
 // Queue.
 export const getQueueItems = async (params) => http.get(
   '/api/queue/items',
@@ -750,7 +744,10 @@ export const getShopifyOrderTally = (params) => http.get('/api/shopify/order-tal
 // Shopify Customer Sync API
 export const startShopifyCustomerSync = () => http.post('/api/shopify/customers/sync');
 export const getShopifyCustomerSyncStatus = () => http.get('/api/shopify/customers/sync/status');
-export const getShopifyFormsStatus = () => http.get('/api/shopify/forms/status');
+
+// Shopify Forms API
+export const getShopifyFormsStatus = () => http.get('/api/shopify/forms/status', { disableToast: true });
+export const updateShopifyFormsSettings = (data) => http.put('/api/shopify/forms', data);
 
 // Activity Feed API
 export const getActivityFeed = (params) => http.get('/api/activity-feed', { params });
@@ -814,4 +811,98 @@ export const uploadFormCoupons = async (id, data) => http.post(
 export const getFormCouponStats = async (id) => http.get(
   `/api/forms/${id}/coupons/stats`,
   { loading: models.forms },
+);
+
+// Flows (Automation) API
+export const getFlows = async (params) => http.get(
+  '/api/flows',
+  { params, loading: models.flows, store: models.flows },
+);
+
+export const getFlow = async (id) => http.get(
+  `/api/flows/${id}`,
+  { loading: models.flows },
+);
+
+export const createFlow = async (data) => http.post(
+  '/api/flows',
+  data,
+  { loading: models.flows },
+);
+
+export const updateFlow = async (id, data) => http.put(
+  `/api/flows/${id}`,
+  data,
+  { loading: models.flows },
+);
+
+export const updateFlowStatus = async (id, status) => http.put(
+  `/api/flows/${id}/status`,
+  { status },
+  { loading: models.flows },
+);
+
+export const deleteFlow = async (id) => http.delete(
+  `/api/flows/${id}`,
+  { loading: models.flows },
+);
+
+export const getFlowSteps = async (flowId) => http.get(
+  `/api/flows/${flowId}/steps`,
+  { loading: models.flows },
+);
+
+export const createFlowStep = async (flowId, data) => http.post(
+  `/api/flows/${flowId}/steps`,
+  data,
+  { loading: models.flows },
+);
+
+export const updateFlowStep = async (flowId, stepId, data) => http.put(
+  `/api/flows/${flowId}/steps/${stepId}`,
+  data,
+  { loading: models.flows },
+);
+
+export const deleteFlowStep = async (flowId, stepId) => http.delete(
+  `/api/flows/${flowId}/steps/${stepId}`,
+  { loading: models.flows },
+);
+
+export const reorderFlowSteps = async (flowId, stepIds, stepOrders) => http.put(
+  `/api/flows/${flowId}/steps/reorder`,
+  { step_ids: stepIds, step_orders: stepOrders },
+  { loading: models.flows },
+);
+
+export const getFlowStats = async (flowId) => http.get(
+  `/api/flows/${flowId}/stats`,
+  { loading: models.flows },
+);
+
+export const getFlowRuns = async (flowId, params) => http.get(
+  `/api/flows/${flowId}/runs`,
+  { params, loading: models.flows },
+);
+
+export const getFlowRunLogs = async (flowId, runId) => http.get(
+  `/api/flows/${flowId}/runs/${runId}/logs`,
+  { loading: models.flows },
+);
+
+export const duplicateFlow = async (id) => http.post(
+  `/api/flows/${id}/duplicate`,
+  {},
+  { loading: models.flows },
+);
+
+export const triggerFlow = async (flowId, subscriberId, subscriberEmail, triggerData) => http.post(
+  `/api/flows/${flowId}/trigger`,
+  { subscriber_id: subscriberId, subscriber_email: subscriberEmail, trigger_data: triggerData },
+  { loading: models.flows },
+);
+
+export const cancelFlowRun = async (flowId, runId) => http.delete(
+  `/api/flows/${flowId}/runs/${runId}`,
+  { loading: models.flows },
 );
