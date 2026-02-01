@@ -30,14 +30,20 @@ npm run build
 mkdir -p ../public/static/email-builder
 cp -r dist/* ../public/static/email-builder/
 cd ../..
+echo -e "  - Building form-builder..."
+cd frontend/form-builder
+npm run build
+mkdir -p ../public/static/form-builder
+cp -r dist/* ../public/static/form-builder/
+cd ../..
 echo -e "  - Building frontend..."
 cd frontend
 npm run build
 cd ..
 echo -e "  - Building Go binary with message tracking..."
 go build -o listmonk -ldflags="-s -w -X 'main.buildString=$(date -u +%Y-%m-%dT%H:%M:%S%z)' -X 'main.versionString=$(git describe --tags --always)'" ./cmd
-echo -e "  - Using Bobby Sea Moss logo..."
-docker build -f Dockerfile.build --build-arg LOGO_URL="https://d3k81ch9hvuctc.cloudfront.net/company/XFsBBP/images/6066d5d2-0701-4193-a8e7-13b624efc474.png" -t ${FULL_IMAGE_NAME} .
+echo -e "  - Building Docker image..."
+docker build -f Dockerfile.build -t ${FULL_IMAGE_NAME} .
 echo -e "${GREEN}✓ Docker image built with all components${NC}"
 echo ""
 
@@ -119,7 +125,7 @@ echo ""
 #echo ""
 
 # Step 4: Deploy to Azure Container Apps
-echo -e "${YELLOW}[5/6] Deploying to Azure Container Apps...${NC}"
+echo -e "${YELLOW}[4/6] Deploying to Azure Container Apps...${NC}"
 echo -e "  - Forcing new image pull and container restart..."
 az containerapp update \
   --name ${CONTAINER_APP_NAME} \
@@ -131,13 +137,25 @@ echo -e "${GREEN}✓ Deployed to Azure with new revision${NC}"
 echo ""
 
 # Step 5: Get deployment info
-echo -e "${YELLOW}[6/6] Getting deployment information...${NC}"
+echo -e "${YELLOW}[5/6] Getting deployment information...${NC}"
 REVISION=$(az containerapp show \
   --name ${CONTAINER_APP_NAME} \
   --resource-group ${RESOURCE_GROUP} \
   --query "properties.latestRevisionName" \
   -o tsv)
 echo -e "${GREEN}✓ Deployment complete!${NC}"
+echo ""
+
+# Step 6: Clean up local Docker resources
+echo -e "${YELLOW}[6/6] Cleaning up local Docker resources...${NC}"
+echo -e "  - Removing local image ${FULL_IMAGE_NAME}..."
+docker rmi ${FULL_IMAGE_NAME} 2>/dev/null || true
+echo -e "  - Pruning dangling images..."
+docker image prune -f 2>/dev/null || true
+echo -e "  - Pruning build cache..."
+docker builder prune -f --filter "until=24h" 2>/dev/null || true
+SPACE_FREED=$(docker system df --format "{{.Reclaimable}}" 2>/dev/null | head -1 || echo "unknown")
+echo -e "${GREEN}✓ Docker cleanup complete${NC}"
 echo ""
 
 echo -e "${GREEN}=== Deployment Summary ===${NC}"
