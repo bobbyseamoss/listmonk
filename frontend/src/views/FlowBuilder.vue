@@ -557,9 +557,10 @@ export default Vue.extend({
       this.loading.test = true;
       try {
         await this.$api.triggerFlow(this.flow.id, null, this.testEmail, {});
-        this.$utils.toast('Test flow triggered', 'is-success');
+        this.$utils.toast('Test flow triggered successfully', 'is-success');
       } catch (err) {
-        this.$utils.toast(err.message, 'is-danger');
+        // Error toast is already shown by the API interceptor
+        // Don't show a duplicate toast here
       } finally {
         this.loading.test = false;
       }
