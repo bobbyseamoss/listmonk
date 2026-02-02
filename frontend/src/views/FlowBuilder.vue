@@ -176,7 +176,7 @@
                     <b-field label="Template">
                       <b-select v-model="step.template_id" expanded>
                         <option :value="null">Select a template...</option>
-                        <option v-for="tpl in templates.results" :key="tpl.id" :value="tpl.id">
+                        <option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">
                           {{ tpl.name }}
                         </option>
                       </b-select>
@@ -433,8 +433,8 @@ export default Vue.extend({
       switch (step.step_type) {
         case 'email':
           if (step.subject) return step.subject;
-          if (step.template_id && this.templates.results) {
-            const tpl = this.templates.results.find((t) => t.id === step.template_id);
+          if (step.template_id && this.templates) {
+            const tpl = this.templates.find((t) => t.id === step.template_id);
             return tpl ? tpl.name : 'Send email';
           }
           return 'Send email';
