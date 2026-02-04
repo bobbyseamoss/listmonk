@@ -178,15 +178,231 @@ func (a *App) BounceWebhook(c echo.Context) error {
 				a.log.Printf("error processing SNS (SES) subscription: %v", err)
 				return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidData"))
 			}
+			processed = true
 
-		// Bounce notification.
+		// All SES event notifications (Bounce, Complaint, Delivery, Open, Click, etc.)
 		case "Notification":
-			b, err := a.bounce.SES.ProcessBounce(rawReq)
+			result, err := a.bounce.SES.ProcessEvents(rawReq)
 			if err != nil {
 				a.log.Printf("error processing SES notification: %v", err)
+				errorMsg = err.Error()
+				responseStatus = http.StatusBadRequest
 				return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidData"))
 			}
-			bounces = append(bounces, b)
+
+			// Log each event individually for the webhook logs
+			for _, evt := range result.Events {
+				eventType = evt.EventType
+				a.logWebhook("ses", evt.EventType, c.Request().Header, rawReq, http.StatusOK, evt.Email, true, "")
+			}
+
+			// Record ALL SES events to dedicated tables for analytics
+			for _, evt := range result.Events {
+				// Look up campaign and subscriber IDs
+				var campaignID, subscriberID int
+
+				// Try to find by UUIDs from X-headers first
+				if evt.CampaignUUID != "" && evt.SubscriberUUID != "" {
+					_ = a.db.QueryRow(`
+						SELECT c.id, s.id
+						FROM campaigns c, subscribers s
+						WHERE c.uuid = $1 AND s.uuid = $2
+					`, evt.CampaignUUID, evt.SubscriberUUID).Scan(&campaignID, &subscriberID)
+				}
+
+				// Fallback: look up by email
+				if subscriberID == 0 && evt.Email != "" {
+					_ = a.db.QueryRow(`
+						SELECT id FROM subscribers WHERE LOWER(email) = LOWER($1)
+					`, evt.Email).Scan(&subscriberID)
+				}
+
+				// Try to find campaign from ses_message_tracking or recent sends
+				if campaignID == 0 && evt.MessageID != "" {
+					_ = a.db.QueryRow(`
+						SELECT campaign_id, subscriber_id FROM ses_message_tracking
+						WHERE ses_message_id = $1
+					`, evt.MessageID).Scan(&campaignID, &subscriberID)
+				}
+
+				// Fallback: try recent queue sends
+				if campaignID == 0 && subscriberID > 0 {
+					_ = a.db.QueryRow(`
+						SELECT campaign_id FROM email_queue
+						WHERE subscriber_id = $1 AND status = 'sent'
+						ORDER BY sent_at DESC LIMIT 1
+					`, subscriberID).Scan(&campaignID)
+				}
+
+				// Categorize event type for storage
+				switch evt.EventType {
+				case "Send", "Delivery", "Bounce", "Complaint", "Reject", "DeliveryDelay", "RenderingFailure":
+					// Delivery events - store in ses_delivery_events
+					linkTagsJSON := "{}"
+					if evt.LinkTags != nil {
+						if b, err := json.Marshal(evt.LinkTags); err == nil {
+							linkTagsJSON = string(b)
+						}
+					}
+					_ = linkTagsJSON // unused for delivery events
+
+					_, err := a.db.Exec(`
+						INSERT INTO ses_delivery_events
+							(ses_message_id, campaign_id, subscriber_id, event_type, email, bounce_type, bounce_sub_type, complaint_feedback_type, diagnostic_code, status_code, remote_mta_ip, reporting_mta, event_timestamp)
+						VALUES ($1, (SELECT id FROM campaigns WHERE id = $2), (SELECT id FROM subscribers WHERE id = $3), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+					`, evt.MessageID, campaignID, subscriberID, evt.EventType, evt.Email, evt.BounceType, evt.BounceSubType, evt.ComplaintFeedbackType, evt.DiagnosticCode, evt.StatusCode, evt.RemoteMtaIp, evt.ReportingMTA, evt.Timestamp)
+					if err != nil {
+						a.log.Printf("SES: error storing delivery event: %v", err)
+					}
+
+				case "Open", "Click":
+					// Engagement events - store in ses_engagement_events
+					linkTagsJSON := "{}"
+					if evt.LinkTags != nil {
+						if b, err := json.Marshal(evt.LinkTags); err == nil {
+							linkTagsJSON = string(b)
+						}
+					}
+
+					_, err := a.db.Exec(`
+						INSERT INTO ses_engagement_events
+							(ses_message_id, campaign_id, subscriber_id, event_type, email, url, user_agent, ip_address, link_tags, event_timestamp)
+						VALUES ($1, (SELECT id FROM campaigns WHERE id = $2), (SELECT id FROM subscribers WHERE id = $3), $4, $5, $6, $7, $8, $9, $10)
+					`, evt.MessageID, campaignID, subscriberID, evt.EventType, evt.Email, evt.URL, evt.UserAgent, evt.IpAddress, linkTagsJSON, evt.Timestamp)
+					if err != nil {
+						a.log.Printf("SES: error storing engagement event: %v", err)
+					}
+				}
+			}
+
+			// Add bounces
+			bounces = append(bounces, result.Bounces...)
+
+			// Process engagement events (opens, clicks) - also record to campaign_views/link_clicks
+			for _, eng := range result.Engagements {
+				// Look up campaign and subscriber IDs
+				var campaignID, subscriberID int
+
+				// Try to find by UUIDs from X-headers first
+				if eng.CampaignUUID != "" && eng.SubscriberUUID != "" {
+					err := a.db.QueryRow(`
+						SELECT c.id, s.id
+						FROM campaigns c, subscribers s
+						WHERE c.uuid = $1 AND s.uuid = $2
+					`, eng.CampaignUUID, eng.SubscriberUUID).Scan(&campaignID, &subscriberID)
+					if err != nil {
+						a.log.Printf("SES: could not find campaign/subscriber by UUIDs: %v", err)
+					}
+				}
+
+				// Fallback: look up by email
+				if subscriberID == 0 && eng.Email != "" {
+					err := a.db.QueryRow(`
+						SELECT id FROM subscribers WHERE LOWER(email) = LOWER($1)
+					`, eng.Email).Scan(&subscriberID)
+					if err != nil {
+						a.log.Printf("SES: could not find subscriber by email %s: %v", eng.Email, err)
+						continue
+					}
+				}
+
+				if subscriberID == 0 {
+					a.log.Printf("SES: skipping engagement - no subscriber found for %s", eng.Email)
+					continue
+				}
+
+				// Try to find from ses_message_tracking
+				if campaignID == 0 && eng.MessageID != "" {
+					_ = a.db.QueryRow(`
+						SELECT campaign_id FROM ses_message_tracking
+						WHERE ses_message_id = $1
+					`, eng.MessageID).Scan(&campaignID)
+				}
+
+				// Fallback: try recent queue sends
+				if campaignID == 0 {
+					_ = a.db.QueryRow(`
+						SELECT campaign_id FROM email_queue
+						WHERE subscriber_id = $1 AND status = 'sent'
+						ORDER BY sent_at DESC LIMIT 1
+					`, subscriberID).Scan(&campaignID)
+				}
+
+				// Fallback: try campaign_views
+				if campaignID == 0 {
+					_ = a.db.QueryRow(`
+						SELECT c.id FROM campaigns c
+						JOIN campaign_views cv ON cv.campaign_id = c.id
+						WHERE cv.subscriber_id = $1
+						ORDER BY cv.created_at DESC
+						LIMIT 1
+					`, subscriberID).Scan(&campaignID)
+				}
+
+				if campaignID == 0 {
+					a.log.Printf("SES: skipping engagement - no campaign found for subscriber %d", subscriberID)
+					continue
+				}
+
+				switch eng.Event {
+				case "open":
+					// Record view with deduplication
+					_, err := a.db.Exec(`
+						INSERT INTO campaign_views (campaign_id, subscriber_id, created_at)
+						SELECT $1, $2, $3
+						WHERE NOT EXISTS (
+							SELECT 1 FROM campaign_views
+							WHERE campaign_id = $1
+							AND subscriber_id = $2
+							AND ABS(EXTRACT(EPOCH FROM (created_at - $3))) <= 5
+						)
+					`, campaignID, subscriberID, eng.Timestamp)
+					if err != nil {
+						a.log.Printf("SES: error recording view: %v", err)
+					} else {
+						a.log.Printf("SES: recorded view for campaign %d, subscriber %d", campaignID, subscriberID)
+					}
+
+				case "click":
+					if eng.URL == "" {
+						continue
+					}
+
+					// Find or create link
+					var linkID int
+					err := a.db.QueryRow(`
+						INSERT INTO links (uuid, url, created_at)
+						VALUES (gen_random_uuid(), $1, NOW())
+						ON CONFLICT (url) DO UPDATE SET url = EXCLUDED.url
+						RETURNING id
+					`, eng.URL).Scan(&linkID)
+					if err != nil {
+						a.log.Printf("SES: error finding/creating link: %v", err)
+						continue
+					}
+
+					// Record click with deduplication
+					_, err = a.db.Exec(`
+						INSERT INTO link_clicks (campaign_id, subscriber_id, link_id, created_at)
+						SELECT $1, $2, $3, $4
+						WHERE NOT EXISTS (
+							SELECT 1 FROM link_clicks
+							WHERE campaign_id = $1
+							AND subscriber_id = $2
+							AND link_id = $3
+							AND ABS(EXTRACT(EPOCH FROM (created_at - $4))) <= 5
+						)
+					`, campaignID, subscriberID, linkID, eng.Timestamp)
+					if err != nil {
+						a.log.Printf("SES: error recording click: %v", err)
+					} else {
+						a.log.Printf("SES: recorded click for campaign %d, subscriber %d, link %d", campaignID, subscriberID, linkID)
+					}
+				}
+			}
+
+			// Skip the default logging since we logged each event individually
+			processed = true
 
 		default:
 			return echo.NewHTTPError(http.StatusBadRequest, a.i18n.T("globals.messages.invalidData"))
