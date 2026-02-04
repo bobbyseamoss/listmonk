@@ -13,7 +13,7 @@
           <h5 class="title is-5">Select Date Range</h5>
           <div class="columns">
             <div class="column">
-              <b-field label="Start Date">
+              <b-field label="From">
                 <b-datepicker
                   v-model="startDate"
                   placeholder="Select start date"
@@ -23,7 +23,7 @@
               </b-field>
             </div>
             <div class="column">
-              <b-field label="End Date">
+              <b-field label="To">
                 <b-datepicker
                   v-model="endDate"
                   placeholder="Select end date"
@@ -51,41 +51,25 @@
     </div>
 
     <div v-if="results" class="results mt-5">
-      <div class="box mb-4">
-        <h5 class="title is-5">Summary</h5>
-        <p><strong>Period:</strong> {{ results.start_date }} to {{ results.end_date }}</p>
-        <p><strong>Orders:</strong> {{ results.order_count }}</p>
-        <p><strong>Total Products:</strong> {{ results.grand_total }}</p>
-      </div>
-
-      <div v-if="results.effects && results.effects.length > 0">
-        <div v-for="effect in results.effects" :key="effect.effect" class="box mb-4">
-          <h4 class="title is-5">{{ effect.effect }}</h4>
-          <table class="table is-fullwidth is-striped">
-            <thead>
-              <tr>
-                <th>Flavor</th>
-                <th class="has-text-right">Count</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="flavor in effect.flavors" :key="flavor.flavor">
-                <td>{{ flavor.flavor }}</td>
-                <td class="has-text-right">{{ flavor.count }}</td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr>
-                <th>Total</th>
-                <th class="has-text-right">{{ effect.total }}</th>
-              </tr>
-            </tfoot>
-          </table>
+      <div class="tally-output">
+        <div class="tally-header">
+          {{ results.start_date }} to {{ results.end_date }}
+          Orders: {{ results.order_count }} | Total: {{ results.grand_total }}
         </div>
-      </div>
 
-      <div v-else class="notification is-warning">
-        No product data found for the selected date range.
+        <div v-if="results.effects && results.effects.length > 0">
+          <div v-for="effect in results.effects" :key="effect.effect" class="tally-section">
+            <div class="tally-effect">{{ effect.effect }}</div>
+            <div v-for="flavor in effect.flavors" :key="flavor.flavor" class="tally-line">
+              {{ flavor.flavor }} {{ flavor.count }}
+            </div>
+            <div class="tally-total">Total {{ effect.total }}</div>
+          </div>
+        </div>
+
+        <div v-else class="tally-line">
+          No product data found for the selected date range.
+        </div>
       </div>
     </div>
   </section>
@@ -148,23 +132,53 @@ export default Vue.extend({
   },
 
   mounted() {
-    // Default to last 30 days
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - 30);
+    // Default: From yesterday To today
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
 
-    this.startDate = start;
-    this.endDate = end;
+    this.startDate = yesterday;
+    this.endDate = today;
   },
 });
 </script>
 
 <style lang="scss" scoped>
 .shopify-order-tally {
-  .results {
-    .box {
-      border-left: 4px solid #3273dc;
-    }
+  .tally-output {
+    font-family: monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    background: #fafafa;
+    border: 1px solid #ddd;
+    padding: 20px;
+    white-space: pre-wrap;
+  }
+
+  .tally-header {
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #ccc;
+    color: #666;
+  }
+
+  .tally-section {
+    margin-bottom: 20px;
+  }
+
+  .tally-effect {
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .tally-line {
+    padding-left: 0;
+  }
+
+  .tally-total {
+    font-weight: bold;
+    margin-top: 4px;
   }
 }
 </style>
