@@ -175,9 +175,9 @@ export default Vue.extend({
 
     // Parse webhook JSON and extract status or engagementType
     getEventStatus(row) {
-      // SES webhooks store event type in the database column
-      if (row.webhookType === 'ses' && row.event_type) {
-        return row.event_type;
+      // SES webhooks store event type in the database column (camelCase from API)
+      if (row.webhookType === 'ses' && row.eventType) {
+        return row.eventType;
       }
 
       try {
