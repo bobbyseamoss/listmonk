@@ -731,6 +731,24 @@ func (a *App) GetCampaignUnsubscribers(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
+// GetCampaignBotStats returns bot click statistics for a campaign.
+func (a *App) GetCampaignBotStats(c echo.Context) error {
+	id := getID(c)
+
+	// Check if the user has access to the campaign.
+	if err := a.checkCampaignPerm(auth.PermTypeGet, id, c); err != nil {
+		return err
+	}
+
+	// Get the bot stats from the DB.
+	out, err := a.core.GetCampaignBotStats(id)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
 // GetCampaignsPerformanceDetail returns paginated performance data for all finished campaigns.
 func (a *App) GetCampaignsPerformanceDetail(c echo.Context) error {
 	var (
@@ -787,7 +805,22 @@ func (a *App) GetCampaignsPerformanceDetail(c echo.Context) error {
 
 // sendTestMessage takes a campaign and a subscriber and sends out a sample campaign message.
 func (a *App) sendTestMessage(sub models.Subscriber, camp *models.Campaign) error {
+	// If the campaign uses the "automatic" messenger, we need to use a real SMTP messenger
+	// for test emails since the automatic messenger doesn't actually send anything.
+	originalMessenger := camp.Messenger
+	if camp.Messenger == "automatic" {
+		// Use the default "email" messenger for test emails
+		if a.manager.HasMessenger("email") {
+			camp.Messenger = "email"
+			a.log.Printf("test email: using 'email' messenger instead of 'automatic' for campaign %d", camp.ID)
+		} else {
+			return echo.NewHTTPError(http.StatusBadRequest,
+				"Cannot send test email: no SMTP messenger available")
+		}
+	}
+
 	if err := camp.CompileTemplate(a.manager.TemplateFuncs(camp)); err != nil {
+		camp.Messenger = originalMessenger // Restore original
 		a.log.Printf("error compiling template: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError,
 			a.i18n.Ts("templates.errorCompiling", "error", err.Error()))
@@ -796,11 +829,14 @@ func (a *App) sendTestMessage(sub models.Subscriber, camp *models.Campaign) erro
 	// Create a sample campaign message.
 	msg, err := a.manager.NewCampaignMessage(camp, sub)
 	if err != nil {
+		camp.Messenger = originalMessenger // Restore original
 		a.log.Printf("error rendering message: %v", err)
 		return echo.NewHTTPError(http.StatusNotFound, a.i18n.Ts("templates.errorRendering", "error", err.Error()))
 	}
 
-	return a.manager.PushCampaignMessage(msg)
+	err = a.manager.PushCampaignMessage(msg)
+	camp.Messenger = originalMessenger // Restore original
+	return err
 }
 
 // validateCampaignFields validates incoming campaign field values.
@@ -842,7 +878,8 @@ func (a *App) validateCampaignFields(c campReq) (campReq, error) {
 		}
 	}
 
-	if len(c.ListIDs) == 0 {
+	// Campaigns must have at least one list OR one segment
+	if len(c.ListIDs) == 0 && len(c.SegmentIDs) == 0 {
 		return c, errors.New(a.i18n.T("campaigns.fieldInvalidListIDs"))
 	}
 
