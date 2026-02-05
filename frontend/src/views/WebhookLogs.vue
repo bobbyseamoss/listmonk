@@ -175,6 +175,11 @@ export default Vue.extend({
 
     // Parse webhook JSON and extract status or engagementType
     getEventStatus(row) {
+      // SES webhooks store event type in the database column
+      if (row.webhookType === 'ses' && row.event_type) {
+        return row.event_type;
+      }
+
       try {
         const body = JSON.parse(row.requestBody);
 
@@ -214,21 +219,24 @@ export default Vue.extend({
       const statusLower = typeof status === 'string' ? status.toLowerCase() : '';
 
       // Success/Delivered statuses (green)
-      if (status === 'Delivered' || statusLower === 'delivered') return 'is-success';
+      if (status === 'Delivered' || statusLower === 'delivered' || statusLower === 'delivery') return 'is-success';
       if (statusLower === 'processed') return 'is-success';
 
       // Failure statuses (red)
       if (['Bounced', 'Failed', 'Suppressed', 'Quarantined', 'FilteredSpam'].includes(status)) {
         return 'is-danger';
       }
-      if (['bounce', 'dropped', 'blocked', 'spamreport', 'unsubscribe'].includes(statusLower)) {
+      if (['bounce', 'dropped', 'blocked', 'spamreport', 'unsubscribe', 'complaint', 'reject', 'renderingfailure'].includes(statusLower)) {
         return 'is-danger';
       }
 
       // Warning/Pending statuses (yellow/warning)
-      if (statusLower === 'deferred') return 'is-warning';
+      if (statusLower === 'deferred' || statusLower === 'deliverydelay') return 'is-warning';
 
-      // Engagement types (blue/info)
+      // Send/Accepted status (grey/light) - email accepted but not yet delivered
+      if (statusLower === 'send') return 'is-light';
+
+      // Engagement types (blue/info for opens, purple/link for clicks)
       if (status === 'view' || statusLower === 'open') return 'is-info';
       if (status === 'click' || statusLower === 'click') return 'is-link';
 
