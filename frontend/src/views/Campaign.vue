@@ -160,6 +160,55 @@
                       :disabled="!canEdit" />
                   </b-field>
                 </div>
+
+                <!-- UTM Parameters -->
+                <b-collapse class="card" animation="slide" :open="false">
+                  <template #trigger="props">
+                    <div class="card-header" role="button">
+                      <p class="card-header-title">
+                        <b-icon :icon="props.open ? 'chevron-down' : 'chevron-right'" />
+                        UTM Parameters
+                      </p>
+                    </div>
+                  </template>
+                  <div class="card-content">
+                    <p class="is-size-7 has-text-grey mb-3">
+                      UTM parameters are automatically appended to all tracked links in this campaign for analytics tracking.
+                    </p>
+                    <div class="columns">
+                      <div class="column is-6">
+                        <b-field label="utm_source" label-position="on-border">
+                          <b-input v-model="form.utmSource" placeholder="listmonk" :disabled="!canEdit" />
+                        </b-field>
+                      </div>
+                      <div class="column is-6">
+                        <b-field label="utm_medium" label-position="on-border">
+                          <b-input v-model="form.utmMedium" placeholder="email" :disabled="!canEdit" />
+                        </b-field>
+                      </div>
+                    </div>
+                    <div class="columns">
+                      <div class="column is-6">
+                        <b-field label="utm_campaign" label-position="on-border">
+                          <b-input v-model="form.utmCampaign" :placeholder="form.name || 'campaign_name'" :disabled="!canEdit" />
+                        </b-field>
+                      </div>
+                      <div class="column is-6">
+                        <b-field label="utm_content" label-position="on-border">
+                          <b-input v-model="form.utmContent" placeholder="optional" :disabled="!canEdit" />
+                        </b-field>
+                      </div>
+                    </div>
+                    <div class="columns">
+                      <div class="column is-6">
+                        <b-field label="utm_term" label-position="on-border">
+                          <b-input v-model="form.utmTerm" placeholder="optional" :disabled="!canEdit" />
+                        </b-field>
+                      </div>
+                    </div>
+                  </div>
+                </b-collapse>
+
                 <hr />
 
                 <b-field v-if="isNew">
@@ -179,25 +228,17 @@
                   <b-taginput v-model="form.testEmails" :before-adding="$utils.validateEmail" :disabled="isNew" ellipsis
                     icon="email-outline" :placeholder="$t('campaigns.testEmails')" />
                 </b-field>
+                <b-field :label="$t('campaigns.testMessenger')" label-position="on-border">
+                  <b-select v-model="form.testMessenger" :disabled="isNew" expanded>
+                    <option v-for="m in testMessengers" :key="m" :value="m">
+                      {{ m }}
+                    </option>
+                  </b-select>
+                </b-field>
                 <b-field>
                   <b-button @click="() => onSubmit('test')" :loading="loading.campaigns" :disabled="isNew"
                     type="is-primary" icon-left="email-outline">
                     {{ $t('campaigns.send') }}
-                  </b-button>
-                </b-field>
-              </div>
-
-              <div v-if="data.messenger === 'automatic' && !isNew" class="box">
-                <h3 class="title is-size-6">
-                  Remove Sent Subscribers
-                </h3>
-                <p class="is-size-7 has-text-grey mb-3">
-                  Remove all subscribers who received this campaign from the campaign's lists. Useful for preventing duplicate sends in future campaigns.
-                </p>
-                <b-field>
-                  <b-button @click="removeSentFromLists" :loading="removeSubscribersLoading"
-                    type="is-warning" icon-left="account-remove">
-                    Remove Sent Subscribers
                   </b-button>
                 </b-field>
               </div>
@@ -414,7 +455,6 @@ export default Vue.extend({
       isAttachModalOpen: false,
       isPreviewingArchive: false,
       activeTab: 'campaign',
-      removeSubscribersLoading: false,
 
       data: {},
 
@@ -449,7 +489,16 @@ export default Vue.extend({
         archive: false,
         archiveMetaStr: '{}',
         archiveMeta: {},
+
+        // UTM tracking parameters
+        utmSource: '',
+        utmMedium: '',
+        utmCampaign: '',
+        utmTerm: '',
+        utmContent: '',
+
         testEmails: [],
+        testMessenger: 'email',
       },
 
       // Shopify purchase analytics
@@ -636,8 +685,10 @@ export default Vue.extend({
     },
 
     sendTest() {
-      // Extract lists from unified targets for test send
-      const selectedLists = this.form.targets.filter((t) => t.targetType === 'list').map((l) => l.id);
+      // Extract lists from unified targets for test send (with null checks)
+      const targets = this.form.targets || [];
+      const selectedLists = targets.filter((t) => t && t.targetType === 'list').map((l) => l.id);
+      const mediaIds = (this.form.media || []).filter((m) => m && m.id).map((m) => m.id);
 
       const data = {
         id: this.data.id,
@@ -645,7 +696,7 @@ export default Vue.extend({
         subject: this.form.subject,
         lists: selectedLists.length > 0 ? selectedLists : [this.lists.results[0]?.id].filter(Boolean),
         from_email: this.form.fromEmail,
-        messenger: this.form.messenger,
+        messenger: this.form.testMessenger,
         type: 'regular',
         headers: this.form.headers,
         tags: this.form.tags,
@@ -654,7 +705,7 @@ export default Vue.extend({
         body: this.form.content.body,
         altbody: this.form.content.contentType !== 'plain' ? this.form.altbody : null,
         subscribers: this.form.testEmails,
-        media: this.form.media.map((m) => m.id),
+        media: mediaIds,
       };
 
       this.$api.testCampaign(data).then(() => {
@@ -664,9 +715,11 @@ export default Vue.extend({
     },
 
     createCampaign() {
-      // Extract lists and segments from unified targets
-      const selectedLists = this.form.targets.filter((t) => t.targetType === 'list').map((l) => l.id);
-      const selectedSegments = this.form.targets.filter((t) => t.targetType === 'segment').map((s) => s.id);
+      // Extract lists and segments from unified targets (with null checks)
+      const targets = this.form.targets || [];
+      const selectedLists = targets.filter((t) => t && t.targetType === 'list').map((l) => l.id);
+      const selectedSegments = targets.filter((t) => t && t.targetType === 'segment').map((s) => s.id);
+      const mediaIds = (this.form.media || []).filter((m) => m && m.id).map((m) => m.id);
 
       const data = {
         archiveSlug: this.form.subject,
@@ -681,8 +734,13 @@ export default Vue.extend({
         tags: this.form.tags,
         send_at: this.form.sendLater ? this.form.sendAtDate : null,
         headers: this.form.headers,
-        media: this.form.media.map((m) => m.id),
+        media: mediaIds,
         bypass_time_window: this.form.bypassTimeWindow,
+        utm_source: this.form.utmSource,
+        utm_medium: this.form.utmMedium,
+        utm_campaign: this.form.utmCampaign,
+        utm_term: this.form.utmTerm,
+        utm_content: this.form.utmContent,
       };
 
       this.$api.createCampaign(data).then((d) => {
@@ -692,9 +750,13 @@ export default Vue.extend({
     },
 
     async updateCampaign(typ) {
-      // Extract lists and segments from unified targets
-      const selectedLists = this.form.targets.filter((t) => t.targetType === 'list').map((l) => l.id);
-      const selectedSegments = this.form.targets.filter((t) => t.targetType === 'segment').map((s) => s.id);
+      // Extract lists and segments from unified targets (with null checks)
+      const targets = this.form.targets || [];
+      const selectedLists = targets.filter((t) => t && t.targetType === 'list').map((l) => l.id);
+      const selectedSegments = targets.filter((t) => t && t.targetType === 'segment').map((s) => s.id);
+
+      // Filter out any undefined media items
+      const mediaIds = (this.form.media || []).filter((m) => m && m.id).map((m) => m.id);
 
       const data = {
         archive_slug: this.form.archiveSlug,
@@ -716,8 +778,13 @@ export default Vue.extend({
         archive: this.form.archive,
         archive_template_id: this.form.archiveTemplateId,
         archive_meta: this.form.archiveMeta,
-        media: this.form.media.map((m) => m.id),
+        media: mediaIds,
         bypass_time_window: this.form.bypassTimeWindow,
+        utm_source: this.form.utmSource,
+        utm_medium: this.form.utmMedium,
+        utm_campaign: this.form.utmCampaign,
+        utm_term: this.form.utmTerm,
+        utm_content: this.form.utmContent,
       };
 
       let typMsg = 'globals.messages.updated';
@@ -730,13 +797,16 @@ export default Vue.extend({
       }
 
       // This promise is used by startCampaign to first save before starting.
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         this.$api.updateCampaign(this.data.id, data).then((d) => {
           this.data = d;
           this.form.archiveSlug = d.archiveSlug;
 
           this.$utils.toast(this.$t(typMsg, { name: d.name }));
           resolve();
+        }).catch((err) => {
+          // Error is already displayed by the API interceptor
+          reject(err);
         });
       });
     },
@@ -791,24 +861,6 @@ export default Vue.extend({
       this.$api.changeCampaignStatus(this.data.id, 'draft').then((d) => {
         this.data = d;
       });
-    },
-
-    removeSentFromLists() {
-      this.$utils.confirm(
-        'Remove all subscribers who received this campaign from its associated lists? This cannot be undone.',
-        () => {
-          this.removeSubscribersLoading = true;
-
-          this.$api.removeSentSubscribersFromLists(this.data.id)
-            .then((data) => {
-              this.$utils.toast(data.message || 'Subscribers removed successfully');
-              this.removeSubscribersLoading = false;
-            })
-            .catch(() => {
-              this.removeSubscribersLoading = false;
-            });
-        },
-      );
     },
   },
 
@@ -885,6 +937,11 @@ export default Vue.extend({
 
     emailMessengers() {
       return ['email', ...this.serverConfig.messengers.filter((m) => m.startsWith('email-'))];
+    },
+
+    // Messengers available for test emails (excludes 'automatic' since it doesn't send directly)
+    testMessengers() {
+      return this.serverConfig.messengers.filter((m) => m !== 'automatic');
     },
 
     otherMessengers() {
