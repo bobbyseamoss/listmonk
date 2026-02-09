@@ -38,8 +38,8 @@
       </b-table-column>
 
       <b-table-column v-slot="props" field="trigger_type" label="Trigger" sortable width="180">
-        <b-tag :type="triggerColors[props.row.trigger_type] || 'is-light'">
-          {{ formatTriggerType(props.row.trigger_type) }}
+        <b-tag :type="triggerColors[props.row.triggerType] || 'is-light'">
+          {{ formatTriggerType(props.row.triggerType) }}
         </b-tag>
       </b-table-column>
 
@@ -50,22 +50,22 @@
       </b-table-column>
 
       <b-table-column v-slot="props" label="Active Runs" width="120" numeric>
-        <span v-if="props.row.stats">{{ props.row.stats.active_runs || 0 }}</span>
+        <span v-if="props.row.stats">{{ props.row.stats.activeRuns || 0 }}</span>
         <span v-else class="has-text-grey">—</span>
       </b-table-column>
 
       <b-table-column v-slot="props" label="Completed" width="120" numeric>
-        <span v-if="props.row.stats">{{ props.row.stats.completed_runs || 0 }}</span>
+        <span v-if="props.row.stats">{{ props.row.stats.completedRuns || 0 }}</span>
         <span v-else class="has-text-grey">—</span>
       </b-table-column>
 
       <b-table-column v-slot="props" label="Emails Sent" width="120" numeric>
-        <span v-if="props.row.stats">{{ props.row.stats.emails_sent || 0 }}</span>
+        <span v-if="props.row.stats">{{ props.row.stats.emailsSent || 0 }}</span>
         <span v-else class="has-text-grey">—</span>
       </b-table-column>
 
-      <b-table-column v-slot="props" field="created_at" :label="$t('globals.fields.createdAt')" sortable width="150">
-        {{ $utils.niceDate(props.row.created_at) }}
+      <b-table-column v-slot="props" field="createdAt" :label="$t('globals.fields.createdAt')" sortable width="150">
+        {{ $utils.niceDate(props.row.createdAt) }}
       </b-table-column>
 
       <b-table-column v-slot="props" cell-class="actions" width="120" align="right">
